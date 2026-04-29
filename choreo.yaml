@@ -1,0 +1,33 @@
+apiVersion: wso2.com/v1alpha1
+kind: Component
+metadata:
+  name: insureme-frontend
+spec:
+  type: web
+  build:
+    language: nodejs
+    languageVersion: 18
+    source:
+      repository: https://github.com/your-username/insureme-frontend.git
+      branch: main
+      context: frontend
+  runtime:
+    language: nodejs
+    languageVersion: 18
+    resources:
+      memory: 256Mi
+      cpu: 0.25
+  ports:
+    - containerPort: 80
+      protocol: TCP
+  env:
+    - name: REACT_APP_API_URL
+      value: "https://your-backend-choreo-url.choreo.dev"
+    - name: NODE_ENV
+      value: "production"
+  healthCheck:
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 30
+    periodSeconds: 10 
