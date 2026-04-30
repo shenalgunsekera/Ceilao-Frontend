@@ -120,8 +120,9 @@ function SkeletonRow() {
 
 /* ── main component ───────────────────────────────────────────────────── */
 const TableSection = () => {
-  const { userProfile, searchQuery } = useAuth();
-  const isManager = userProfile?.role === 'manager';
+  const { user, userProfile, searchQuery } = useAuth();
+  const isPrivileged = userProfile?.role === 'manager' || userProfile?.role === 'admin';
+  const isManager = isPrivileged;
 
   const [clients,      setClients]      = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -151,7 +152,14 @@ const TableSection = () => {
     try {
       const q = query(collection(db, 'clients'), orderBy('created_at', 'desc'));
       const snap = await getDocs(q);
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Employees only see approved clients + their own pending/rejected
+      const data = isPrivileged
+        ? all
+        : all.filter(c =>
+            !c.status || c.status === 'approved' ||
+            ((c.status === 'pending' || c.status === 'rejected') && c.submitted_by === user?.uid)
+          );
       _cachedClients = data;
       setClients(data);
     } catch (err) {
@@ -450,6 +458,16 @@ const TableSection = () => {
                           </Typography>
                           {client.email && (
                             <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>{client.email}</Typography>
+                          )}
+                          {client.status === 'pending' && (
+                            <Chip label="Pending approval" size="small"
+                              sx={{ mt: 0.4, bgcolor: 'rgba(245,158,11,0.12)', color: '#d97706', fontWeight: 600, fontSize: 10, height: 18 }} />
+                          )}
+                          {client.status === 'rejected' && (
+                            <Tooltip title={client.rejection_reason || 'Rejected'}>
+                              <Chip label="Rejected" size="small"
+                                sx={{ mt: 0.4, bgcolor: 'rgba(239,68,68,0.10)', color: '#dc2626', fontWeight: 600, fontSize: 10, height: 18, cursor: 'help' }} />
+                            </Tooltip>
                           )}
                         </TableCell>
                         <TableCell sx={{ fontSize: 13 }}>{client.mobile_no}</TableCell>

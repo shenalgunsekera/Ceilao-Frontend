@@ -6,10 +6,9 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { useNavigate } from 'react-router-dom';
-import ExcelJS from 'exceljs';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
+import PendingApprovals from './PendingApprovals';
+import CreateAccountModal from './CreateAccountModal';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -36,6 +35,8 @@ import Alert from '@mui/material/Alert';
 
 import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
 import BackupOutlinedIcon from '@mui/icons-material/BackupOutlined';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -69,7 +70,7 @@ function xlFill(argb) {
 }
 
 /* ── build per-client workbook ──────────────────────────────────────────── */
-async function buildClientWorkbook(client, logoBase64) {
+async function buildClientWorkbook(client, logoBase64, ExcelJS) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Ceilao Insurance Brokers';
   wb.created = new Date();
@@ -254,7 +255,7 @@ async function fetchLogoBase64() {
   } catch { return null; }
 }
 
-async function buildDocZip(client) {
+async function buildDocZip(client, JSZip) {
   const zip = new JSZip();
   let hasFiles = false;
   for (const { label, key } of DOC_FIELDS) {
@@ -373,8 +374,9 @@ const AdminPanel = () => {
   const [ticketLoad, setTicketLoad] = useState(true);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
-  const [backupOpen,   setBackupOpen]   = useState(false);
-  const [backupState,  setBackupState]  = useState({ step: '', progress: 0, done: false });
+  const [backupOpen,    setBackupOpen]    = useState(false);
+  const [backupState,   setBackupState]   = useState({ step: '', progress: 0, done: false });
+  const [createAccOpen, setCreateAccOpen] = useState(false);
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
 
   // Admin guard
@@ -431,6 +433,9 @@ const AdminPanel = () => {
       setBackupState(s => ({ ...s, step: 'Loading company logo…' }));
       const logoBase64 = await fetchLogoBase64();
 
+      const { default: JSZip }   = await import('jszip');
+      const { saveAs }           = await import('file-saver');
+      const { default: ExcelJS } = await import('exceljs');
       const masterZip = new JSZip();
       const total = clients.length;
 
@@ -449,13 +454,13 @@ const AdminPanel = () => {
 
         // Excel info sheet
         try {
-          const xlBuf = await buildClientWorkbook(c, logoBase64);
+          const xlBuf = await buildClientWorkbook(c, logoBase64, ExcelJS);
           folder.file(`${fileNo}_info.xlsx`, xlBuf);
         } catch { /* skip on error */ }
 
         // Documents zip
         try {
-          const docBuf = await buildDocZip(c);
+          const docBuf = await buildDocZip(c, JSZip);
           if (docBuf) folder.file(`${fileNo}_documents.zip`, docBuf);
         } catch { /* skip on error */ }
       }
@@ -492,7 +497,9 @@ const AdminPanel = () => {
           '& .MuiTabs-indicator': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)', height: 2.5 },
         }}
       >
-        <Tab icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Support Tickets${stats.open ? ` (${stats.open} open)` : ''}`} />
+        <Tab icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Tickets${stats.open ? ` (${stats.open})` : ''}`} />
+        <Tab icon={<HourglassEmptyIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Pending Approvals" />
+        <Tab icon={<GroupAddOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Accounts" />
         <Tab icon={<BackupOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Data Backup" />
       </Tabs>
 
@@ -552,8 +559,38 @@ const AdminPanel = () => {
         </Box>
       )}
 
+      {/* ── PENDING APPROVALS TAB ── */}
+      {tab === 1 && <PendingApprovals />}
+
+      {/* ── ACCOUNTS TAB ── */}
+      {tab === 2 && (
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Employee Accounts</Typography>
+              <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>Create login credentials for new staff members</Typography>
+            </Box>
+            <Button variant="contained" startIcon={<GroupAddOutlinedIcon />}
+              onClick={() => setCreateAccOpen(true)} sx={{ fontSize: 13 }}>
+              Create Account
+            </Button>
+          </Box>
+          <Box sx={{ p: 3, borderRadius: '14px', bgcolor: 'rgba(255,90,90,0.04)', border: '1px solid rgba(255,139,90,0.12)' }}>
+            <Typography sx={{ fontSize: 13, color: '#6B7280', lineHeight: 1.8 }}>
+              Use this to create login accounts for your employees and managers. They receive an email and password you can share with them.
+              Employees can add clients (pending manager approval). Managers get full access including the Admin Panel.
+            </Typography>
+          </Box>
+          <CreateAccountModal
+            open={createAccOpen}
+            onClose={() => setCreateAccOpen(false)}
+            onCreated={() => setToast({ open: true, msg: 'Account created successfully!', severity: 'success' })}
+          />
+        </Box>
+      )}
+
       {/* ── BACKUP TAB ── */}
-      {tab === 1 && (
+      {tab === 3 && (
         <Box>
           <Card sx={{ mb: 2 }}>
             <CardContent>

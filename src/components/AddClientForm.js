@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadToCloudinary } from '../cloudinary';
+import { useAuth } from '../App';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -185,6 +186,8 @@ function SectionHeader({ title }) {
 
 /* ── main form ────────────────────────────────────────────────────────── */
 const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }) => {
+  const { user, userProfile } = useAuth();
+  const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
   const [fields, setFields] = useState(() => {
     const obj = {};
     textFields.forEach(f => { obj[f.name] = initialData[f.name] || ''; });
@@ -244,7 +247,13 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         await updateDoc(ref, { ...payload, updated_at: serverTimestamp() });
       } else {
         await addDoc(collection(db, 'clients'), {
-          ...payload, created_at: serverTimestamp(), is_active: true,
+          ...payload,
+          created_at:        serverTimestamp(),
+          is_active:         true,
+          status:            isPrivileged ? 'approved' : 'pending',
+          submitted_by:      user?.uid || '',
+          submitted_by_name: userProfile?.full_name || user?.email?.split('@')[0] || 'Unknown',
+          submitted_at:      serverTimestamp(),
         });
       }
 
