@@ -123,6 +123,7 @@ const TableSection = () => {
   const { user, userProfile, searchQuery } = useAuth();
   const isPrivileged = userProfile?.role === 'manager' || userProfile?.role === 'admin';
   const isManager = isPrivileged;
+  const uid = user?.uid || '';
 
   const [clients,      setClients]      = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -158,7 +159,7 @@ const TableSection = () => {
         ? all
         : all.filter(c =>
             !c.status || c.status === 'approved' ||
-            ((c.status === 'pending' || c.status === 'rejected') && c.submitted_by === user?.uid)
+            ((c.status === 'pending' || c.status === 'rejected') && c.submitted_by === uid)
           );
       _cachedClients = data;
       setClients(data);
@@ -166,7 +167,7 @@ const TableSection = () => {
       if (!_cachedClients) toast('Failed to load clients', 'error');
     }
     setLoading(false);
-  }, []);
+  }, [isPrivileged, uid]);
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
