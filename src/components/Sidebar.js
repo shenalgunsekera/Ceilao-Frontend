@@ -19,6 +19,9 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
+import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
+import RaiseTicketModal from './RaiseTicketModal';
 
 const DRAWER_W = 260;
 
@@ -78,6 +81,7 @@ function DrawerContent({ onClose }) {
   const navigate  = useNavigate();
   const location  = useLocation();
   const { user, userProfile } = useAuth();
+  const [ticketOpen, setTicketOpen] = useState(false);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -160,8 +164,38 @@ function DrawerContent({ onClose }) {
               onClick={() => { navigate(item.path); onClose?.(); }}
             />
           ))}
+          {role === 'admin' && (
+            <NavItem
+              item={{ label: 'Admin Panel', path: '/admin', icon: <AdminPanelSettingsOutlinedIcon /> }}
+              active={location.pathname === '/admin'}
+              onClick={() => { navigate('/admin'); onClose?.(); }}
+            />
+          )}
         </List>
+
+        <Divider sx={{ mx: 2, my: 1.5, borderColor: 'rgba(255,255,255,0.08)' }} />
+
+        {/* Support ticket button — visible to all */}
+        <ListItem
+          button
+          onClick={() => { setTicketOpen(true); onClose?.(); }}
+          sx={{
+            mx: 1.5, borderRadius: '10px', px: 1.5, py: 1,
+            transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+            '&:hover': { background: 'rgba(255,139,90,0.12)', transform: 'translateX(3px)' },
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 36, color: 'rgba(255,139,90,0.7)', '& svg': { fontSize: 20 } }}>
+            <ConfirmationNumberOutlinedIcon />
+          </ListItemIcon>
+          <ListItemText
+            primary="Raise a Ticket"
+            primaryTypographyProps={{ fontSize: 13.5, fontWeight: 400, color: 'rgba(255,255,255,0.60)' }}
+          />
+        </ListItem>
       </Box>
+
+      <RaiseTicketModal open={ticketOpen} onClose={() => setTicketOpen(false)} />
 
       {/* ── user footer ──────────────────────────────────── */}
       <Box>
