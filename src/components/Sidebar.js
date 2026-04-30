@@ -164,7 +164,7 @@ function DrawerContent({ onClose }) {
               onClick={() => { navigate(item.path); onClose?.(); }}
             />
           ))}
-          {role === 'admin' && (
+          {(role === 'admin' || role === 'manager') && (
             <NavItem
               item={{ label: 'Admin Panel', path: '/admin', icon: <AdminPanelSettingsOutlinedIcon /> }}
               active={location.pathname === '/admin'}

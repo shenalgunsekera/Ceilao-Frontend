@@ -379,7 +379,7 @@ const AdminPanel = () => {
 
   // Admin guard
   useEffect(() => {
-    if (userProfile && userProfile.role !== 'admin') navigate('/');
+    if (userProfile && userProfile.role !== 'admin' && userProfile.role !== 'manager') navigate('/');
   }, [userProfile, navigate]);
 
   const loadTickets = useCallback(async () => {
