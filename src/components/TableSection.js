@@ -47,6 +47,9 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 
+/* ── module-level client cache (survives React re-mounts) ─────────────── */
+let _cachedClients = null;
+
 /* ── helpers ──────────────────────────────────────────────────────────── */
 function daysUntilExpiry(dateStr) {
   if (!dateStr) return null;
@@ -137,15 +140,22 @@ const TableSection = () => {
 
   const toast = (msg, sev = 'success') => setSnackbar({ open: true, msg, sev });
 
-  /* fetch */
-  const fetchClients = useCallback(async () => {
-    setLoading(true);
+  /* fetch — serves from module cache instantly, then refreshes from Firestore */
+  const fetchClients = useCallback(async (force = false) => {
+    if (!force && _cachedClients) {
+      setClients(_cachedClients);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
       const q = query(collection(db, 'clients'), orderBy('created_at', 'desc'));
       const snap = await getDocs(q);
-      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      _cachedClients = data;
+      setClients(data);
     } catch (err) {
-      toast('Failed to load clients', 'error');
+      if (!_cachedClients) toast('Failed to load clients', 'error');
     }
     setLoading(false);
   }, []);
@@ -189,7 +199,7 @@ const TableSection = () => {
     try {
       await deleteDoc(doc(db, 'clients', deleteTarget.id));
       toast('Client deleted');
-      fetchClients();
+      _cachedClients = null; fetchClients(true);
     } catch {
       toast('Failed to delete client', 'error');
     }
@@ -204,7 +214,7 @@ const TableSection = () => {
       snap.docs.forEach(d => batch.delete(d.ref));
       await batch.commit();
       toast(`Deleted ${snap.size} clients`);
-      fetchClients();
+      _cachedClients = null; fetchClients(true);
     } catch {
       toast('Failed to delete all clients', 'error');
     }
@@ -268,7 +278,7 @@ const TableSection = () => {
           await batch.commit();
           if (errors.length) { setCsvErrors(errors); setCsvErrDlg(true); toast(`Imported ${imported}, ${errors.length} failed`, 'warning'); }
           else toast(`Successfully imported ${imported} clients!`);
-          fetchClients();
+          _cachedClients = null; fetchClients(true);
         } catch { toast('Import failed', 'error'); }
         e.target.value = ''; setCsvImporting(false);
       },
@@ -276,8 +286,8 @@ const TableSection = () => {
   };
 
   /* add / edit callbacks */
-  const handleAddClient  = () => { fetchClients(); setAddOpen(false);    toast('Client added successfully!'); };
-  const handleEditClient = () => { fetchClients(); setEditClient(null);  toast('Client updated successfully!'); };
+  const handleAddClient  = () => { _cachedClients = null; fetchClients(true); setAddOpen(false);    toast('Client added successfully!'); };
+  const handleEditClient = () => { _cachedClients = null; fetchClients(true); setEditClient(null);  toast('Client updated successfully!'); };
 
   return (
     <Box className="page-enter">

@@ -12,8 +12,8 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import TableSection from './components/TableSection';
 import LoginPage from './components/LoginPage';
-import ReportsPage from './components/ReportsPage';
-const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const ReportsPage = lazy(() => import('./components/ReportsPage'));
+const AdminPanel  = lazy(() => import('./components/AdminPanel'));
 
 /* ── MUI theme ───────────────────────────────────────────────────────────── */
 const theme = createTheme({

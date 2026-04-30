@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { viewUrl } from '../cloudinary';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -65,11 +66,6 @@ function FinancialRow({ label, value }) {
   );
 }
 
-function inlineUrl(url) {
-  if (!url || !url.includes('cloudinary.com')) return url;
-  return url.replace('/upload/', '/upload/fl_inline/');
-}
-
 function DocCard({ label, url, description }) {
   return (
     <Box sx={{
@@ -82,7 +78,7 @@ function DocCard({ label, url, description }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{label}</Typography>
         {url && (
-          <Link href={inlineUrl(url)} target="_blank" rel="noopener noreferrer"
+          <Link href={viewUrl(url)} target="_blank" rel="noopener noreferrer"
             sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: 11, fontWeight: 700, color: '#FF5A5A', textDecoration: 'none',
                   '&:hover': { textDecoration: 'underline' } }}>
             View <OpenInNewIcon sx={{ fontSize: 11 }} />
