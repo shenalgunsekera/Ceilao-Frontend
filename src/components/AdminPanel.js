@@ -260,20 +260,58 @@ async function fetchLogoBase64() {
 
 async function buildDocZip(client, JSZip) {
   const zip = new JSZip();
-  let hasFiles = false;
+  const urlLines = [];
+  let fetchedAny = false;
+
   for (const { label, key } of DOC_FIELDS) {
     const url = client[key];
     if (!url) continue;
+
+    // Always record the URL so the zip is never empty
+    urlLines.push(`${label}:\n  ${url}\n`);
+
     try {
-      const resp = await fetch(url);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30_000); // 30s per file
+      const resp = await fetch(url, {
+        mode: 'cors',
+        cache: 'no-cache',
+        signal: ctrl.signal,
+        headers: { 'Accept': '*/*' },
+      });
+      clearTimeout(timer);
       if (!resp.ok) continue;
       const buf = await resp.arrayBuffer();
-      const ext = url.split('?')[0].split('.').pop().toLowerCase() || 'pdf';
+      if (buf.byteLength === 0) continue;
+
+      // Extract extension from URL path (before any query string)
+      const pathPart = url.split('?')[0];
+      const ext = pathPart.includes('.')
+        ? pathPart.split('.').pop().toLowerCase().slice(0, 5) || 'pdf'
+        : 'pdf';
+
       zip.file(`${label}.${ext}`, buf);
-      hasFiles = true;
-    } catch { /* skip unfetchable doc */ }
+      fetchedAny = true;
+    } catch {
+      // Binary fetch failed — URL is still recorded in document_links.txt
+    }
   }
-  if (!hasFiles) return null;
+
+  // Always include a plain-text list of all document URLs as a reliable fallback
+  if (urlLines.length === 0) return null;
+  zip.file('document_links.txt', urlLines.join('\n'));
+
+  // If binary fetch failed entirely, add a note explaining how to access files
+  if (!fetchedAny && urlLines.length > 0) {
+    zip.file('README.txt', [
+      'Binary download of documents was blocked by CORS in this browser session.',
+      'Open document_links.txt and paste each URL into your browser to view/save the files.',
+      '',
+      'To enable direct binary backup, configure CORS in your Cloudinary dashboard:',
+      '  Settings → Security → Allowed fetch domains → add your Vercel domain',
+    ].join('\n'));
+  }
+
   return zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
 }
 
