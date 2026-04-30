@@ -5,7 +5,7 @@ import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, limit, query, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
@@ -218,7 +218,23 @@ function App() {
       if (firebaseUser) {
         setUser(firebaseUser);
         const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
-        setUserProfile(snap.exists() ? snap.data() : null);
+
+        if (snap.exists()) {
+          setUserProfile(snap.data());
+        } else {
+          // No Firestore profile — auto-create one.
+          // First account ever in the system becomes admin; all others get employee.
+          const anyExisting = await getDocs(query(collection(db, 'users'), limit(1)));
+          const role = anyExisting.empty ? 'admin' : 'employee';
+          const profile = {
+            full_name:  firebaseUser.displayName || firebaseUser.email.split('@')[0],
+            email:      firebaseUser.email,
+            role,
+            created_at: serverTimestamp(),
+          };
+          await setDoc(doc(db, 'users', firebaseUser.uid), profile);
+          setUserProfile(profile);
+        }
       } else {
         setUser(null);
         setUserProfile(null);
