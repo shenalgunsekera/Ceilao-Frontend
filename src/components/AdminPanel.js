@@ -6,6 +6,9 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { useNavigate } from 'react-router-dom';
+import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
 import PendingApprovals from './PendingApprovals';
 import CreateAccountModal from './CreateAccountModal';
@@ -379,7 +382,9 @@ const AdminPanel = () => {
   const [createAccOpen, setCreateAccOpen] = useState(false);
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
 
-  const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin';
+  const isAdmin   = userProfile?.role === 'admin';
+  const isPrivileged = isManager;
 
   // Admin guard — only redirect after profile has loaded and is definitively non-privileged
   useEffect(() => {
@@ -435,9 +440,6 @@ const AdminPanel = () => {
       setBackupState(s => ({ ...s, step: 'Loading company logo…' }));
       const logoBase64 = await fetchLogoBase64();
 
-      const { default: JSZip }   = await import('jszip');
-      const { saveAs }           = await import('file-saver');
-      const { default: ExcelJS } = await import('exceljs');
       const masterZip = new JSZip();
       const total = clients.length;
 
@@ -591,8 +593,13 @@ const AdminPanel = () => {
         </Box>
       )}
 
-      {/* ── BACKUP TAB ── */}
-      {tab === 3 && (
+      {/* ── BACKUP TAB (admin only) ── */}
+      {tab === 3 && !isAdmin && (
+        <Box sx={{ textAlign: 'center', py: 6 }}>
+          <Typography sx={{ color: '#9CA3AF' }}>Data backup is restricted to admin accounts.</Typography>
+        </Box>
+      )}
+      {tab === 3 && isAdmin && (
         <Box>
           <Card sx={{ mb: 2 }}>
             <CardContent>

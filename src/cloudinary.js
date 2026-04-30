@@ -46,9 +46,12 @@ export async function uploadToCloudinary(file, folder = 'ceilao/docs', onProgres
   });
 }
 
-// Returns a Cloudinary URL optimised for inline viewing in the browser.
-// Adds fl_inline (prevent download prompt), q_auto (compress), f_auto (best format).
+// Returns a Cloudinary URL for inline browser viewing.
+// fl_inline prevents the download prompt. q_auto/f_auto only apply to images —
+// they break raw/PDF delivery so we skip them for non-image files.
 export function viewUrl(url) {
   if (!url || !url.includes('cloudinary.com')) return url;
-  return url.replace('/upload/', '/upload/fl_inline,q_auto,f_auto/');
+  const isImage = /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url);
+  const transforms = isImage ? 'fl_inline,q_auto,f_auto' : 'fl_inline';
+  return url.replace('/upload/', `/upload/${transforms}/`);
 }
