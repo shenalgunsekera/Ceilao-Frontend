@@ -7,7 +7,6 @@ import { useAuth } from '../App';
 import AddClientForm from './AddClientForm';
 import ClientDetailsModal from './ClientDetailsModal';
 import Papa from 'papaparse';
-import { textFields } from './AddClientForm';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
