@@ -7,11 +7,13 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import TableSection from './components/TableSection';
 import LoginPage from './components/LoginPage';
 import ReportsPage from './components/ReportsPage';
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 
 /* ── MUI theme ───────────────────────────────────────────────────────────── */
 const theme = createTheme({
@@ -255,10 +257,13 @@ function App() {
                       className="page-enter"
                       sx={{ flex: 1, p: { xs: 2, sm: 3, md: 3 }, pt: { xs: 2, sm: 3 } }}
                     >
-                      <Routes>
-                        <Route path="/"        element={<TableSection />} />
-                        <Route path="/reports" element={<ReportsPage />} />
-                      </Routes>
+                      <Suspense fallback={null}>
+                        <Routes>
+                          <Route path="/"        element={<TableSection />} />
+                          <Route path="/reports" element={<ReportsPage />} />
+                          <Route path="/admin"   element={<AdminPanel />} />
+                        </Routes>
+                      </Suspense>
                     </Box>
                   </Box>
                 </Box>

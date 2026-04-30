@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
 
 import Box from '@mui/material/Box';
@@ -21,6 +19,7 @@ import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import Collapse from '@mui/material/Collapse';
 import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
@@ -226,6 +225,8 @@ const ReportsPage = () => {
   const [dateFrom,   setDateFrom]   = useState(null);
   const [dateTo,     setDateTo]     = useState(null);
   const [useRange,   setUseRange]   = useState(false);
+  const [exporting,  setExporting]  = useState(false);
+  const [exportErr,  setExportErr]  = useState('');
 
   const fetchAll = async () => {
     setLoading(true);
@@ -280,6 +281,10 @@ const ReportsPage = () => {
 
   /* ── XLS: full report (summary + client list) ── */
   const exportFullXLS = async () => {
+    setExporting(true); setExportErr('');
+    try {
+    const { default: ExcelJS } = await import('exceljs');
+    const { saveAs } = await import('file-saver');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Ceilao Insurance Brokers';
     wb.created = new Date();
@@ -481,10 +486,16 @@ const ReportsPage = () => {
       new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       `ceilao_report_${ts()}.xlsx`
     );
+    } catch (err) { setExportErr(err.message || 'Export failed'); }
+    setExporting(false);
   };
 
   /* ── XLS: client list only ── */
   const exportClientXLS = async () => {
+    setExporting(true); setExportErr('');
+    try {
+    const { default: ExcelJS } = await import('exceljs');
+    const { saveAs } = await import('file-saver');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Ceilao Insurance Brokers';
     wb.created = new Date();
@@ -588,6 +599,8 @@ const ReportsPage = () => {
       new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       `ceilao_clients_${ts()}.xlsx`
     );
+    } catch (err) { setExportErr(err.message || 'Export failed'); }
+    setExporting(false);
   };
 
   /* ── date range filter UI ── */
@@ -637,14 +650,19 @@ const ReportsPage = () => {
         </Typography>
 
         {/* ── summary overview ────────────────────────────────── */}
+        {exportErr && (
+          <Alert severity="error" sx={{ mb: 2, fontSize: 12 }} onClose={() => setExportErr('')}>
+            Export failed: {exportErr}
+          </Alert>
+        )}
         <ReportCard
           title="Financial Summary"
           description="Portfolio totals and premium breakdown"
           icon={<MonetizationOnOutlinedIcon />}
           expanded={expanded === 'summary'}
           onToggle={() => handleToggle('summary')}
-          onDownload={filteredClients.length ? exportFullXLS : null}
-          downloadLabel="Export XLS"
+          onDownload={filteredClients.length && !exporting ? exportFullXLS : null}
+          downloadLabel={exporting ? 'Generating…' : 'Export XLS'}
           loading={loading}
         >
           <DateRangeFilter />
@@ -684,8 +702,8 @@ const ReportsPage = () => {
           icon={<PeopleOutlineIcon />}
           expanded={expanded === 'clients'}
           onToggle={() => handleToggle('clients')}
-          onDownload={filteredClients.length ? exportClientXLS : null}
-          downloadLabel="Export XLS"
+          onDownload={filteredClients.length && !exporting ? exportClientXLS : null}
+          downloadLabel={exporting ? 'Generating…' : 'Export XLS'}
           loading={loading}
         >
           <DateRangeFilter />
