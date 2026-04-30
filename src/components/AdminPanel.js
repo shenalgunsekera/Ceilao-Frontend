@@ -379,10 +379,12 @@ const AdminPanel = () => {
   const [createAccOpen, setCreateAccOpen] = useState(false);
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
 
-  // Admin guard
+  const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+
+  // Admin guard — only redirect after profile has loaded and is definitively non-privileged
   useEffect(() => {
-    if (userProfile && userProfile.role !== 'admin' && userProfile.role !== 'manager') navigate('/');
-  }, [userProfile, navigate]);
+    if (userProfile && !isPrivileged) navigate('/');
+  }, [userProfile, isPrivileged, navigate]);
 
   const loadTickets = useCallback(async () => {
     setTicketLoad(true);
