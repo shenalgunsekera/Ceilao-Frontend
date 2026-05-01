@@ -8,11 +8,6 @@ import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
 import emailjs from '@emailjs/browser';
 
-// Initialise once at module load so the key is always available
-if (process.env.REACT_APP_EMAILJS_PUBLIC_KEY) {
-  emailjs.init({ publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY });
-}
-
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -61,6 +56,9 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 const EMAILJS_SERVICE  = process.env.REACT_APP_EMAILJS_SERVICE_ID  || '';
 const EMAILJS_TEMPLATE = process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '';
 const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
+
+// Initialise once — must be after all imports
+if (EMAILJS_KEY) emailjs.init({ publicKey: EMAILJS_KEY });
 
 /* ── generate reference number ────────────────────────────────────────────── */
 function genRef() {
@@ -551,6 +549,8 @@ const QuotationsPage = () => {
               to_name:       co.name,
               to_email:      co.email,
               from_name:     'Ceilao Insurance Brokers',
+              from_email:    'noreply@ceilaoinsurance.lk',
+              email:         'noreply@ceilaoinsurance.lk',
               reference:     pendingQuote.reference,
               product:       productLabel,
               response_link: responseUrl,
