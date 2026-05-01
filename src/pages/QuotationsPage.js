@@ -136,7 +136,7 @@ function ProductForm({ product, values, onChange }) {
 }
 
 /* ── quote row ─────────────────────────────────────────────────────────────── */
-function QuoteRow({ quote, onSelect, selectedForCompare, onToggleCompare, tab }) {
+function QuoteRow({ quote, onSelect, tab }) {
   const [open, setOpen] = useState(false);
   const product = PRODUCTS[quote.product_key];
   const sentCount = quote.sent_to?.length || 0;
@@ -172,9 +172,9 @@ function QuoteRow({ quote, onSelect, selectedForCompare, onToggleCompare, tab })
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
-            {tab === 'received' && (
+            {(tab === 'received' || tab === 'sent') && sentCount > 0 && (
               <Chip
-                label={`${respondedCount}/${sentCount}`}
+                label={`${respondedCount}/${sentCount} replied`}
                 size="small"
                 sx={{
                   bgcolor: respondedCount === sentCount ? 'rgba(16,185,129,0.10)' : 'rgba(245,158,11,0.10)',
@@ -184,10 +184,11 @@ function QuoteRow({ quote, onSelect, selectedForCompare, onToggleCompare, tab })
               />
             )}
             {tab === 'compare' && (
-              <Checkbox size="small" checked={selectedForCompare}
-                onChange={e => { e.stopPropagation(); onToggleCompare(quote.id); }}
-                onClick={e => e.stopPropagation()}
-                sx={{ color: '#FF5A5A', '&.Mui-checked': { color: '#FF5A5A' } }} />
+              <Button size="small" variant="outlined" startIcon={<CompareArrowsIcon />}
+                onClick={e => { e.stopPropagation(); onSelect(quote); }}
+                sx={{ fontSize: 11, py: 0.4, borderColor: 'rgba(255,139,90,0.3)', color: '#FF8B5A', flexShrink: 0 }}>
+                Compare
+              </Button>
             )}
             {open ? <ExpandLessIcon sx={{ color: '#9CA3AF' }} /> : <ExpandMoreIcon sx={{ color: '#9CA3AF' }} />}
           </Stack>
@@ -261,13 +262,6 @@ function QuoteRow({ quote, onSelect, selectedForCompare, onToggleCompare, tab })
               </Box>
             )}
 
-            {tab === 'compare' && quote.responses?.length > 0 && (
-              <Button variant="outlined" size="small" startIcon={<CompareArrowsIcon />}
-                onClick={() => onSelect(quote)}
-                sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.3)', color: '#FF8B5A' }}>
-                Compare this quote
-              </Button>
-            )}
           </Box>
         </Collapse>
       </CardContent>
@@ -466,9 +460,11 @@ const QuotationsPage = () => {
   // Real-time quotes listener
   useEffect(() => {
     const q = query(collection(db, 'quotes'), orderBy('created_at', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setQuotes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = onSnapshot(
+      q,
+      snap => { setQuotes(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
+      () => { /* permission or network error — keep local optimistic state */ }
+    );
     return unsub;
   }, []);
 
@@ -481,6 +477,7 @@ const QuotationsPage = () => {
 
   const sentQuotes     = filteredQuotes.filter(q => (q.sent_to?.length || 0) > 0);
   const receivedQuotes = filteredQuotes.filter(q => (q.responses?.length || 0) > 0);
+  const compareQuotes  = receivedQuotes; // only quotes with at least 1 response can be compared
 
   const setField = useCallback((name, val) => setFormValues(v => ({ ...v, [name]: val })), []);
 
@@ -491,8 +488,9 @@ const QuotationsPage = () => {
 
     setSaving(true);
     try {
+      const reference = genRef();
       const ref = await addDoc(collection(db, 'quotes'), {
-        reference:       genRef(),
+        reference,
         product_key:     product,
         product_label:   PRODUCTS[product].label,
         form_data:       formValues,
@@ -504,7 +502,16 @@ const QuotationsPage = () => {
         created_at:      serverTimestamp(),
         updated_at:      serverTimestamp(),
       });
-      setPendingQuote({ id: ref.id, ...formValues, product_key: product });
+      // Optimistic update — add draft to local state immediately
+      setQuotes(prev => [{
+        id: ref.id, reference, product_key: product,
+        product_label: PRODUCTS[product].label,
+        form_data: formValues, status: 'draft',
+        sent_to: [], responses: [],
+        created_by_name: userProfile?.full_name || '',
+        created_at: { toDate: () => new Date() },
+      }, ...prev]);
+      setPendingQuote({ id: ref.id, reference, form_data: formValues, product_key: product });
       setNewQuoteOpen(false);
       setSendOpen(true);
       setFormValues({});
@@ -525,17 +532,23 @@ const QuotationsPage = () => {
         sentTo.push({ company_id: co.id, company_name: co.name, company_email: co.email, sent_at: new Date().toISOString(), responded: false });
 
         if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY) {
+          const productLabel = PRODUCTS[pendingQuote.product_key]?.label || pendingQuote.product_key;
+          const formEntries  = Object.entries(pendingQuote.form_data || {}).filter(([,v]) => v);
+          const details = formEntries.length
+            ? formEntries.map(([k, v]) => {
+                const field = PRODUCTS[pendingQuote.product_key]?.fields?.find(f => f.name === k);
+                return `${field?.label || k}: ${v}`;
+              }).join('\n')
+            : 'No additional details provided.';
+
           await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
             to_name:       co.name,
             to_email:      co.email,
             from_name:     'Ceilao Insurance Brokers',
-            reference:     pendingQuote.reference || 'N/A',
-            product:       PRODUCTS[product]?.label || product,
+            reference:     pendingQuote.reference,
+            product:       productLabel,
             response_link: responseUrl,
-            details:       Object.entries(pendingQuote.form_data || {})
-              .filter(([,v]) => v)
-              .map(([k,v]) => `${k}: ${v}`)
-              .join('\n'),
+            details,
           }, EMAILJS_KEY);
         }
       }
@@ -543,6 +556,11 @@ const QuotationsPage = () => {
       await updateDoc(doc(db, 'quotes', pendingQuote.id), {
         sent_to: sentTo, status: 'sent', updated_at: serverTimestamp(),
       });
+
+      // Optimistic update — mark as sent in local state immediately
+      setQuotes(prev => prev.map(q =>
+        q.id === pendingQuote.id ? { ...q, sent_to: sentTo, status: 'sent' } : q
+      ));
 
       setSendOpen(false);
       setSelectedCos([]);
@@ -574,7 +592,7 @@ const QuotationsPage = () => {
     }, 1500);
   };
 
-  const tabQuotes = [sentQuotes, receivedQuotes, filteredQuotes];
+  const tabQuotes = [sentQuotes, receivedQuotes, compareQuotes];
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -632,18 +650,23 @@ const QuotationsPage = () => {
             }}>
               <Tab label={`Sent (${sentQuotes.length})`} />
               <Tab label={`Received (${receivedQuotes.length})`} />
-              <Tab label="Compare" />
+              <Tab label={`Compare (${compareQuotes.length})`} />
             </Tabs>
 
             {tabQuotes[tab].length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 6 }}>
-                <Typography sx={{ color: '#9CA3AF', fontWeight: 600 }}>No quote requests yet.</Typography>
-                {tab === 0 && <Typography sx={{ fontSize: 12.5, color: '#C4B5B0', mt: 0.5 }}>Click "New Quote Request" to get started.</Typography>}
+                <Typography sx={{ color: '#9CA3AF', fontWeight: 600 }}>
+                  {tab === 0 ? 'No sent quote requests yet.' : tab === 1 ? 'No responses received yet.' : 'No quotes with responses to compare yet.'}
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: '#C4B5B0', mt: 0.5 }}>
+                  {tab === 0 ? 'Click "New Quote Request" to get started.' : tab === 1 ? 'Responses appear here once insurers submit their quotes.' : 'Quotes move here once at least one insurer responds.'}
+                </Typography>
               </Box>
             ) : (
               tabQuotes[tab].map(q => (
-                <QuoteRow key={q.id} quote={q} tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
-                  onSelect={setCompareQuote} selectedForCompare={false} onToggleCompare={() => {}} />
+                <QuoteRow key={q.id} quote={q}
+                  tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
+                  onSelect={setCompareQuote} />
               ))
             )}
           </>
