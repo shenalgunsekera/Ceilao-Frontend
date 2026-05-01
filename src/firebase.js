@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 
 export const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -17,5 +17,8 @@ export const db   = getFirestore(app);
 export const auth = getAuth(app);
 export default app;
 
-// Best-effort offline cache — silently skips if already enabled or unsupported
+// Session-only auth — user is logged out when they close the browser tab
+setPersistence(auth, browserSessionPersistence).catch(() => {});
+
+// Best-effort offline cache
 enableIndexedDbPersistence(db).catch(() => {});
