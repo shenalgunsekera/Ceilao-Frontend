@@ -252,15 +252,49 @@
 
   <!-- Cover -->
   <div class="cover">
-    <div class="cover-badge">Pricing Proposal · 2026</div>
-    <h1>Insurance Management<br>Portal Pricing</h1>
-    <p>A fully custom cloud-based insurance brokerage management system — quotations, underwriting, claims, renewals, reporting, and more. Three plans tailored to your scale.</p>
+    <div class="cover-badge">Official Quotation · 2026</div>
+    <h1>Insurance Management<br>Portal — Service Quotation</h1>
+    <p>Custom cloud-based insurance brokerage management software — quotations, underwriting, claims, renewals, reporting, admin panel, and more. Delivered and maintained by Shenal Gunasekara.</p>
     <div class="cover-meta">
-      <span>Prepared by <strong>Ceilao Insurance Brokers</strong></span>
+      <span>Quoted by <strong>Shenal Gunasekara</strong></span>
+      <span>Prepared for <strong>Ceilao Insurance Brokers (Pvt) Ltd</strong></span>
       <span>Valid <strong>30 days from issue date</strong></span>
-      <span>Currency <strong>Sri Lankan Rupees (LKR)</strong></span>
+      <span>Currency <strong>LKR (Sri Lankan Rupees)</strong></span>
     </div>
   </div>
+
+  <!-- Formal quotation header -->
+  <div style="background:#fff;border-radius:18px;padding:32px 36px;margin-bottom:36px;box-shadow:0 4px 24px rgba(0,0,0,0.07);display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+    <div>
+      <div style="font-size:10.5px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">From</div>
+      <div style="font-size:16px;font-weight:800;color:#1A1A2E">Shenal Gunasekara</div>
+      <div style="font-size:13px;color:#6B7280;margin-top:4px">Software Developer &amp; Systems Architect</div>
+      <div style="font-size:13px;color:#6B7280">shenalgunsekera@gmail.com</div>
+    </div>
+    <div>
+      <div style="font-size:10.5px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">To</div>
+      <div style="font-size:16px;font-weight:800;color:#1A1A2E">Ceilao Insurance Brokers (Pvt) Ltd</div>
+      <div style="font-size:13px;color:#6B7280;margin-top:4px">Insurance Broking &amp; Risk Management</div>
+      <div style="font-size:13px;color:#6B7280">Sri Lanka</div>
+    </div>
+    <div>
+      <div style="font-size:10.5px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Quotation Reference</div>
+      <div style="font-size:13px;font-weight:700;color:#FF5A5A;font-family:monospace">QT-CIB-2026-001</div>
+    </div>
+    <div>
+      <div style="font-size:10.5px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Date of Issue</div>
+      <div style="font-size:13px;font-weight:600;color:#1A1A2E" id="issue-date"></div>
+    </div>
+    <div style="grid-column:1/-1;background:rgba(255,90,90,0.05);border:1px solid rgba(255,90,90,0.12);border-radius:10px;padding:14px 18px;">
+      <div style="font-size:10.5px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Subject</div>
+      <div style="font-size:14px;font-weight:700;color:#1A1A2E">Quotation for Custom Insurance Brokerage Management Portal — SaaS Subscription Pricing 2026</div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('issue-date').textContent =
+      new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  </script>
 
   <!-- Plans -->
   <div class="section-title">Choose Your Plan</div>
@@ -287,12 +321,11 @@
           <li><span class="check">✓</span> Underwriting & client management</li>
           <li><span class="check">✓</span> Renewals tracker</li>
           <li><span class="check">✓</span> Basic reports & Excel export</li>
-          <li><span class="check">✓</span> 25GB document storage (Cloudinary)</li>
-          <li><span class="check">✓</span> 200 automated emails/month</li>
+          <li><span class="check">✓</span> 25GB document & image storage (Cloudinary Free)</li>
+          <li><span class="check">✓</span> 200 automated emails/month (EmailJS)</li>
           <li><span class="check">✓</span> 20-min session timeout security</li>
-          <li><span class="check">✓</span> Standard SSL (Vercel free)</li>
+          <li><span class="check">✓</span> Standard SSL (Vercel)</li>
           <li><span class="check">✓</span> Email support (48hr response)</li>
-          <li><span class="check">✓</span> Document & image storage (Cloudinary)</li>
           <li><span class="cross">✗</span> Custom domain</li>
           <li><span class="cross">✗</span> Claims module</li>
           <li><span class="cross">✗</span> Data backup tool</li>
@@ -323,8 +356,8 @@
           <li><span class="check">✓</span> All modules (Quotations, Underwriting, Claims, Renewals, Reports)</li>
           <li><span class="check">✓</span> Admin panel + module access control</li>
           <li><span class="check">✓</span> Client approval workflow</li>
-          <li><span class="check">✓</span> 100GB document storage (Cloudinary Starter)</li>
-          <li><span class="check">✓</span> 1,000 automated emails/month</li>
+          <li><span class="check">✓</span> 100GB document & image storage (Firebase Storage GCP)</li>
+          <li><span class="check">✓</span> 40,000 emails/month (SendGrid Essentials)</li>
           <li><span class="check">✓</span> Comparison PDF/Excel export</li>
           <li><span class="check">✓</span> Data backup tool (per-client ZIP)</li>
           <li><span class="check">✓</span> Custom sub-domain included</li>
@@ -358,9 +391,9 @@
           <li><span class="check">✓</span> Everything in Professional</li>
           <li><span class="check">✓</span> Microsoft Azure infrastructure (SLA 99.99%)</li>
           <li><span class="check">✓</span> Azure Cosmos DB (global replication)</li>
-          <li><span class="check">✓</span> Azure Blob Storage (500GB+)</li>
-          <li><span class="check">✓</span> Azure Communication Services (10K emails)</li>
-          <li><span class="check">✓</span> Azure Active Directory B2C (enterprise auth)</li>
+          <li><span class="check">✓</span> Azure Blob Storage 500GB (docs, images, backups)</li>
+          <li><span class="check">✓</span> SendGrid Pro — 100K emails/month + dedicated IP</li>
+          <li><span class="check">✓</span> Azure Active Directory B2C (enterprise auth + MFA)</li>
           <li><span class="check">✓</span> Azure CDN (fast global delivery)</li>
           <li><span class="check">✓</span> Azure WAF + DDoS protection</li>
           <li><span class="check">✓</span> Azure Application Insights (monitoring)</li>
@@ -393,31 +426,31 @@
     </div>
 
     <div class="infra-row">
-      <div class="infra-service">Database <small>Firebase Firestore / Azure Cosmos DB</small></div>
+      <div class="infra-service">Database <small>Google Firebase Firestore / Microsoft Azure Cosmos DB</small></div>
       <div class="infra-val">Firebase Spark (Free)<br><small>0 LKR</small></div>
-      <div class="infra-val highlight">Firebase Blaze<br><small>~6,500 LKR</small></div>
-      <div class="infra-val">Azure Cosmos DB<br><small>~16,500 LKR</small></div>
+      <div class="infra-val highlight">Firebase Blaze (Pay-as-you-go)<br><small>~7,500 LKR</small></div>
+      <div class="infra-val">Azure Cosmos DB Serverless<br><small>~16,500 LKR</small></div>
     </div>
 
     <div class="infra-row">
-      <div class="infra-service">Authentication <small>Firebase Auth / Azure AD B2C</small></div>
+      <div class="infra-service">Authentication <small>Google Firebase Auth / Azure Active Directory B2C</small></div>
       <div class="infra-val">Firebase Auth (Free)<br><small>0 LKR</small></div>
       <div class="infra-val highlight">Firebase Auth (Free)<br><small>0 LKR</small></div>
-      <div class="infra-val">Azure AD B2C<br><small>~4,950 LKR</small></div>
+      <div class="infra-val">Azure AD B2C + MFA<br><small>~4,950 LKR</small></div>
     </div>
 
     <div class="infra-row">
-      <div class="infra-service">Document & File Storage <small>Cloudinary / Azure Blob</small></div>
-      <div class="infra-val">Cloudinary Free<br><small>25GB — 0 LKR</small></div>
-      <div class="infra-val highlight">Cloudinary Starter<br><small>~3,300 LKR</small></div>
-      <div class="infra-val">Azure Blob 500GB<br><small>~8,250 LKR</small></div>
+      <div class="infra-service">Document & Image Storage <small>Cloudinary (Basic) / Firebase Storage GCP (Pro) / Azure Blob (Advanced)</small></div>
+      <div class="infra-val">Cloudinary (Free)<br><small>25GB — 0 LKR</small></div>
+      <div class="infra-val highlight">Firebase Storage (Blaze)<br><small>100GB — ~1,500 LKR</small></div>
+      <div class="infra-val">Azure Blob Storage<br><small>500GB — ~3,300 LKR</small></div>
     </div>
 
     <div class="infra-row">
-      <div class="infra-service">Email Delivery <small>EmailJS / Azure Communication Services</small></div>
+      <div class="infra-service">Email Delivery <small>EmailJS / SendGrid (Twilio) — transactional & automated emails</small></div>
       <div class="infra-val">EmailJS Free<br><small>200/mo — 0 LKR</small></div>
-      <div class="infra-val highlight">EmailJS Personal<br><small>~5,000 LKR</small></div>
-      <div class="infra-val">Azure Comms Services<br><small>~6,600 LKR</small></div>
+      <div class="infra-val highlight">SendGrid Essentials<br><small>40K/mo — ~6,600 LKR</small></div>
+      <div class="infra-val">SendGrid Pro + Dedicated IP<br><small>100K/mo — ~16,500 LKR</small></div>
     </div>
 
     <div class="infra-row">
@@ -451,8 +484,8 @@
     <div class="infra-total-row">
       <span>Infrastructure Subtotal</span>
       <span class="total-val total-free">0 LKR</span>
-      <span class="total-val total-medium">~21,400 LKR</span>
-      <span class="total-val total-advanced">~58,300 LKR</span>
+      <span class="total-val total-medium">~22,200 LKR</span>
+      <span class="total-val total-advanced">~63,350 LKR</span>
     </div>
     <div class="infra-total-row" style="background:linear-gradient(135deg,rgba(255,90,90,0.08),rgba(255,139,90,0.05));border-top:none;">
       <span style="font-size:15px">Monthly Total (incl. maintenance)</span>
@@ -641,11 +674,17 @@
 
   <!-- Footer -->
   <div class="proposal-footer">
-    <p style="font-size:14px;font-weight:700;color:#1A1A2E;margin-bottom:6px">Ceilao Insurance Brokers (Pvt) Ltd — Technology Division</p>
+    <p style="font-size:14px;font-weight:700;color:#1A1A2E;margin-bottom:6px">Prepared by: Shenal Gunasekara &nbsp;|&nbsp; For: Ceilao Insurance Brokers (Pvt) Ltd</p>
     <p>All prices are in Sri Lankan Rupees (LKR) and valid for 30 days from the date of issue.<br>
-    Third-party service costs are estimates based on average usage and may vary. Infrastructure costs are billed at cost.<br>
-    Maintenance fee of LKR 35,000/month is fixed across all plans.</p>
-    <p style="margin-top:12px;font-size:11px">For inquiries: raise a support ticket or contact your account representative · Confidential — Not for distribution</p>
+    Third-party infrastructure costs (Firebase, Azure, SendGrid, Vercel, Cloudinary) are estimates based on projected usage and are billed at cost price with no markup.<br>
+    The maintenance fee of <strong>LKR 35,000/month</strong> covers ongoing development, bug fixes, security updates, and feature enhancements.<br>
+    Infrastructure costs are subject to change based on actual usage; quotes reflect average monthly projections.</p>
+    <p style="margin-top:14px;padding:14px 20px;background:#F9F9FB;border-radius:10px;border:1px solid #E5E7EB;font-size:12px;color:#374151;line-height:1.7;">
+      <strong>Payment Terms:</strong> Monthly subscription billed in advance. Setup fee may apply for initial deployment.<br>
+      <strong>Contract:</strong> Minimum 3-month commitment. 30-day written notice required for cancellation.<br>
+      <strong>Intellectual Property:</strong> Source code remains the property of Shenal Gunasekara. Client receives perpetual licence to use the deployed system.
+    </p>
+    <p style="margin-top:12px;font-size:11px">Quotation Ref: QT-CIB-2026-001 · Confidential — Prepared exclusively for Ceilao Insurance Brokers (Pvt) Ltd</p>
   </div>
 
 </div>
