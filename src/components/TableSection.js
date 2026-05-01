@@ -140,7 +140,7 @@ const TableSection = () => {
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
-  // Auto-open Add Client form with pre-filled data when navigating from Quote comparison
+  // Auto-open Add/Edit Client form with pre-filled data from Quote comparison
   useEffect(() => {
     if (prefillHandled.current) return;
     const params = new URLSearchParams(location.search);
@@ -149,10 +149,24 @@ const TableSection = () => {
     try {
       const data = JSON.parse(decodeURIComponent(raw));
       prefillHandled.current = true;
-      setPrefillData(data);
-      setAddOpen(true);
-      // Remove the prefill param from URL so refreshing doesn't re-open
       window.history.replaceState({}, '', window.location.pathname);
+
+      const quoteId  = data._quote_id;
+      const { _quote_id: _removed, ...cleanData } = data; // eslint-disable-line no-unused-vars
+
+      if (quoteId) {
+        // If a client was already saved from this quote, open it in edit mode
+        const existing = _cachedClients?.find(c => c.source_quote_id === quoteId);
+        if (existing) {
+          setEditClient({ ...existing, ...cleanData });
+        } else {
+          setPrefillData({ ...cleanData, source_quote_id: quoteId });
+          setAddOpen(true);
+        }
+      } else {
+        setPrefillData(cleanData);
+        setAddOpen(true);
+      }
     } catch { /* ignore malformed param */ }
   }, [location.search]);
 

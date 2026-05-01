@@ -590,12 +590,30 @@ const QuotationsPage = () => {
     setToast({ open: true, msg: `${response.company_name} selected. Forwarding to Underwriting…`, severity: 'success' });
     setCompareQuote(null);
     setTimeout(() => {
-      window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify({
-        product:            quote.product_label,
+      const fd = quote.form_data || {};
+      // Explicitly map quote fields → client form fields
+      const prefill = {
+        _quote_id:          quote.id,
+        // Policy & financial fields that match directly
         insurance_provider: response.company_name,
-        net_premium:        response.premium,
-        ...quote.form_data,
-      }))}`;
+        net_premium:        String(response.premium || ''),
+        basic_premium:      String(response.premium || ''),
+        total_invoice:      String(response.premium || ''),
+        sum_insured:        String(fd.sum_insured || fd.contract_value || fd.sum_assured || ''),
+        // Client name from proposer / contractor field
+        client_name:        fd.proposer_name || fd.contractor || fd.proposer || '',
+        // Coverage / policy type
+        coverage:           fd.cover_type || fd.plan_type || fd.perils || fd.cover_basis || '',
+        policy_type:        quote.product_label || '',
+        // Address fields if present
+        street1:            fd.property_address || fd.location || '',
+        // Dates
+        policy_period_from: fd.period_from || fd.voyage_date || '',
+        policy_period_to:   fd.period_to   || '',
+        // Remarks
+        ...(fd.remarks ? { coverage: fd.coverage || fd.cover_type || fd.remarks } : {}),
+      };
+      window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
     }, 1500);
   };
 
