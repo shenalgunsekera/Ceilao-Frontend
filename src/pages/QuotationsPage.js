@@ -8,6 +8,11 @@ import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
 import emailjs from '@emailjs/browser';
 
+// Initialise once at module load so the key is always available
+if (process.env.REACT_APP_EMAILJS_PUBLIC_KEY) {
+  emailjs.init({ publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY });
+}
+
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -531,7 +536,7 @@ const QuotationsPage = () => {
         const responseUrl = `${responseBase}?qid=${pendingQuote.id}&cid=${co.id}&cn=${encodeURIComponent(co.name)}`;
         sentTo.push({ company_id: co.id, company_name: co.name, company_email: co.email, sent_at: new Date().toISOString(), responded: false });
 
-        if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY) {
+        if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY && co.email) {
           const productLabel = PRODUCTS[pendingQuote.product_key]?.label || pendingQuote.product_key;
           const formEntries  = Object.entries(pendingQuote.form_data || {}).filter(([,v]) => v);
           const details = formEntries.length
