@@ -3,7 +3,14 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, limit, query, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -193,6 +200,43 @@ const theme = createTheme({
 export const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
+/* ── Session timeout guard ───────────────────────────────────────────────── */
+function SessionGuard({ children }) {
+  const { warning, countdown, stayLoggedIn, logout } = useSessionTimeout();
+  return (
+    <>
+      {children}
+      <Dialog open={warning} maxWidth="xs" fullWidth disableEscapeKeyDown
+        PaperProps={{ sx: { borderRadius: '18px' } }}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          ⏱ Session Expiring Soon
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography sx={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }}>
+            You've been inactive. Your session will automatically log out in{' '}
+            <Box component="span" sx={{ fontWeight: 800, color: '#FF5A5A', fontSize: 16 }}>
+              {countdown}s
+            </Box>
+            .
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: '#9CA3AF', mt: 1 }}>
+            Click "Stay Logged In" to continue your session.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(255,139,90,0.10)' }}>
+          <Button onClick={logout} variant="outlined"
+            sx={{ fontSize: 13, borderColor: '#e0e0e0', color: '#6B7280' }}>
+            Log Out Now
+          </Button>
+          <Button onClick={stayLoggedIn} variant="contained" sx={{ fontSize: 13 }}>
+            Stay Logged In
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -266,6 +310,7 @@ function App() {
 
             <Route path="/*" element={
               <RequireAuth>
+                <SessionGuard>
                 <Suspense fallback={null}>
                   <Routes>
                     {/* Full-screen operational menu — no sidebar */}
@@ -297,6 +342,7 @@ function App() {
                     } />
                   </Routes>
                 </Suspense>
+                </SessionGuard>
               </RequireAuth>
             } />
           </Routes>
