@@ -548,9 +548,6 @@ const QuotationsPage = () => {
             await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
               to_name:       co.name,
               to_email:      co.email,
-              from_name:     'Ceilao Insurance Brokers',
-              from_email:    'noreply@ceilaoinsurance.lk',
-              email:         'noreply@ceilaoinsurance.lk',
               reference:     pendingQuote.reference,
               product:       productLabel,
               response_link: responseUrl,
