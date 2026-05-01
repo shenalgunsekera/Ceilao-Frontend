@@ -274,8 +274,45 @@ function QuoteRow({ quote, onSelect, tab }) {
 
 /* ── comparison view ──────────────────────────────────────────────────────── */
 function ComparisonView({ quote, onBack, onConfirm }) {
-  const product = PRODUCTS[quote?.product_key];
+  const product   = PRODUCTS[quote?.product_key];
   const responses = quote?.responses || [];
+  const [custEmail,  setCustEmail]  = useState('');
+  const [sending,    setSending]    = useState(false);
+  const [sendDone,   setSendDone]   = useState(false);
+
+  const sendToCustomer = async () => {
+    if (!custEmail.trim()) return;
+    setSending(true);
+    try {
+      // Build an HTML table of the comparison
+      const rows = (product?.comparisonRows || []);
+      const headerCells = responses.map(r => `<th style="background:#FF5A5A;color:#fff;padding:10px 14px;font-size:13px;">${r.company_name}</th>`).join('');
+      const premiumRow = `<tr><td style="padding:8px 14px;font-weight:700;background:#FFF8F5;">Annual Premium (LKR)</td>${responses.map(r => `<td style="padding:8px 14px;font-weight:800;color:#FF5A5A;text-align:right;">${Number(r.premium||0).toLocaleString()}</td>`).join('')}</tr>`;
+      const dataRows = rows.filter(r => r !== 'Annual Premium (LKR)').map((row, i) =>
+        `<tr style="background:${i%2===0?'#fff':'#FFF8F5'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${row}</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:right;">${r.comparison_data?.[row]||'—'}</td>`).join('')}</tr>`
+      ).join('');
+      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${premiumRow}${dataRows}</tbody></table>`;
+
+      await emailjs.send(
+        process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
+        process.env.REACT_APP_EMAILJS_CUSTOMER_TEMPLATE_ID || process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '',
+        {
+          to_email:      custEmail.trim(),
+          to_name:       'Valued Client',
+          reference:     quote.reference,
+          product:       product?.label || quote.product_key,
+          table_html:    tableHtml,
+          company_count: responses.length,
+        },
+        { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY || '' }
+      );
+      setSendDone(true);
+      setTimeout(() => setSendDone(false), 4000);
+    } catch (err) {
+      console.error('Customer email error:', err?.text || err?.message);
+    }
+    setSending(false);
+  };
 
   const exportExcel = async () => {
     const { default: ExcelJS } = await import('exceljs');
@@ -341,6 +378,24 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           Export PDF
         </Button>
       </Stack>
+
+      {/* ── Send comparison to customer ── */}
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'center', flexWrap: 'wrap',
+                  p: 2, borderRadius: '12px', bgcolor: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.12)' }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#6366f1', flexShrink: 0 }}>
+          📧 Send to Customer
+        </Typography>
+        <TextField size="small" placeholder="customer@email.com" type="email"
+          value={custEmail} onChange={e => setCustEmail(e.target.value)}
+          sx={{ flex: 1, minWidth: 220,
+            '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+        <Button variant="contained" size="small" disabled={sending || !custEmail.trim()}
+          onClick={sendToCustomer}
+          sx={{ background: sendDone ? 'linear-gradient(135deg,#10B981,#059669)' : 'linear-gradient(135deg,#6366f1,#818cf8)',
+                fontSize: 12, flexShrink: 0, minWidth: 130 }}>
+          {sending ? 'Sending…' : sendDone ? '✓ Sent!' : 'Send Comparison'}
+        </Button>
+      </Box>
 
       {responses.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 6 }}>
