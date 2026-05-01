@@ -42,9 +42,6 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
-import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlined';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 
 /* ── module-level client cache (survives React re-mounts) ─────────────── */
@@ -73,37 +70,7 @@ const statusChip = {
   none:     { label: '—',        color: '#9CA3AF', bg: 'transparent'            },
 };
 
-/* ── stat card ────────────────────────────────────────────────────────── */
-function StatCard({ icon, label, value, sub, gradient, delay = 0 }) {
-  return (
-    <Card className="card-hover anim-fade-up" sx={{ animationDelay: `${delay}s`, flex: 1, minWidth: 150 }}>
-      <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, mb: 0.5 }}>
-              {label}
-            </Typography>
-            <Typography sx={{ fontSize: 26, fontWeight: 800, color: '#1A1A2E', lineHeight: 1.1 }}>
-              {value}
-            </Typography>
-            {sub && (
-              <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', mt: 0.4 }}>{sub}</Typography>
-            )}
-          </Box>
-          <Box sx={{
-            width: 42, height: 42, borderRadius: '12px',
-            background: gradient,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-            '& svg': { color: '#fff', fontSize: 20 },
-          }}>
-            {icon}
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
+
 
 /* ── skeleton row ─────────────────────────────────────────────────────── */
 function SkeletonRow() {
@@ -172,14 +139,6 @@ const TableSection = () => {
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
   /* stats */
-  const stats = useMemo(() => {
-    const total    = clients.length;
-    const expiring = clients.filter(c => expiryStatus(c) === 'expiring').length;
-    const expired  = clients.filter(c => expiryStatus(c) === 'expired').length;
-    const totalPrem = clients.reduce((s, c) => s + (Number(c.net_premium) || 0), 0);
-    return { total, expiring, expired, totalPrem };
-  }, [clients]);
-
   /* filter + search */
   const filtered = useMemo(() => {
     let list = clients;
