@@ -550,7 +550,7 @@ const QuotationsPage = () => {
               product:       productLabel,
               response_link: responseUrl,
               details,
-            }, EMAILJS_KEY);
+            }, { publicKey: EMAILJS_KEY });
           } catch (emailErr) {
             // Don't block the whole flow if email fails — quote is still saved
             console.error('EmailJS error for', co.name, ':', emailErr?.text || emailErr?.message || emailErr);
