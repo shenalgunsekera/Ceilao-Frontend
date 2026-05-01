@@ -300,40 +300,6 @@ const TableSection = () => {
 
   return (
     <Box className="page-enter">
-      {/* ── stats row ─────────────────────────────────────────── */}
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }}>
-        <StatCard
-          icon={<PeopleOutlineIcon />}
-          label="Total Clients"
-          value={stats.total}
-          gradient="linear-gradient(135deg,#E8472A,#E8712A)"
-          delay={0}
-        />
-        <StatCard
-          icon={<MonetizationOnOutlinedIcon />}
-          label="Net Premium"
-          value={`LKR ${(stats.totalPrem / 1_000_000).toFixed(2)}M`}
-          sub="total portfolio"
-          gradient="linear-gradient(135deg,#D97706,#B45309)"
-          delay={0.05}
-        />
-        <StatCard
-          icon={<WarningAmberIcon />}
-          label="Expiring Soon"
-          value={stats.expiring}
-          sub="within 30 days"
-          gradient="linear-gradient(135deg,#92400E,#B45309)"
-          delay={0.10}
-        />
-        <StatCard
-          icon={<TrendingUpIcon />}
-          label="Expired"
-          value={stats.expired}
-          sub="needs renewal"
-          gradient="linear-gradient(135deg,#7F1D1D,#991B1B)"
-          delay={0.15}
-        />
-      </Stack>
 
       {/* ── toolbar ───────────────────────────────────────────── */}
       <Box sx={{

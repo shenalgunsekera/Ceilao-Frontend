@@ -541,15 +541,20 @@ const QuotationsPage = () => {
               }).join('\n')
             : 'No additional details provided.';
 
-          await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-            to_name:       co.name,
-            to_email:      co.email,
-            from_name:     'Ceilao Insurance Brokers',
-            reference:     pendingQuote.reference,
-            product:       productLabel,
-            response_link: responseUrl,
-            details,
-          }, EMAILJS_KEY);
+          try {
+            await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+              to_name:       co.name,
+              to_email:      co.email,
+              from_name:     'Ceilao Insurance Brokers',
+              reference:     pendingQuote.reference,
+              product:       productLabel,
+              response_link: responseUrl,
+              details,
+            }, EMAILJS_KEY);
+          } catch (emailErr) {
+            // Don't block the whole flow if email fails — quote is still saved
+            console.error('EmailJS error for', co.name, ':', emailErr?.text || emailErr?.message || emailErr);
+          }
         }
       }
 
