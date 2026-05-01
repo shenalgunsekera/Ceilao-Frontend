@@ -619,9 +619,8 @@ const QuotationsPage = () => {
         {/* Stats row */}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 3 }}>
           {[
-            { label: 'Total Requests', val: filteredQuotes.length, color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
-            { label: 'Sent',           val: sentQuotes.length,     color: '#d97706', bg: 'rgba(245,158,11,0.08)' },
-            { label: 'Received',       val: receivedQuotes.length, color: '#059669', bg: 'rgba(16,185,129,0.08)' },
+            { label: 'Sent',     val: sentQuotes.length,     color: '#d97706', bg: 'rgba(245,158,11,0.08)' },
+            { label: 'Received', val: receivedQuotes.length, color: '#059669', bg: 'rgba(16,185,129,0.08)' },
           ].map(s => (
             <Box key={s.label} sx={{ flex: 1, p: 2, borderRadius: '12px', bgcolor: s.bg, border: `1px solid ${s.bg}` }}>
               <Typography sx={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.val}</Typography>
