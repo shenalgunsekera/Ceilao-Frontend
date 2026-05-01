@@ -24,7 +24,6 @@ import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumb
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import RaiseTicketModal from './RaiseTicketModal';
