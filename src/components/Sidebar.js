@@ -22,13 +22,22 @@ import CloseIcon from '@mui/icons-material/Close';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import RaiseTicketModal from './RaiseTicketModal';
 
 const DRAWER_W = 260;
 
 const navItems = [
-  { label: 'Clients',  path: '/',        icon: <PeopleOutlineIcon /> },
-  { label: 'Reports',  path: '/reports', icon: <BarChartIcon /> },
+  { label: 'Home',          path: '/menu',          icon: <HomeOutlinedIcon /> },
+  { label: 'Quotations',    path: '/quotations',    icon: <RequestQuoteOutlinedIcon /> },
+  { label: 'Underwriting',  path: '/underwriting',  icon: <PeopleOutlineIcon /> },
+  { label: 'Claims',        path: '/claims',        icon: <GavelOutlinedIcon /> },
+  { label: 'Renewals',      path: '/renewals',      icon: <AutorenewIcon /> },
+  { label: 'Reports',       path: '/reports',       icon: <BarChartIcon /> },
 ];
 
 function NavItem({ item, active, onClick }) {
@@ -161,14 +170,16 @@ function DrawerContent({ onClose }) {
             <NavItem
               key={item.path}
               item={item}
-              active={location.pathname === item.path}
+              active={item.path === '/menu'
+                ? location.pathname === '/menu'
+                : location.pathname.startsWith(item.path)}
               onClick={() => { navigate(item.path); onClose?.(); }}
             />
           ))}
           {(role === 'admin' || role === 'manager') && (
             <NavItem
               item={{ label: 'Admin Panel', path: '/admin', icon: <AdminPanelSettingsOutlinedIcon /> }}
-              active={location.pathname === '/admin'}
+              active={location.pathname.startsWith('/admin')}
               onClick={() => { navigate('/admin'); onClose?.(); }}
             />
           )}

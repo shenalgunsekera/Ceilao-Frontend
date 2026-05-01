@@ -12,8 +12,13 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import TableSection from './components/TableSection';
 import LoginPage from './components/LoginPage';
-const ReportsPage = lazy(() => import('./components/ReportsPage'));
-const AdminPanel  = lazy(() => import('./components/AdminPanel'));
+const ReportsPage      = lazy(() => import('./components/ReportsPage'));
+const AdminPanel       = lazy(() => import('./components/AdminPanel'));
+const OperationalMenu  = lazy(() => import('./pages/OperationalMenu'));
+const QuotationsPage   = lazy(() => import('./pages/QuotationsPage'));
+const QuoteResponsePage= lazy(() => import('./pages/QuoteResponsePage'));
+const RenewalsPage     = lazy(() => import('./pages/RenewalsPage'));
+const ClaimsPage       = lazy(() => import('./pages/ClaimsPage'));
 
 /* ── MUI theme ───────────────────────────────────────────────────────────── */
 const theme = createTheme({
@@ -256,33 +261,42 @@ function App() {
         <Router>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            {/* Public — insurance companies submit quotes without logging in */}
+            <Route path="/quote-respond" element={<Suspense fallback={null}><QuoteResponsePage /></Suspense>} />
+
             <Route path="/*" element={
               <RequireAuth>
-                <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#FFF8F5' }}>
-                  <Sidebar />
-                  <Box sx={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    ml: { xs: 0, md: '260px' },
-                    minWidth: 0,
-                    transition: 'margin 0.3s cubic-bezier(0.4,0,0.2,1)',
-                  }}>
-                    <Header />
-                    <Box
-                      className="page-enter"
-                      sx={{ flex: 1, p: { xs: 2, sm: 3, md: 3 }, pt: { xs: 2, sm: 3 } }}
-                    >
-                      <Suspense fallback={null}>
-                        <Routes>
-                          <Route path="/"        element={<TableSection />} />
-                          <Route path="/reports" element={<ReportsPage />} />
-                          <Route path="/admin"   element={<AdminPanel />} />
-                        </Routes>
-                      </Suspense>
-                    </Box>
-                  </Box>
-                </Box>
+                <Suspense fallback={null}>
+                  <Routes>
+                    {/* Full-screen operational menu — no sidebar */}
+                    <Route path="/menu" element={<OperationalMenu />} />
+
+                    {/* All other routes use sidebar layout */}
+                    <Route path="/*" element={
+                      <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#FFF8F5' }}>
+                        <Sidebar />
+                        <Box sx={{
+                          flex: 1, display: 'flex', flexDirection: 'column',
+                          ml: { xs: 0, md: '260px' }, minWidth: 0,
+                          transition: 'margin 0.3s cubic-bezier(0.4,0,0.2,1)',
+                        }}>
+                          <Header />
+                          <Box className="page-enter" sx={{ flex: 1, p: { xs: 2, sm: 3, md: 3 }, pt: { xs: 2, sm: 3 } }}>
+                            <Routes>
+                              <Route path="/"              element={<TableSection />} />
+                              <Route path="/underwriting"  element={<TableSection />} />
+                              <Route path="/reports"       element={<ReportsPage />} />
+                              <Route path="/admin"         element={<AdminPanel />} />
+                              <Route path="/quotations"    element={<QuotationsPage />} />
+                              <Route path="/renewals"      element={<RenewalsPage />} />
+                              <Route path="/claims"        element={<ClaimsPage />} />
+                            </Routes>
+                          </Box>
+                        </Box>
+                      </Box>
+                    } />
+                  </Routes>
+                </Suspense>
               </RequireAuth>
             } />
           </Routes>
