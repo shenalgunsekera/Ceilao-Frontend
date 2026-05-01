@@ -12,8 +12,9 @@ import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import BarChartIcon from '@mui/icons-material/BarChart';
 
 const pageMeta = {
-  '/':        { title: 'Clients',  sub: 'Manage insurance clients and policies', icon: <PeopleOutlineIcon /> },
-  '/reports': { title: 'Reports',  sub: 'Financial summaries and analytics',     icon: <BarChartIcon /> },
+  '/':             { title: 'Underwriting', sub: 'Policy issuance and client records',    icon: <PeopleOutlineIcon /> },
+  '/underwriting': { title: 'Underwriting', sub: 'Policy issuance and client records',    icon: <PeopleOutlineIcon /> },
+  '/reports':      { title: 'Reports',      sub: 'Financial summaries and analytics',     icon: <BarChartIcon /> },
 };
 
 const Header = () => {
@@ -23,7 +24,7 @@ const Header = () => {
   const role = userProfile?.role || '';
   const name = userProfile?.full_name || user?.email?.split('@')[0] || '';
   const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
-  const isClients = location.pathname === '/';
+  const isClients = location.pathname === '/' || location.pathname === '/underwriting';
 
   return (
     <Box sx={{
