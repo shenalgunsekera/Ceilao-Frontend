@@ -291,7 +291,18 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       const dataRows = rows.filter(r => r !== 'Annual Premium (LKR)').map((row, i) =>
         `<tr style="background:${i%2===0?'#fff':'#FFF8F5'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${row}</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:right;">${r.comparison_data?.[row]||'—'}</td>`).join('')}</tr>`
       ).join('');
-      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${premiumRow}${dataRows}</tbody></table>`;
+      // Row showing each company's uploaded quote document
+      const isImg = (url) => url && /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(url);
+      const docRow = `<tr style="background:#F9F9FB"><td style="padding:10px 14px;font-weight:600;color:#374151;">Uploaded Quote</td>${
+        responses.map(r => r.quote_file_url
+          ? isImg(r.quote_file_url)
+            ? `<td style="padding:8px 14px;text-align:center;"><a href="${r.quote_file_url}" target="_blank"><img src="${r.quote_file_url}" alt="Quote" style="max-width:140px;max-height:100px;border-radius:6px;border:1px solid #E5E7EB;" /></a></td>`
+            : `<td style="padding:8px 14px;text-align:center;"><a href="${r.quote_file_url}" target="_blank" style="display:inline-block;background:#6366f1;color:#fff;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">View PDF ↗</a></td>`
+          : `<td style="padding:8px 14px;text-align:center;color:#9CA3AF;font-size:12px;">Not uploaded</td>`
+        ).join('')
+      }</tr>`;
+
+      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${premiumRow}${dataRows}${docRow}</tbody></table>`;
 
       await emailjs.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
@@ -450,23 +461,43 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                 ))}
               </TableRow>
               {/* Quote images */}
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Uploaded Quote</TableCell>
-                {responses.map(r => (
-                  <TableCell key={r.id} align="center">
-                    {r.quote_file_url ? (
-                      <Box component="a" href={r.quote_file_url} target="_blank" rel="noopener noreferrer">
-                        {r.quote_file_url.match(/\.(jpg|jpeg|png|gif|webp)/i) ? (
-                          <Box component="img" src={r.quote_file_url} alt="Quote"
-                            sx={{ width: 100, height: 80, objectFit: 'cover', borderRadius: '8px', border: '1px solid rgba(255,139,90,0.2)' }} />
-                        ) : (
-                          <Chip label="View PDF" size="small"
-                            sx={{ bgcolor: 'rgba(99,102,241,0.1)', color: '#6366f1', fontWeight: 600, cursor: 'pointer' }} />
-                        )}
-                      </Box>
-                    ) : '—'}
-                  </TableCell>
-                ))}
+              <TableRow sx={{ bgcolor: 'rgba(99,102,241,0.03)' }}>
+                <TableCell sx={{ fontWeight: 700 }}>Uploaded Quote Document</TableCell>
+                {responses.map(r => {
+                  const isImage = r.quote_file_url && (
+                    r.quote_file_url.includes('/image/upload/') ||
+                    /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(r.quote_file_url)
+                  );
+                  return (
+                    <TableCell key={r.id} align="center">
+                      {r.quote_file_url ? (
+                        <Box>
+                          {isImage ? (
+                            <Box component="a" href={r.quote_file_url} target="_blank" rel="noopener noreferrer">
+                              <Box component="img"
+                                src={r.quote_file_url.replace('/upload/', '/upload/q_auto,f_auto/')}
+                                alt={`${r.company_name} quote`}
+                                sx={{
+                                  width: '100%', maxWidth: 180, maxHeight: 140,
+                                  objectFit: 'contain', borderRadius: '10px',
+                                  border: '1px solid rgba(99,102,241,0.20)',
+                                  display: 'block', mx: 'auto', mb: 1,
+                                  cursor: 'pointer',
+                                  '&:hover': { opacity: 0.88 },
+                                }} />
+                            </Box>
+                          ) : null}
+                          <Chip
+                            label={isImage ? 'Open full size ↗' : 'View PDF ↗'}
+                            size="small" clickable
+                            component="a" href={r.quote_file_url.replace('/upload/', '/upload/fl_inline/')}
+                            target="_blank"
+                            sx={{ bgcolor: 'rgba(99,102,241,0.10)', color: '#6366f1', fontWeight: 600, fontSize: 11 }} />
+                        </Box>
+                      ) : <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>Not uploaded</Typography>}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
               {/* Select winner */}
               <TableRow sx={{ bgcolor: 'rgba(16,185,129,0.04)' }}>

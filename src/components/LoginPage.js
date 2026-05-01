@@ -53,7 +53,8 @@ const LoginPage = () => {
       setUser(cred.user);
       const snap = await getDoc(doc(db, 'users', cred.user.uid));
       if (snap.exists()) setUserProfile(snap.data());
-      navigate(location.state?.from?.pathname || '/menu');
+      const from = location.state?.from?.pathname;
+      navigate(from && from !== '/' && from !== '/login' ? from : '/menu');
     } catch (err) {
       const msgs = {
         'auth/user-not-found':    'No account found with this email.',
