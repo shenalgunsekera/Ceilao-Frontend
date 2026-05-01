@@ -12,6 +12,8 @@ import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
 import PendingApprovals from './PendingApprovals';
 import CreateAccountModal from './CreateAccountModal';
+import InsuranceCompaniesManager from './InsuranceCompaniesManager';
+import ModuleAccessManager from './ModuleAccessManager';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -40,6 +42,8 @@ import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumb
 import BackupOutlinedIcon from '@mui/icons-material/BackupOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
+import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -542,6 +546,8 @@ const AdminPanel = () => {
         <Tab icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Tickets${stats.open ? ` (${stats.open})` : ''}`} />
         <Tab icon={<HourglassEmptyIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Pending Approvals" />
         <Tab icon={<GroupAddOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Accounts" />
+        <Tab icon={<BusinessOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Insurers" />
+        <Tab icon={<LockOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Module Access" />
         <Tab icon={<BackupOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Data Backup" />
       </Tabs>
 
@@ -631,13 +637,19 @@ const AdminPanel = () => {
         </Box>
       )}
 
+      {/* ── INSURERS TAB ── */}
+      {tab === 3 && <InsuranceCompaniesManager />}
+
+      {/* ── MODULE ACCESS TAB ── */}
+      {tab === 4 && <ModuleAccessManager />}
+
       {/* ── BACKUP TAB (admin only) ── */}
-      {tab === 3 && !isAdmin && (
+      {tab === 5 && !isAdmin && (
         <Box sx={{ textAlign: 'center', py: 6 }}>
           <Typography sx={{ color: '#9CA3AF' }}>Data backup is restricted to admin accounts.</Typography>
         </Box>
       )}
-      {tab === 3 && isAdmin && (
+      {tab === 5 && isAdmin && (
         <Box>
           <Card sx={{ mb: 2 }}>
             <CardContent>
