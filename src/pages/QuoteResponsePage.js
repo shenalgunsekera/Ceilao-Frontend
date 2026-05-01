@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { db, auth } from '../firebase';
 import { uploadToCloudinary } from '../cloudinary';
 import { PRODUCTS } from '../config/products';
 
@@ -41,18 +42,23 @@ const QuoteResponsePage = () => {
 
   useEffect(() => {
     if (!qid) { setError('Invalid link — missing quote ID.'); setLoading(false); return; }
-    getDoc(doc(db, 'quotes', qid))
-      .then(snap => {
-        if (!snap.exists()) { setError('This quote request could not be found.'); return; }
-        const data = snap.data();
-        if (data.status === 'confirmed') { setError('This quote has already been confirmed. No further responses needed.'); return; }
-        // Check if already responded
-        const alreadyResponded = (data.responses || []).some(r => r.company_id === cid);
-        if (alreadyResponded) { setSubmitted(true); }
-        setQuote({ id: snap.id, ...data });
-      })
-      .catch(() => setError('Failed to load quote. Please check your link.'))
-      .finally(() => setLoading(false));
+
+    // Sign in anonymously so Firestore rules allow unauthenticated public access
+    signInAnonymously(auth)
+      .catch(() => {})
+      .finally(() => {
+        getDoc(doc(db, 'quotes', qid))
+          .then(snap => {
+            if (!snap.exists()) { setError('This quote request could not be found.'); return; }
+            const data = snap.data();
+            if (data.status === 'confirmed') { setError('This quote has already been confirmed. No further responses needed.'); return; }
+            const alreadyResponded = (data.responses || []).some(r => r.company_id === cid);
+            if (alreadyResponded) { setSubmitted(true); }
+            setQuote({ id: snap.id, ...data });
+          })
+          .catch(() => setError('Failed to load quote. Please check your link.'))
+          .finally(() => setLoading(false));
+      });
   }, [qid, cid]);
 
   const handleFile = async (file) => {
