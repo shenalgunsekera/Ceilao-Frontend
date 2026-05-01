@@ -190,7 +190,20 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
   const [fields, setFields] = useState(() => {
     const obj = {};
-    textFields.forEach(f => { obj[f.name] = initialData[f.name] || ''; });
+    textFields.forEach(f => {
+      const raw = initialData[f.name];
+      if (raw === undefined || raw === null || raw === '') {
+        obj[f.name] = '';
+      } else if (f.dropdown && dropdowns[f.name]) {
+        // If value doesn't match any dropdown option, use as-is (shown as free text hint)
+        // or fall back to the last option ("Other") so the field isn't blank
+        obj[f.name] = dropdowns[f.name].includes(String(raw))
+          ? String(raw)
+          : (dropdowns[f.name].includes('Other') ? 'Other' : '');
+      } else {
+        obj[f.name] = String(raw);
+      }
+    });
     docFields.forEach(f => { obj[f.text] = initialData[f.text] || ''; });
     return obj;
   });
@@ -254,6 +267,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           submitted_by:      user?.uid || '',
           submitted_by_name: userProfile?.full_name || user?.email?.split('@')[0] || 'Unknown',
           submitted_at:      serverTimestamp(),
+          ...(initialData.source_quote_id ? { source_quote_id: initialData.source_quote_id } : {}),
         });
       }
 
