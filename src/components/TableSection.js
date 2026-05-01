@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   collection, getDocs, deleteDoc, doc, query, orderBy, writeBatch
 } from 'firebase/firestore';
@@ -86,6 +87,8 @@ function SkeletonRow() {
 /* ── main component ───────────────────────────────────────────────────── */
 const TableSection = () => {
   const { user, userProfile, searchQuery } = useAuth();
+  const location = useLocation();
+  const prefillHandled = useRef(false);
   const isPrivileged = userProfile?.role === 'manager' || userProfile?.role === 'admin';
   const isManager = isPrivileged;
   const uid = user?.uid || '';
@@ -93,6 +96,7 @@ const TableSection = () => {
   const [clients,      setClients]      = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [addOpen,      setAddOpen]      = useState(false);
+  const [prefillData,  setPrefillData]  = useState({});
   const [detailClient, setDetailClient] = useState(null);
   const [editClient,   setEditClient]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -135,6 +139,22 @@ const TableSection = () => {
   }, [isPrivileged, uid]);
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
+
+  // Auto-open Add Client form with pre-filled data when navigating from Quote comparison
+  useEffect(() => {
+    if (prefillHandled.current) return;
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('prefill');
+    if (!raw) return;
+    try {
+      const data = JSON.parse(decodeURIComponent(raw));
+      prefillHandled.current = true;
+      setPrefillData(data);
+      setAddOpen(true);
+      // Remove the prefill param from URL so refreshing doesn't re-open
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch { /* ignore malformed param */ }
+  }, [location.search]);
 
   /* stats */
   /* filter + search */
@@ -483,9 +503,15 @@ const TableSection = () => {
       {/* ── dialogs ──────────────────────────────────────────── */}
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="md" fullWidth
         PaperProps={{ sx: { maxHeight: '92vh' } }}>
-        <DialogTitle>Add New Client</DialogTitle>
+        <DialogTitle>
+          {Object.keys(prefillData).length > 0 ? 'New Client — Pre-filled from Quote' : 'Add New Client'}
+        </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
-          <AddClientForm onSuccess={handleAddClient} onCancel={() => setAddOpen(false)} />
+          <AddClientForm
+            onSuccess={() => { handleAddClient(); setPrefillData({}); }}
+            onCancel={() => { setAddOpen(false); setPrefillData({}); }}
+            initialData={prefillData}
+          />
         </DialogContent>
       </Dialog>
 
