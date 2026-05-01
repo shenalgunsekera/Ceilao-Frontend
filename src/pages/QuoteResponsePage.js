@@ -77,12 +77,16 @@ const QuoteResponsePage = () => {
   const setCompRow = (key, val) =>
     setForm(f => ({ ...f, comparison_data: { ...f.comparison_data, [key]: val } }));
 
+  const [submittedData, setSubmittedData] = useState(null);
+  const [editing,       setEditing]       = useState(false);
+
   const handleSubmit = async () => {
     if (!form.premium) { setError('Annual Premium is required.'); return; }
     setSaving(true);
     try {
+      const responseId = `${cid}_${Date.now()}`;
       const response = {
-        id:              `${cid}_${Date.now()}`,
+        id:              responseId,
         company_id:      cid,
         company_name:    companyName,
         premium:         Number(form.premium),
@@ -94,17 +98,92 @@ const QuoteResponsePage = () => {
         submitted_at:    new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'quotes', qid), {
-        responses: arrayUnion(response),
-        status: 'partial',
-        updated_at: serverTimestamp(),
-      });
+      // If editing, remove previous response for this company first
+      if (editing) {
+        const snap = await (await import('firebase/firestore')).getDoc(
+          (await import('firebase/firestore')).doc(db, 'quotes', qid)
+        );
+        if (snap.exists()) {
+          const prev = (snap.data().responses || []).filter(r => r.company_id !== cid);
+          await updateDoc(doc(db, 'quotes', qid), {
+            responses: [...prev, response],
+            status: 'partial',
+            updated_at: serverTimestamp(),
+          });
+        }
+      } else {
+        await updateDoc(doc(db, 'quotes', qid), {
+          responses: arrayUnion(response),
+          status: 'partial',
+          updated_at: serverTimestamp(),
+        });
+      }
+
+      setSubmittedData(response);
       setSubmitted(true);
+      setEditing(false);
     } catch (err) {
       setError(err.message);
     }
     setSaving(false);
   };
+
+  const downloadReceipt = async () => {
+    const { default: jsPDF }     = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    // Header band
+    pdf.setFillColor(255, 90, 90);
+    pdf.rect(0, 0, 210, 38, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(18); pdf.setFont('helvetica', 'bold');
+    pdf.text('Ceilao Insurance Brokers', 14, 15);
+    pdf.setFontSize(11); pdf.setFont('helvetica', 'normal');
+    pdf.text('Quotation Submission Receipt', 14, 23);
+    pdf.setFontSize(9);
+    pdf.text(`Ref: ${quote?.reference || qid}   |   ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}`, 14, 31);
+
+    // Sub-header
+    pdf.setFillColor(26, 26, 46);
+    pdf.rect(0, 38, 210, 12, 'F');
+    pdf.setTextColor(255, 139, 90);
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
+    pdf.text(`SUBMITTED BY: ${companyName}`, 14, 46);
+    pdf.setTextColor(255,255,255);
+    pdf.text(`PRODUCT: ${quote?.product_label || ''}`, 120, 46);
+
+    // Submission details table
+    const rows = [
+      ['Annual Premium (LKR)', Number(submittedData?.premium || form.premium).toLocaleString()],
+      ['Deductible / Excess',  submittedData?.deductible      || form.deductible     || '—'],
+      ['Quote Validity (days)',submittedData?.validity_days   || form.validity_days  || '—'],
+      ['Notes / Terms',        submittedData?.notes           || form.notes          || '—'],
+      ...(submittedData?.quote_file_url ? [['Uploaded Document', submittedData.quote_file_url]] : []),
+      ...Object.entries(submittedData?.comparison_data || {})
+        .filter(([,v]) => v)
+        .map(([k, v]) => [k, String(v)]),
+    ];
+
+    autoTable(pdf, {
+      startY: 56,
+      head: [['Field', 'Value']],
+      body: rows,
+      headStyles: { fillColor: [255, 139, 90], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+      alternateRowStyles: { fillColor: [255, 248, 245] },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 65 } },
+      styles: { fontSize: 9.5, cellPadding: 4 },
+      margin: { left: 14, right: 14 },
+    });
+
+    const finalY = pdf.lastAutoTable.finalY + 10;
+    pdf.setTextColor(150, 150, 150); pdf.setFontSize(8); pdf.setFont('helvetica', 'italic');
+    pdf.text('Ceilao Insurance Brokers (Pvt) Ltd — Confidential Quotation Receipt', 14, finalY);
+
+    pdf.save(`receipt_${quote?.reference || qid}_${companyName.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  const handleEdit = () => { setSubmitted(false); setEditing(true); };
 
   const product = quote ? PRODUCTS[quote.product_key] : null;
 
@@ -115,16 +194,54 @@ const QuoteResponsePage = () => {
   );
 
   if (submitted) return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
-      <Card sx={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
-        <CardContent sx={{ p: 4 }}>
-          <CheckCircleIcon sx={{ fontSize: 64, color: '#10B981', mb: 2 }} />
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>Quote Submitted!</Typography>
-          <Typography sx={{ color: '#6B7280', fontSize: 14 }}>
-            Thank you, <strong>{companyName}</strong>. Your quotation has been received and will be reviewed by Ceilao Insurance Brokers.
-          </Typography>
-        </CardContent>
-      </Card>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', py: 4, px: 2 }}>
+      <Box sx={{ maxWidth: 560, mx: 'auto' }}>
+        <Card sx={{ mb: 2.5, overflow: 'hidden' }}>
+          <Box sx={{ background: 'linear-gradient(135deg,#10B981,#059669)', p: 3, textAlign: 'center' }}>
+            <CheckCircleIcon sx={{ fontSize: 52, color: '#fff', mb: 1 }} />
+            <Typography sx={{ fontWeight: 800, fontSize: 20, color: '#fff' }}>
+              {editing ? 'Quotation Updated!' : 'Quotation Submitted!'}
+            </Typography>
+            <Typography sx={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', mt: 0.5 }}>
+              {companyName} · Ref: {quote?.reference}
+            </Typography>
+          </Box>
+          <CardContent sx={{ p: 3 }}>
+            {/* Receipt summary */}
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
+              Submission Summary
+            </Typography>
+            <Stack spacing={1} sx={{ mb: 2.5 }}>
+              {[
+                ['Annual Premium', `LKR ${Number(submittedData?.premium || 0).toLocaleString()}`],
+                ['Deductible',     submittedData?.deductible  || '—'],
+                ['Validity',       submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
+                ['Submitted',      new Date(submittedData?.submitted_at || Date.now()).toLocaleString('en-GB')],
+              ].map(([l, v]) => (
+                <Box key={l} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.8,
+                                    borderBottom: '1px solid rgba(255,139,90,0.08)' }}>
+                  <Typography sx={{ fontSize: 13, color: '#6B7280' }}>{l}</Typography>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>{v}</Typography>
+                </Box>
+              ))}
+            </Stack>
+            <Stack spacing={1.5}>
+              <Button fullWidth variant="contained" onClick={downloadReceipt}
+                startIcon={<UploadFileIcon />}
+                sx={{ py: 1.2, fontSize: 13, background: 'linear-gradient(135deg,#1A1A2E,#2d2d42)' }}>
+                Download PDF Receipt
+              </Button>
+              <Button fullWidth variant="outlined" onClick={handleEdit}
+                sx={{ py: 1.2, fontSize: 13, borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A' }}>
+                Made a Mistake? Edit &amp; Resubmit
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+        <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', textAlign: 'center' }}>
+          Ceilao Insurance Brokers (Pvt) Ltd — your response has been tracked in real-time.
+        </Typography>
+      </Box>
     </Box>
   );
 
@@ -183,7 +300,9 @@ const QuoteResponsePage = () => {
         {/* Response form */}
         <Card>
           <CardContent>
-            <Typography sx={{ fontWeight: 700, fontSize: 14, mb: 2.5, color: '#1A1A2E' }}>Your Quotation Details</Typography>
+            <Typography sx={{ fontWeight: 700, fontSize: 14, mb: 2.5, color: '#1A1A2E' }}>
+              {editing ? '✏️ Editing Submission — Update your details below' : 'Your Quotation Details'}
+            </Typography>
 
             {error && <Alert severity="error" sx={{ mb: 2, fontSize: 12 }}>{error}</Alert>}
 
@@ -258,7 +377,7 @@ const QuoteResponsePage = () => {
 
             <Button fullWidth variant="contained" onClick={handleSubmit} disabled={saving || uploading}
               sx={{ mt: 3, py: 1.3, fontSize: 14, fontWeight: 700 }}>
-              {saving ? 'Submitting…' : 'Submit Quotation'}
+              {saving ? 'Submitting…' : editing ? 'Update Quotation' : 'Submit Quotation'}
             </Button>
 
             <Typography sx={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', mt: 2 }}>
