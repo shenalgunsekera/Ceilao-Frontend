@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
 
 import Box from '@mui/material/Box';
@@ -283,8 +285,6 @@ const ReportsPage = () => {
   const exportFullXLS = async () => {
     setExporting(true); setExportErr('');
     try {
-    const { default: ExcelJS } = await import('exceljs');
-    const { saveAs } = await import('file-saver');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Ceilao Insurance Brokers';
     wb.created = new Date();
@@ -494,8 +494,6 @@ const ReportsPage = () => {
   const exportClientXLS = async () => {
     setExporting(true); setExportErr('');
     try {
-    const { default: ExcelJS } = await import('exceljs');
-    const { saveAs } = await import('file-saver');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Ceilao Insurance Brokers';
     wb.created = new Date();
