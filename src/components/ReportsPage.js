@@ -97,9 +97,9 @@ function addSheetHeader(ws, logoId, wb, title, subtitle) {
   titleCell.value = '';
   headerStyle(titleCell, { bg: XL.coral, size: 14 });
 
-  // Logo (top-left)
+  // Logo (top-left) — ws.addImage positions the image; wb.addImage only registers it
   if (logoId !== null) {
-    wb.addImage(logoId, {
+    ws.addImage(logoId, {
       tl: { col: 0.3, row: 0.2 },
       ext: { width: 110, height: 55 },
     });
