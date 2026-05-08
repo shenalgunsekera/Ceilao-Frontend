@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   doc, getDoc, updateDoc, arrayUnion, serverTimestamp,
-  collection, addDoc, getDocs, query, where, orderBy,
+  collection, addDoc, getDocs, query, where,
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../firebase';
@@ -50,6 +50,18 @@ const QuoteResponsePage = () => {
     special_terms: '', excesses: '', commission_type: '',
     comparison_data: {},
   });
+
+  const [submittedData,  setSubmittedData]  = useState(null);
+  const [editing,        setEditing]        = useState(false);
+  const [fieldErrors,    setFieldErrors]    = useState({});
+  const [valOpen,        setValOpen]        = useState(false);
+  const [valIssues,      setValIssues]      = useState({ missing: [], invalid: [] });
+  const [editWindowOpen,  setEditWindowOpen]  = useState(false);
+  const [reditApproved,   setReditApproved]   = useState(false);
+  const [reditPending,    setReditPending]    = useState(false);
+  const [showReditForm,   setShowReditForm]   = useState(false);
+  const [reditReason,     setReditReason]     = useState('');
+  const [reditSending,    setReditSending]    = useState(false);
 
   useEffect(() => {
     if (!qid) { setError('Invalid link — missing quote ID.'); setLoading(false); return; }
@@ -152,19 +164,6 @@ const QuoteResponsePage = () => {
 
   const setCompRow = (key, val) =>
     setForm(f => ({ ...f, comparison_data: { ...f.comparison_data, [key]: val } }));
-
-  const [submittedData,  setSubmittedData]  = useState(null);
-  const [editing,        setEditing]        = useState(false);
-  const [fieldErrors,    setFieldErrors]    = useState({});
-  const [valOpen,        setValOpen]        = useState(false);
-  const [valIssues,      setValIssues]      = useState({ missing: [], invalid: [] });
-  // Re-edit access control
-  const [editWindowOpen,  setEditWindowOpen]  = useState(false);   // within 15 min of submit
-  const [reditApproved,   setReditApproved]   = useState(false);   // broker approved re-edit
-  const [reditPending,    setReditPending]    = useState(false);   // request awaiting broker
-  const [showReditForm,   setShowReditForm]   = useState(false);
-  const [reditReason,     setReditReason]     = useState('');
-  const [reditSending,    setReditSending]    = useState(false);
 
   const totalPremium =
     (Number(form.basic_premium) || 0) +

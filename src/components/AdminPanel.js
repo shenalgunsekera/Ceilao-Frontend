@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   collection, getDocs, doc, updateDoc, deleteDoc,
-  query, orderBy, serverTimestamp, where
+  query, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';

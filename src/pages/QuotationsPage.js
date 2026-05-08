@@ -6,7 +6,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
-import { COUNTRIES, getDialCode } from '../config/countries';
+import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
 
 import Box from '@mui/material/Box';
