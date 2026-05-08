@@ -362,13 +362,26 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     setSending(true);
     try {
       // Build an HTML table of the comparison
-      const rows = (product?.comparisonRows || []);
+      const compRows = (product?.comparisonRows || []);
       const headerCells = responses.map(r => `<th style="background:#FF5A5A;color:#fff;padding:10px 14px;font-size:13px;">${r.company_name}</th>`).join('');
-      const premiumRow = `<tr><td style="padding:8px 14px;font-weight:700;background:#FFF8F5;">Annual Premium (LKR)</td>${responses.map(r => `<td style="padding:8px 14px;font-weight:800;color:#FF5A5A;text-align:right;">${Number(r.premium||0).toLocaleString()}</td>`).join('')}</tr>`;
-      const dataRows = rows.filter(r => r !== 'Annual Premium (LKR)').map((row, i) =>
+      const fmt = n => n ? Number(n).toLocaleString() : '—';
+      // Premium breakdown rows — shown to customer, commission excluded
+      const breakdownRows = [
+        ['Basic Premium (LKR)', r => fmt(r.basic_premium)],
+        ['SRCC (LKR)',          r => fmt(r.srcc_premium)],
+        ['TC (LKR)',            r => fmt(r.tc_premium)],
+        ['Admin Fee (LKR)',     r => fmt(r.admin_fee)],
+        ['VAT (LKR)',           r => fmt(r.vat_amount)],
+        ['Other (LKR)',         r => fmt(r.other_premium)],
+        ['Total Premium (LKR)', r => `<strong style="color:#FF5A5A">${fmt(r.premium)}</strong>`],
+      ].map(([label, getter], i) =>
+        `<tr style="background:${i%2===0?'#FFF8F5':'#fff'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`
+      ).join('');
+      const excessRow = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
+      const termsRow  = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Special Terms</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.special_terms||'—'}</td>`).join('')}</tr>`;
+      const dataRows = compRows.filter(r => r !== 'Annual Premium (LKR)').map((row, i) =>
         `<tr style="background:${i%2===0?'#fff':'#FFF8F5'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${row}</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:right;">${r.comparison_data?.[row]||'—'}</td>`).join('')}</tr>`
       ).join('');
-      // Row showing each company's uploaded quote document
       const isImg = (url) => url && /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(url);
       const docRow = `<tr style="background:#F9F9FB"><td style="padding:10px 14px;font-weight:600;color:#374151;">Uploaded Quote</td>${
         responses.map(r => r.quote_file_url
@@ -379,7 +392,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         ).join('')
       }</tr>`;
 
-      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${premiumRow}${dataRows}${docRow}</tbody></table>`;
+      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${excessRow}${termsRow}${dataRows}${docRow}</tbody></table>`;
 
       await emailjs.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
@@ -423,6 +436,29 @@ function ComparisonView({ quote, onBack, onConfirm }) {
 
     // Reference row
     ws.addRow(['Reference', ...responses.map(() => quote.reference)]);
+
+    // Premium breakdown
+    const breakdownLabels = [
+      ['Basic Premium (LKR)', 'basic_premium'],
+      ['SRCC (LKR)',          'srcc_premium'],
+      ['TC (LKR)',            'tc_premium'],
+      ['Admin Fee (LKR)',     'admin_fee'],
+      ['VAT (LKR)',           'vat_amount'],
+      ['Other (LKR)',         'other_premium'],
+      ['Total Premium (LKR)', 'premium'],
+    ];
+    breakdownLabels.forEach(([label, key], i) => {
+      const row = ws.addRow([label, ...responses.map(r => r[key] ? Number(r[key]) : '—')]);
+      row.eachCell((cell, ci) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFFFFFFF' : 'FFFFF8F5' } };
+        if (ci === 1) cell.font = { bold: true, size: 10, name: 'Calibri' };
+        if (key === 'premium' && ci > 1) { cell.font = { bold: true, color: { argb: 'FFFF5A5A' }, size: 11, name: 'Calibri' }; }
+      });
+    });
+
+    ws.addRow(['Commission Type (Internal)', ...responses.map(r => r.commission_type || '—')]);
+    ws.addRow(['Excesses',      ...responses.map(r => r.excesses     || '—')]);
+    ws.addRow(['Special Terms', ...responses.map(r => r.special_terms || '—')]);
 
     // Comparison rows
     (product?.comparisonRows || []).forEach((label, i) => {
@@ -511,11 +547,61 @@ function ComparisonView({ quote, onBack, onConfirm }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              <TableRow sx={{ bgcolor: 'rgba(255,90,90,0.04)' }}>
-                <TableCell sx={{ fontWeight: 700 }}>Premium (LKR)</TableCell>
+              {/* Premium breakdown rows */}
+              {[
+                { key: 'basic_premium', label: 'Basic Premium (LKR)' },
+                { key: 'srcc_premium',  label: 'SRCC (LKR)' },
+                { key: 'tc_premium',    label: 'TC (LKR)' },
+                { key: 'admin_fee',     label: 'Admin Fee (LKR)' },
+                { key: 'vat_amount',    label: 'VAT (LKR)' },
+                { key: 'other_premium', label: 'Other (LKR)' },
+              ].map((row, i) => (
+                <TableRow key={row.key} sx={{ bgcolor: i % 2 === 0 ? 'rgba(255,248,245,0.4)' : '#fff' }}>
+                  <TableCell sx={{ fontWeight: 600, color: '#374151', fontSize: 12.5 }}>{row.label}</TableCell>
+                  {responses.map(r => (
+                    <TableCell key={r.id} align="center" sx={{ fontSize: 12.5 }}>
+                      {r[row.key] ? Number(r[row.key]).toLocaleString() : '—'}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+              <TableRow sx={{ bgcolor: 'rgba(255,90,90,0.06)' }}>
+                <TableCell sx={{ fontWeight: 800, color: '#FF5A5A' }}>Total Premium (LKR)</TableCell>
                 {responses.map(r => (
                   <TableCell key={r.id} align="center" sx={{ fontWeight: 800, color: '#FF5A5A', fontSize: 15 }}>
                     {Number(r.premium || 0).toLocaleString()}
+                  </TableCell>
+                ))}
+              </TableRow>
+              {/* Commission — broker internal only */}
+              <TableRow sx={{ bgcolor: 'rgba(99,102,241,0.04)' }}>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <Stack direction="row" spacing={0.8} alignItems="center">
+                    <span>Commission Type</span>
+                    <Chip label="Internal" size="small"
+                      sx={{ fontSize: 9, height: 16, bgcolor: 'rgba(99,102,241,0.12)', color: '#6366f1', fontWeight: 700 }} />
+                  </Stack>
+                </TableCell>
+                {responses.map(r => (
+                  <TableCell key={r.id} align="center" sx={{ fontSize: 12.5, color: '#6366f1', fontWeight: 600 }}>
+                    {r.commission_type || '—'}
+                  </TableCell>
+                ))}
+              </TableRow>
+              {/* Excesses & Special Terms */}
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Excesses</TableCell>
+                {responses.map(r => (
+                  <TableCell key={r.id} sx={{ fontSize: 12, color: '#6B7280', whiteSpace: 'pre-wrap' }}>
+                    {r.excesses || '—'}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow sx={{ bgcolor: 'rgba(255,248,245,0.6)' }}>
+                <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Special Terms</TableCell>
+                {responses.map(r => (
+                  <TableCell key={r.id} sx={{ fontSize: 12, color: '#6B7280', whiteSpace: 'pre-wrap' }}>
+                    {r.special_terms || '—'}
                   </TableCell>
                 ))}
               </TableRow>
@@ -530,7 +616,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                 </TableRow>
               ))}
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Notes / T&Cs</TableCell>
                 {responses.map(r => (
                   <TableCell key={r.id} sx={{ fontSize: 12, color: '#6B7280', whiteSpace: 'pre-wrap' }}>
                     {r.notes || '—'}
@@ -772,23 +858,43 @@ const QuotationsPage = () => {
     setCompareQuote(null);
     setTimeout(() => {
       const fd = quote.form_data || {};
-      // Explicitly map quote fields → client form fields
+      // Full mapping: quote form data + insurer response → underwriting form
       const prefill = {
         _quote_id:          quote.id,
+        // Insurer & policy
         insurance_provider: response.company_name,
-        net_premium:        String(response.premium || ''),
-        basic_premium:      String(response.premium || ''),
-        total_invoice:      String(response.premium || ''),
-        sum_insured:        String(fd.sum_insured || fd.contract_value || fd.sum_assured || fd.total_value || fd.cyber_limit || ''),
-        client_name:        fd.proposer_name || fd.name_of_insured || fd.full_name || fd.company_name || fd.contractor || '',
-        coverage:           fd.cover_type || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
         policy_type:        quote.product_label || '',
+        main_class:         quote.product_label || '',
+        coverage:           fd.cover_type || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
+        // Premium breakdown from insurer response
+        basic_premium:      String(response.basic_premium || response.premium || ''),
+        srcc_premium:       String(response.srcc_premium  || ''),
+        tc_premium:         String(response.tc_premium    || ''),
+        admin_fees:         String(response.admin_fee     || ''),
+        vat_fee:            String(response.vat_amount    || ''),
+        net_premium:        String(response.basic_premium || response.premium || ''),
+        total_invoice:      String(response.premium       || ''),
+        // Commission from insurer
+        commission_type:    response.commission_type || '',
+        // Risk / sum insured from quote form
+        sum_insured:        String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || ''),
+        // Client details from quote form
+        client_name:        fd.proposer_name || fd.name_of_insured || fd.full_name || fd.company_name || fd.contractor || '',
+        customer_type:      fd.customer_type || '',
+        introducer_code:    fd.introducer    || '',
+        email:              fd.email         || '',
+        mobile_no:          fd.mobile        || '',
+        telephone:          fd.telephone     || '',
+        nic_br:             fd.nic_br || fd.nic_passport || fd.nic_passport_br || fd.business_reg || '',
+        // Address
         street1:            fd.property_address || fd.address_of_risk || fd.address || fd.location || '',
-        policy_period_from: fd.period_from || fd.departure_date || fd.voyage_date || '',
-        policy_period_to:   fd.period_to || fd.return_date || '',
-        email:              fd.email || '',
-        mobile_no:          fd.mobile || '',
-        telephone:          fd.telephone || '',
+        city:               fd.city    || fd.district || '',
+        // Policy period
+        policy_period_from: fd.period_from || fd.departure_date || fd.voyage_date || fd.loan_start || '',
+        policy_period_to:   fd.period_to   || fd.return_date    || fd.loan_end    || '',
+        // Vehicle (motor)
+        vehicle_number:     fd.vehicle_no  || '',
+        insurer:            response.company_name,
       };
       window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
     }, 1500);

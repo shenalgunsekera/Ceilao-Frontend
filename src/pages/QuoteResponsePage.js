@@ -36,7 +36,10 @@ const QuoteResponsePage = () => {
   const [fileName,   setFileName]   = useState('');
 
   const [form, setForm] = useState({
-    premium: '', deductible: '', validity_days: '', notes: '',
+    basic_premium: '', srcc_premium: '', tc_premium: '',
+    admin_fee: '', vat_amount: '', other_premium: '',
+    deductible: '', validity_days: '', notes: '',
+    special_terms: '', excesses: '', commission_type: '',
     comparison_data: {},
   });
 
@@ -80,8 +83,16 @@ const QuoteResponsePage = () => {
   const [submittedData, setSubmittedData] = useState(null);
   const [editing,       setEditing]       = useState(false);
 
+  const totalPremium =
+    (Number(form.basic_premium) || 0) +
+    (Number(form.srcc_premium)  || 0) +
+    (Number(form.tc_premium)    || 0) +
+    (Number(form.admin_fee)     || 0) +
+    (Number(form.vat_amount)    || 0) +
+    (Number(form.other_premium) || 0);
+
   const handleSubmit = async () => {
-    if (!form.premium) { setError('Annual Premium is required.'); return; }
+    if (!form.basic_premium) { setError('Basic Premium is required.'); return; }
     setSaving(true);
     try {
       const responseId = `${cid}_${Date.now()}`;
@@ -89,7 +100,16 @@ const QuoteResponsePage = () => {
         id:              responseId,
         company_id:      cid,
         company_name:    companyName,
-        premium:         Number(form.premium),
+        premium:         totalPremium,
+        basic_premium:   Number(form.basic_premium) || 0,
+        srcc_premium:    Number(form.srcc_premium)  || 0,
+        tc_premium:      Number(form.tc_premium)    || 0,
+        admin_fee:       Number(form.admin_fee)     || 0,
+        vat_amount:      Number(form.vat_amount)    || 0,
+        other_premium:   Number(form.other_premium) || 0,
+        special_terms:   form.special_terms,
+        excesses:        form.excesses,
+        commission_type: form.commission_type,
         deductible:      form.deductible,
         validity_days:   form.validity_days,
         notes:           form.notes,
@@ -213,10 +233,15 @@ const QuoteResponsePage = () => {
             </Typography>
             <Stack spacing={1} sx={{ mb: 2.5 }}>
               {[
-                ['Annual Premium', `LKR ${Number(submittedData?.premium || 0).toLocaleString()}`],
-                ['Deductible',     submittedData?.deductible  || '—'],
-                ['Validity',       submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
-                ['Submitted',      new Date(submittedData?.submitted_at || Date.now()).toLocaleString('en-GB')],
+                ['Total Premium',   `LKR ${Number(submittedData?.premium || 0).toLocaleString()}`],
+                ['Basic Premium',   submittedData?.basic_premium ? `LKR ${Number(submittedData.basic_premium).toLocaleString()}` : '—'],
+                ['SRCC',            submittedData?.srcc_premium  ? `LKR ${Number(submittedData.srcc_premium).toLocaleString()}`  : '—'],
+                ['TC',              submittedData?.tc_premium    ? `LKR ${Number(submittedData.tc_premium).toLocaleString()}`    : '—'],
+                ['Admin Fee',       submittedData?.admin_fee     ? `LKR ${Number(submittedData.admin_fee).toLocaleString()}`     : '—'],
+                ['VAT',             submittedData?.vat_amount    ? `LKR ${Number(submittedData.vat_amount).toLocaleString()}`    : '—'],
+                ['Deductible',      submittedData?.deductible    || '—'],
+                ['Validity',        submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
+                ['Submitted',       new Date(submittedData?.submitted_at || Date.now()).toLocaleString('en-GB')],
               ].map(([l, v]) => (
                 <Box key={l} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.8,
                                     borderBottom: '1px solid rgba(255,139,90,0.08)' }}>
@@ -323,8 +348,65 @@ const QuoteResponsePage = () => {
             {error && <Alert severity="error" sx={{ mb: 2, fontSize: 12 }}>{error}</Alert>}
 
             <Stack spacing={2.5}>
-              <TextField label="Annual Premium (LKR) *" type="number" fullWidth size="small"
-                value={form.premium} onChange={e => setForm(f => ({ ...f, premium: e.target.value }))} />
+
+              {/* ── Premium Breakdown ── */}
+              <Box sx={{ p: 2, borderRadius: '12px', border: '1px solid rgba(255,90,90,0.15)', bgcolor: 'rgba(255,90,90,0.02)' }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
+                  Premium Breakdown
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                  <TextField label="Basic Premium (LKR) *" type="number" size="small" fullWidth
+                    value={form.basic_premium} onChange={e => setForm(f => ({ ...f, basic_premium: e.target.value }))} />
+                  <TextField label="SRCC (LKR) *" type="number" size="small" fullWidth
+                    value={form.srcc_premium} onChange={e => setForm(f => ({ ...f, srcc_premium: e.target.value }))} />
+                  <TextField label="TC (LKR) *" type="number" size="small" fullWidth
+                    value={form.tc_premium} onChange={e => setForm(f => ({ ...f, tc_premium: e.target.value }))} />
+                  <TextField label="Admin Fee (LKR) *" type="number" size="small" fullWidth
+                    value={form.admin_fee} onChange={e => setForm(f => ({ ...f, admin_fee: e.target.value }))} />
+                  <TextField label="VAT (LKR) *" type="number" size="small" fullWidth
+                    value={form.vat_amount} onChange={e => setForm(f => ({ ...f, vat_amount: e.target.value }))} />
+                  <TextField label="Other (LKR)" type="number" size="small" fullWidth
+                    value={form.other_premium} onChange={e => setForm(f => ({ ...f, other_premium: e.target.value }))} />
+                </Box>
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: '8px', bgcolor: 'rgba(255,90,90,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Total Premium (LKR)</Typography>
+                  <Typography sx={{ fontSize: 16, fontWeight: 800, color: '#FF5A5A' }}>
+                    {totalPremium > 0 ? totalPremium.toLocaleString() : '—'}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* ── Commission (broker-internal) ── */}
+              <Box>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#6B7280', mb: 0.8 }}>
+                  Commission Type
+                  <Box component="span" sx={{ ml: 1, px: 0.8, py: 0.2, borderRadius: '4px', bgcolor: 'rgba(99,102,241,0.1)', color: '#6366f1', fontSize: 10, fontWeight: 700 }}>
+                    FOR BROKER USE ONLY
+                  </Box>
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {['Standard', 'Special'].map(opt => (
+                    <Box key={opt} onClick={() => setForm(f => ({ ...f, commission_type: opt }))}
+                      sx={{
+                        flex: 1, py: 1, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
+                        border: `1.5px solid ${form.commission_type === opt ? '#6366f1' : 'rgba(0,0,0,0.12)'}`,
+                        bgcolor: form.commission_type === opt ? 'rgba(99,102,241,0.08)' : 'transparent',
+                        color: form.commission_type === opt ? '#6366f1' : '#6B7280',
+                        fontWeight: form.commission_type === opt ? 700 : 400, fontSize: 13,
+                        transition: 'all 0.15s ease',
+                      }}>
+                      {opt}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+
+              <TextField label="Special Terms" multiline minRows={2} fullWidth size="small"
+                value={form.special_terms} onChange={e => setForm(f => ({ ...f, special_terms: e.target.value }))} />
+
+              <TextField label="Excesses" multiline minRows={2} fullWidth size="small"
+                value={form.excesses} onChange={e => setForm(f => ({ ...f, excesses: e.target.value }))} />
+
               <TextField label="Deductible / Excess" fullWidth size="small"
                 value={form.deductible} onChange={e => setForm(f => ({ ...f, deductible: e.target.value }))} />
               <TextField label="Quote Validity (days)" type="number" fullWidth size="small"
