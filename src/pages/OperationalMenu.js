@@ -21,6 +21,7 @@ const MODULE_ROUTES = {
   accounting:   '/accounting',
   reports:      '/reports',
   renewals:     '/renewals',
+  marketing:    '/marketing',
 };
 
 const MODULE_COLORS = {
@@ -30,6 +31,7 @@ const MODULE_COLORS = {
   accounting:   { grad: 'linear-gradient(135deg,#10B981,#34d399)', light: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.18)' },
   reports:      { grad: 'linear-gradient(135deg,#f59e0b,#fbbf24)', light: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.18)' },
   renewals:     { grad: 'linear-gradient(135deg,#8b5cf6,#a78bfa)', light: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.18)' },
+  marketing:    { grad: 'linear-gradient(135deg,#25D366,#128C7E)',  light: 'rgba(37,211,102,0.08)', border: 'rgba(37,211,102,0.18)' },
 };
 
 const OperationalMenu = () => {
