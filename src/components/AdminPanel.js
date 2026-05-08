@@ -462,7 +462,7 @@ const AdminPanel = () => {
     await updateDoc(doc(db, 'quote_redit_requests', reqId), {
       status:          decision,
       ...(decision === 'approved' ? { approved_until: approvedUntil } : {}),
-      reviewed_by:     userProfile?.full_name || user?.email || '',
+      reviewed_by:     userProfile?.full_name || userProfile?.email || '',
       reviewed_at:     serverTimestamp(),
     });
     setReditRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: decision } : r));
