@@ -26,6 +26,7 @@ import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
+import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import RaiseTicketModal from './RaiseTicketModal';
 
 const DRAWER_W = 260;
@@ -175,6 +176,13 @@ function DrawerContent({ onClose }) {
               onClick={() => { navigate(item.path); onClose?.(); }}
             />
           ))}
+          {(role === 'admin' || role === 'manager') && (
+            <NavItem
+              item={{ label: 'Marketing', path: '/marketing', icon: <CampaignOutlinedIcon /> }}
+              active={location.pathname.startsWith('/marketing')}
+              onClick={() => { navigate('/marketing'); onClose?.(); }}
+            />
+          )}
           {(role === 'admin' || role === 'manager') && (
             <NavItem
               item={{ label: 'Admin Panel', path: '/admin', icon: <AdminPanelSettingsOutlinedIcon /> }}
