@@ -8,6 +8,8 @@ import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
 import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
+import { uploadToCloudinary } from '../cloudinary';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -74,6 +76,7 @@ function validateForm(product, values) {
 
   def.fields.forEach(f => {
     if (f.autoCalc) return;
+    if (f.type === 'file') return;
     // skip fields hidden by showIf
     if (f.showIf && values[f.showIf.field] !== f.showIf.value) return;
 
@@ -116,6 +119,7 @@ function genRef(productKey, customerName) {
 function ProductForm({ product, values, onChange, errors = {} }) {
   const def = PRODUCTS[product];
   if (!def) return null;
+  const [fileUploading, setFileUploading] = useState({});
 
   // Group fields by section
   const sections = [];
@@ -292,6 +296,50 @@ function ProductForm({ product, values, onChange, errors = {} }) {
             value={values[f.name] || ''}
             onChange={e => onChange(f.name, e.target.value)}
             error={hasErr} helperText={errMsg} />
+        </Box>
+      );
+    }
+
+    // File upload
+    if (f.type === 'file') {
+      const url   = values[f.name] || '';
+      const fname = values[f.name + '_filename'] || '';
+      const busy  = fileUploading[f.name];
+      const accept = (f.accept || 'pdf,jpg,jpeg,png').split(',').map(e => `.${e}`).join(',');
+      return (
+        <Box key={f.name} sx={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 2, p: 1.5, borderRadius: '8px', border: '1px dashed rgba(255,90,90,0.25)', bgcolor: 'rgba(255,90,90,0.02)' }}>
+          <Button component="label" variant="outlined" size="small" disabled={busy}
+            sx={{ flexShrink: 0, borderColor: url ? '#22c55e' : 'rgba(255,90,90,0.5)', color: url ? '#22c55e' : '#FF5A5A', textTransform: 'none', fontSize: 12, minWidth: 110 }}>
+            {busy ? 'Uploading…' : url ? 'Replace' : 'Upload'}
+            <input type="file" hidden accept={accept}
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setFileUploading(prev => ({ ...prev, [f.name]: true }));
+                try {
+                  const uploadedUrl = await uploadToCloudinary(file, 'ceilao/quotation-docs');
+                  onChange(f.name, uploadedUrl);
+                  onChange(f.name + '_filename', file.name);
+                } catch { /* silently ignore */ }
+                setFileUploading(prev => ({ ...prev, [f.name]: false }));
+              }} />
+          </Button>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{f.label}</Typography>
+            {url ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
+                <CheckCircleIcon sx={{ color: '#22c55e', fontSize: 14 }} />
+                <Typography component="a" href={url} target="_blank" rel="noopener noreferrer"
+                  sx={{ fontSize: 11, color: '#22c55e', textDecoration: 'none', '&:hover': { textDecoration: 'underline' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+                  {fname || 'View document'}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography sx={{ fontSize: 11, color: '#9CA3AF', mt: 0.3 }}>
+                Accepted: {(f.accept || 'pdf, jpg, png').toUpperCase()}
+              </Typography>
+            )}
+          </Box>
         </Box>
       );
     }
