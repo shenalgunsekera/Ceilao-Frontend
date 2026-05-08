@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import {
+  doc, getDoc, updateDoc, arrayUnion, serverTimestamp,
+  collection, addDoc, getDocs, query, where, orderBy,
+} from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { uploadToCloudinary } from '../cloudinary';
@@ -16,8 +19,13 @@ import Stack from '@mui/material/Stack';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
 const QuoteResponsePage = () => {
   const [params]    = useSearchParams();
@@ -55,14 +63,79 @@ const QuoteResponsePage = () => {
             if (!snap.exists()) { setError('This quote request could not be found.'); return; }
             const data = snap.data();
             if (data.status === 'confirmed') { setError('This quote has already been confirmed. No further responses needed.'); return; }
-            const alreadyResponded = (data.responses || []).some(r => r.company_id === cid);
-            if (alreadyResponded) { setSubmitted(true); }
+            const myResponse = (data.responses || []).find(r => r.company_id === cid);
+            if (myResponse) {
+              setSubmitted(true);
+              setSubmittedData(myResponse);
+              const submitTime = new Date(myResponse.submitted_at);
+              const windowEnd  = new Date(submitTime.getTime() + 15 * 60 * 1000);
+              if (new Date() < windowEnd) {
+                setEditWindowOpen(true);
+              } else {
+                // check for an approved re-edit request
+                getDocs(query(
+                  collection(db, 'quote_redit_requests'),
+                  where('quote_id', '==', snap.id),
+                  where('company_id', '==', cid),
+                  where('status', '==', 'approved'),
+                )).then(rsnap => {
+                  const valid = rsnap.docs.find(d => new Date(d.data().approved_until) > new Date());
+                  if (valid) { setReditApproved(true); return; }
+                  // check for a pending request
+                  getDocs(query(
+                    collection(db, 'quote_redit_requests'),
+                    where('quote_id', '==', snap.id),
+                    where('company_id', '==', cid),
+                    where('status', '==', 'pending'),
+                  )).then(psnap => { if (!psnap.empty) setReditPending(true); });
+                }).catch(() => {});
+              }
+            }
             setQuote({ id: snap.id, ...data });
           })
           .catch(() => setError('Failed to load quote. Please check your link.'))
           .finally(() => setLoading(false));
       });
   }, [qid, cid]);
+
+  // Poll every 20s while re-edit request is pending — auto-unlocks when broker approves
+  useEffect(() => {
+    if (!reditPending || !qid || !cid) return;
+    const iv = setInterval(async () => {
+      try {
+        const snap = await getDocs(query(
+          collection(db, 'quote_redit_requests'),
+          where('quote_id', '==', qid),
+          where('company_id', '==', cid),
+          where('status', '==', 'approved'),
+        ));
+        const valid = snap.docs.find(d => new Date(d.data().approved_until) > new Date());
+        if (valid) { setReditApproved(true); setReditPending(false); clearInterval(iv); }
+      } catch {}
+    }, 20000);
+    return () => clearInterval(iv);
+  }, [reditPending, qid, cid]);
+
+  const submitReditRequest = async () => {
+    if (!reditReason.trim()) return;
+    setReditSending(true);
+    try {
+      await addDoc(collection(db, 'quote_redit_requests'), {
+        quote_id:     qid,
+        quote_ref:    quote?.reference || qid,
+        company_id:   cid,
+        company_name: companyName,
+        product:      quote?.product_label || '',
+        reason:       reditReason.trim(),
+        status:       'pending',
+        requested_at: serverTimestamp(),
+      });
+      setReditPending(true);
+      setShowReditForm(false);
+      setReditReason('');
+    } catch { /* ignore */ }
+    setReditSending(false);
+  };
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -80,8 +153,18 @@ const QuoteResponsePage = () => {
   const setCompRow = (key, val) =>
     setForm(f => ({ ...f, comparison_data: { ...f.comparison_data, [key]: val } }));
 
-  const [submittedData, setSubmittedData] = useState(null);
-  const [editing,       setEditing]       = useState(false);
+  const [submittedData,  setSubmittedData]  = useState(null);
+  const [editing,        setEditing]        = useState(false);
+  const [fieldErrors,    setFieldErrors]    = useState({});
+  const [valOpen,        setValOpen]        = useState(false);
+  const [valIssues,      setValIssues]      = useState({ missing: [], invalid: [] });
+  // Re-edit access control
+  const [editWindowOpen,  setEditWindowOpen]  = useState(false);   // within 15 min of submit
+  const [reditApproved,   setReditApproved]   = useState(false);   // broker approved re-edit
+  const [reditPending,    setReditPending]    = useState(false);   // request awaiting broker
+  const [showReditForm,   setShowReditForm]   = useState(false);
+  const [reditReason,     setReditReason]     = useState('');
+  const [reditSending,    setReditSending]    = useState(false);
 
   const totalPremium =
     (Number(form.basic_premium) || 0) +
@@ -203,7 +286,12 @@ const QuoteResponsePage = () => {
     pdf.save(`receipt_${quote?.reference || qid}_${companyName.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const handleEdit = () => { setSubmitted(false); setEditing(true); };
+  const canEdit = editWindowOpen || reditApproved;
+  const handleEdit = () => {
+    if (!canEdit) return;
+    setSubmitted(false);
+    setEditing(true);
+  };
 
   const product = quote ? PRODUCTS[quote.product_key] : null;
 
@@ -256,10 +344,51 @@ const QuoteResponsePage = () => {
                 sx={{ py: 1.2, fontSize: 13, background: 'linear-gradient(135deg,#1A1A2E,#2d2d42)' }}>
                 Download PDF Receipt
               </Button>
-              <Button fullWidth variant="outlined" onClick={handleEdit}
-                sx={{ py: 1.2, fontSize: 13, borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A' }}>
-                Made a Mistake? Edit &amp; Resubmit
-              </Button>
+              {/* Edit / re-edit access control */}
+              {canEdit ? (
+                <Button fullWidth variant="outlined" onClick={handleEdit}
+                  sx={{ py: 1.2, fontSize: 13, borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A' }}>
+                  {reditApproved ? '✏️ Re-edit Approved — Edit & Resubmit' : 'Made a Mistake? Edit & Resubmit'}
+                </Button>
+              ) : reditPending ? (
+                <Box sx={{ p: 2, borderRadius: '10px', bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', textAlign: 'center' }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#d97706', mb: 0.5 }}>Re-edit Request Pending</Typography>
+                  <Typography sx={{ fontSize: 12, color: '#6B7280' }}>
+                    Your request is awaiting broker approval. This page will automatically unlock once approved.
+                  </Typography>
+                </Box>
+              ) : showReditForm ? (
+                <Box sx={{ p: 2, borderRadius: '10px', border: '1px solid rgba(255,90,90,0.2)' }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: '#374151' }}>
+                    Request Re-edit Access
+                  </Typography>
+                  <TextField fullWidth size="small" multiline rows={3}
+                    label="Reason for re-edit *"
+                    placeholder="Briefly explain why you need to update your submission…"
+                    value={reditReason}
+                    onChange={e => setReditReason(e.target.value)}
+                    sx={{ mb: 1.5 }} />
+                  <Stack direction="row" spacing={1}>
+                    <Button variant="outlined" size="small" onClick={() => setShowReditForm(false)}
+                      sx={{ borderColor: '#e0e0e0', color: '#6B7280' }}>Cancel</Button>
+                    <Button variant="contained" size="small" onClick={submitReditRequest}
+                      disabled={!reditReason.trim() || reditSending}
+                      sx={{ background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)' }}>
+                      {reditSending ? 'Sending…' : 'Submit Request'}
+                    </Button>
+                  </Stack>
+                </Box>
+              ) : (
+                <Box sx={{ p: 2, borderRadius: '10px', bgcolor: 'rgba(107,114,128,0.05)', border: '1px solid rgba(0,0,0,0.08)', textAlign: 'center' }}>
+                  <Typography sx={{ fontSize: 12.5, color: '#6B7280', mb: 1.5 }}>
+                    The 15-minute edit window has closed. Need to make a change?
+                  </Typography>
+                  <Button variant="outlined" size="small" onClick={() => setShowReditForm(true)}
+                    sx={{ borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A', fontSize: 12 }}>
+                    Request Re-edit Access
+                  </Button>
+                </Box>
+              )}
             </Stack>
           </CardContent>
         </Card>
