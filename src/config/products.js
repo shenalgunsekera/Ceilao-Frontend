@@ -1151,6 +1151,7 @@ export const MODULES = [
   { key: 'accounting',   label: 'Accounting',        icon: '💰', description: 'Premiums, commissions and payments' },
   { key: 'reports',      label: 'Reports',           icon: '📊', description: 'Analytics and data exports' },
   { key: 'renewals',     label: 'Renewals Tracker',  icon: '🔄', description: 'Upcoming renewals and alerts' },
+  { key: 'marketing',    label: 'Marketing',         icon: '📣', description: 'WhatsApp bulk campaigns and client messaging' },
 ];
 
 export const DEFAULT_MODULE_ACCESS = {
@@ -1160,4 +1161,5 @@ export const DEFAULT_MODULE_ACCESS = {
   accounting:   ['admin', 'manager'],
   reports:      ['admin', 'manager', 'employee'],
   renewals:     ['admin', 'manager', 'employee'],
+  marketing:    ['admin', 'manager'],
 };
