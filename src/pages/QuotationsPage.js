@@ -6,6 +6,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
+import { COUNTRIES, getDialCode } from '../config/countries';
 import emailjs from '@emailjs/browser';
 
 import Box from '@mui/material/Box';
@@ -169,6 +170,37 @@ function ProductForm({ product, values, onChange, errors = {} }) {
       );
     }
 
+    // Country searchable select
+    if (f.type === 'country-select') {
+      const selected = COUNTRIES.find(c => c.name === values[f.name]) || null;
+      return (
+        <Autocomplete key={f.name} sx={gridStyle}
+          options={COUNTRIES}
+          getOptionLabel={c => c.name}
+          value={selected}
+          onChange={(_, c) => {
+            onChange(f.name, c?.name || '');
+            // auto-fill dial code for phone fields if this country field affects them
+            if (c && f.affectsPhoneCode) {
+              onChange('telephone_code', c.dialCode);
+              onChange('mobile_code', c.dialCode);
+            }
+          }}
+          renderOption={(props, c) => (
+            <li {...props} key={c.code}>
+              <Box component="span" sx={{ mr: 1, fontSize: 11, color: '#9CA3AF', fontFamily: 'monospace' }}>{c.dialCode}</Box>
+              {c.name}
+            </li>
+          )}
+          renderInput={params => (
+            <TextField {...params} size="small" fullWidth
+              label={f.label + (f.required ? ' *' : '')}
+              error={hasErr} helperText={errMsg} />
+          )}
+        />
+      );
+    }
+
     // Date
     if (f.type === 'date') {
       return (
@@ -226,6 +258,41 @@ function ProductForm({ product, values, onChange, errors = {} }) {
           value={total > 0 ? total.toLocaleString() : ''}
           InputProps={{ readOnly: true }}
           sx={{ ...gridStyle, '& .MuiInputBase-input': { color: '#FF5A5A', fontWeight: 700 } }} />
+      );
+    }
+
+    // Phone fields — dial-code selector + number input
+    if (f.name === 'telephone' || f.name === 'mobile') {
+      const codeKey  = f.name + '_code';
+      const codeVal  = values[codeKey] || '+94';
+      const codeObj  = COUNTRIES.find(c => c.dialCode === codeVal) || null;
+      return (
+        <Box key={f.name} sx={{ ...gridStyle, display: 'flex', gap: 0.8, alignItems: 'flex-start' }}>
+          <Autocomplete
+            options={COUNTRIES}
+            getOptionLabel={c => c.dialCode}
+            value={codeObj}
+            onChange={(_, c) => onChange(codeKey, c?.dialCode || '')}
+            disableClearable
+            sx={{ width: 120, flexShrink: 0 }}
+            renderOption={(props, c) => (
+              <li {...props} key={c.code} style={{ fontSize: 12 }}>
+                <Box component="span" sx={{ fontWeight: 700, mr: 0.5 }}>{c.dialCode}</Box>
+                <Box component="span" sx={{ color: '#9CA3AF' }}>{c.name}</Box>
+              </li>
+            )}
+            renderInput={params => (
+              <TextField {...params} size="small" label="Code"
+                inputProps={{ ...params.inputProps, style: { fontSize: 13 } }} />
+            )}
+          />
+          <TextField size="small" fullWidth
+            label={f.label + (f.required ? ' *' : '')}
+            type="tel"
+            value={values[f.name] || ''}
+            onChange={e => onChange(f.name, e.target.value)}
+            error={hasErr} helperText={errMsg} />
+        </Box>
       );
     }
 
