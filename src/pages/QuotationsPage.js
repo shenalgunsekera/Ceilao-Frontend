@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, addDoc, getDocs, query, orderBy, onSnapshot,
-  doc, updateDoc, serverTimestamp
+  doc, updateDoc, deleteDoc, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
@@ -61,85 +61,154 @@ const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
 if (EMAILJS_KEY) emailjs.init({ publicKey: EMAILJS_KEY });
 
 /* ── generate reference number ────────────────────────────────────────────── */
-function genRef() {
+function genRef(productKey, customerName) {
+  const prefix = PRODUCTS[productKey]?.prefix || 'QT';
   const d = new Date();
   const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const rand = Math.floor(Math.random() * 9000) + 1000;
-  return `QT-${ymd}-${rand}`;
+  const uid = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const name = (customerName || '').replace(/[^A-Za-z0-9]/g, '').substring(0, 12).toUpperCase() || 'UNKNOWN';
+  return `${prefix}-${ymd}-${uid}-${name}`;
 }
 
 /* ── dynamic product form ─────────────────────────────────────────────────── */
 function ProductForm({ product, values, onChange }) {
   const def = PRODUCTS[product];
   if (!def) return null;
+
+  // Group fields by section
+  const sections = [];
+  let currentSection = { name: null, fields: [] };
+  def.fields.forEach(f => {
+    if (f.section !== currentSection.name) {
+      if (currentSection.fields.length) sections.push({ ...currentSection });
+      currentSection = { name: f.section, fields: [f] };
+    } else {
+      currentSection.fields.push(f);
+    }
+  });
+  if (currentSection.fields.length) sections.push(currentSection);
+
+  const isVisible = (f) => {
+    if (!f.showIf) return true;
+    return values[f.showIf.field] === f.showIf.value;
+  };
+
+  const renderField = (f) => {
+    if (!isVisible(f)) return null;
+    const isFullWidth = f.fullWidth || f.type === 'textarea' || f.name === 'remarks' || f.name === 'address' || f.name === 'address_of_risk' || f.name === 'operations_description' || f.name === 'goods_description' || f.name === 'product_description';
+    const gridStyle = isFullWidth ? { gridColumn: '1 / -1' } : {};
+
+    // Multi-select (chips)
+    if (f.multiSelect || f.type === 'multiselect') {
+      const selected = values[f.name] ? values[f.name].split(',').map(s => s.trim()).filter(Boolean) : [];
+      return (
+        <Box key={f.name} sx={{ gridColumn: '1 / -1' }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#6B7280', mb: 0.8 }}>{f.label}{f.required ? ' *' : ''}</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+            {(f.options || []).map(opt => (
+              <Chip key={opt} label={opt} size="small" clickable
+                onClick={() => {
+                  const next = selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt];
+                  onChange(f.name, next.join(', '));
+                }}
+                sx={{
+                  bgcolor: selected.includes(opt) ? 'rgba(255,90,90,0.12)' : 'rgba(0,0,0,0.05)',
+                  color: selected.includes(opt) ? '#FF5A5A' : '#6B7280',
+                  border: selected.includes(opt) ? '1px solid rgba(255,90,90,0.3)' : '1px solid transparent',
+                  fontWeight: selected.includes(opt) ? 700 : 400,
+                }} />
+            ))}
+          </Box>
+        </Box>
+      );
+    }
+
+    // Date
+    if (f.type === 'date') {
+      return (
+        <DatePicker key={f.name}
+          label={f.label + (f.required ? ' *' : '')}
+          value={values[f.name] ? new Date(values[f.name]) : null}
+          onChange={v => onChange(f.name, v ? v.toISOString().split('T')[0] : '')}
+          slotProps={{ textField: { size: 'small', fullWidth: true } }}
+          sx={gridStyle} />
+      );
+    }
+
+    // Select (includes yesno)
+    if (f.options || f.type === 'yesno' || f.type === 'select') {
+      const opts = f.type === 'yesno' ? ['Yes', 'No'] : (f.options || []);
+      return (
+        <FormControl key={f.name} size="small" fullWidth sx={gridStyle}>
+          <InputLabel>{f.label}{f.required ? ' *' : ''}</InputLabel>
+          <Select value={values[f.name] || ''} label={f.label + (f.required ? ' *' : '')}
+            onChange={e => onChange(f.name, e.target.value)}>
+            {opts.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+          </Select>
+        </FormControl>
+      );
+    }
+
+    // Textarea
+    if (f.type === 'textarea') {
+      return (
+        <TextField key={f.name} size="small" fullWidth multiline rows={3}
+          label={f.label + (f.required ? ' *' : '')}
+          value={values[f.name] || ''}
+          onChange={e => onChange(f.name, e.target.value)}
+          sx={{ gridColumn: '1 / -1' }} />
+      );
+    }
+
+    // Auto-calculated
+    if (f.autoCalc) {
+      const fields = f.autoCalc.replace('sum:', '').split(',');
+      const total = fields.reduce((acc, fn) => acc + (Number(values[fn.trim()]) || 0), 0);
+      if (total !== Number(values[f.name] || 0)) {
+        // trigger update without causing infinite loop
+        setTimeout(() => onChange(f.name, String(total)), 0);
+      }
+      return (
+        <TextField key={f.name} size="small" fullWidth
+          label={f.label + ' (Auto-calculated)'}
+          value={total > 0 ? total.toLocaleString() : ''}
+          InputProps={{ readOnly: true }}
+          sx={{ ...gridStyle, '& .MuiInputBase-input': { color: '#FF5A5A', fontWeight: 700 } }} />
+      );
+    }
+
+    // Currency, email, number, text
+    return (
+      <TextField key={f.name} size="small" fullWidth
+        label={f.label + (f.required ? ' *' : '')}
+        type={f.type === 'currency' ? 'number' : (f.type === 'email' ? 'email' : (f.type === 'number' ? 'number' : 'text'))}
+        value={values[f.name] || ''}
+        onChange={e => onChange(f.name, e.target.value)}
+        InputProps={f.type === 'currency' ? { startAdornment: <Box component="span" sx={{ color: '#9CA3AF', mr: 0.5, fontSize: 12 }}>LKR</Box> } : undefined}
+        sx={gridStyle} />
+    );
+  };
+
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-      {def.fields.map(f => {
-        if (f.multiSelect) {
-          const selected = values[f.name] ? values[f.name].split(',').map(s => s.trim()).filter(Boolean) : [];
-          return (
-            <Box key={f.name} sx={{ gridColumn: '1 / -1' }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#6B7280', mb: 1 }}>{f.label}</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
-                {f.options.map(opt => (
-                  <Chip
-                    key={opt} label={opt} size="small" clickable
-                    onClick={() => {
-                      const next = selected.includes(opt)
-                        ? selected.filter(s => s !== opt)
-                        : [...selected, opt];
-                      onChange(f.name, next.join(', '));
-                    }}
-                    sx={{
-                      bgcolor: selected.includes(opt) ? 'rgba(255,90,90,0.12)' : 'rgba(0,0,0,0.05)',
-                      color:   selected.includes(opt) ? '#FF5A5A' : '#6B7280',
-                      border:  selected.includes(opt) ? '1px solid rgba(255,90,90,0.3)' : '1px solid transparent',
-                      fontWeight: selected.includes(opt) ? 700 : 400,
-                    }}
-                  />
-                ))}
-              </Box>
-            </Box>
-          );
-        }
-        if (f.type === 'date') {
-          return (
-            <DatePicker key={f.name}
-              label={f.label + (f.required ? ' *' : '')}
-              value={values[f.name] ? new Date(values[f.name]) : null}
-              onChange={v => onChange(f.name, v ? v.toISOString().split('T')[0] : '')}
-              slotProps={{ textField: { size: 'small', fullWidth: true } }}
-            />
-          );
-        }
-        if (f.options) {
-          return (
-            <FormControl key={f.name} size="small" fullWidth>
-              <InputLabel>{f.label}{f.required ? ' *' : ''}</InputLabel>
-              <Select value={values[f.name] || ''} label={f.label + (f.required ? ' *' : '')}
-                onChange={e => onChange(f.name, e.target.value)}>
-                {f.options.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
-              </Select>
-            </FormControl>
-          );
-        }
-        return (
-          <TextField key={f.name} size="small" fullWidth
-            label={f.label + (f.required ? ' *' : '')}
-            type={f.type || 'text'}
-            value={values[f.name] || ''}
-            onChange={e => onChange(f.name, e.target.value)}
-            multiline={f.name === 'remarks'} rows={f.name === 'remarks' ? 2 : 1}
-            sx={{ gridColumn: f.name === 'remarks' ? '1 / -1' : 'auto' }}
-          />
-        );
-      })}
+    <Box>
+      {sections.map(sec => (
+        <Box key={sec.name || 'default'} sx={{ mb: 3 }}>
+          {sec.name && (
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5, pb: 0.5, borderBottom: '1px solid rgba(255,90,90,0.12)' }}>
+              {sec.name}
+            </Typography>
+          )}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            {sec.fields.map(f => renderField(f))}
+          </Box>
+        </Box>
+      ))}
     </Box>
   );
 }
 
 /* ── quote row ─────────────────────────────────────────────────────────────── */
-function QuoteRow({ quote, onSelect, tab }) {
+function QuoteRow({ quote, onSelect, tab, onDelete }) {
   const [open, setOpen] = useState(false);
   const product = PRODUCTS[quote.product_key];
   const sentCount = quote.sent_to?.length || 0;
@@ -264,6 +333,14 @@ function QuoteRow({ quote, onSelect, tab }) {
                 </Stack>
               </Box>
             )}
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+              <Button size="small" color="error" variant="outlined"
+                onClick={e => { e.stopPropagation(); onDelete(quote); }}
+                sx={{ fontSize: 11, borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                Delete Quote
+              </Button>
+            </Box>
 
           </Box>
         </Collapse>
@@ -538,6 +615,10 @@ const QuotationsPage = () => {
   const [dateFrom,      setDateFrom]      = useState(null);
   const [dateTo,        setDateTo]        = useState(null);
   const [toast,         setToast]         = useState({ open: false, msg: '', severity: 'success' });
+  const [filterProduct,  setFilterProduct]  = useState('all');
+  const [filterStatus,   setFilterStatus]   = useState('all');
+  const [deleteTarget,   setDeleteTarget]   = useState(null);
+  const [deleting,       setDeleting]       = useState(false);
 
   // Load companies
   useEffect(() => {
@@ -561,8 +642,10 @@ const QuotationsPage = () => {
     let list = quotes;
     if (dateFrom) list = list.filter(q => q.created_at?.toDate?.() >= dateFrom);
     if (dateTo)   list = list.filter(q => q.created_at?.toDate?.() <= dateTo);
+    if (filterProduct !== 'all') list = list.filter(q => q.product_key === filterProduct);
+    if (filterStatus  !== 'all') list = list.filter(q => q.status === filterStatus);
     return list;
-  }, [quotes, dateFrom, dateTo]);
+  }, [quotes, dateFrom, dateTo, filterProduct, filterStatus]);
 
   const sentQuotes     = filteredQuotes.filter(q => (q.sent_to?.length || 0) > 0);
   const receivedQuotes = filteredQuotes.filter(q => (q.responses?.length || 0) > 0);
@@ -577,7 +660,8 @@ const QuotationsPage = () => {
 
     setSaving(true);
     try {
-      const reference = genRef();
+      const customerName = formValues[PRODUCTS[product]?.customerNameField || ''] || '';
+      const reference = genRef(product, customerName);
       const ref = await addDoc(collection(db, 'quotes'), {
         reference,
         product_key:     product,
@@ -622,10 +706,21 @@ const QuotationsPage = () => {
 
         if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY && co.email) {
           const productLabel = PRODUCTS[pendingQuote.product_key]?.label || pendingQuote.product_key;
-          const formEntries  = Object.entries(pendingQuote.form_data || {}).filter(([,v]) => v);
+          const productFields = PRODUCTS[pendingQuote.product_key]?.fields || [];
+          const formData      = pendingQuote.form_data || {};
+          const noFields      = new Set(
+            productFields.filter(f => f.type === 'yesno' && formData[f.name] === 'No').map(f => f.name)
+          );
+          const formEntries = Object.entries(formData).filter(([k, v]) => {
+            if (!v) return false;
+            const fd = productFields.find(f => f.name === k);
+            if (fd?.type === 'yesno' && v === 'No') return false;
+            if (fd?.showIf && noFields.has(fd.showIf.field)) return false;
+            return true;
+          });
           const details = formEntries.length
             ? formEntries.map(([k, v]) => {
-                const field = PRODUCTS[pendingQuote.product_key]?.fields?.find(f => f.name === k);
+                const field = productFields.find(f => f.name === k);
                 return `${field?.label || k}: ${v}`;
               }).join('\n')
             : 'No additional details provided.';
@@ -680,27 +775,37 @@ const QuotationsPage = () => {
       // Explicitly map quote fields → client form fields
       const prefill = {
         _quote_id:          quote.id,
-        // Policy & financial fields that match directly
         insurance_provider: response.company_name,
         net_premium:        String(response.premium || ''),
         basic_premium:      String(response.premium || ''),
         total_invoice:      String(response.premium || ''),
-        sum_insured:        String(fd.sum_insured || fd.contract_value || fd.sum_assured || ''),
-        // Client name from proposer / contractor field
-        client_name:        fd.proposer_name || fd.contractor || fd.proposer || '',
-        // Coverage / policy type
-        coverage:           fd.cover_type || fd.plan_type || fd.perils || fd.cover_basis || '',
+        sum_insured:        String(fd.sum_insured || fd.contract_value || fd.sum_assured || fd.total_value || fd.cyber_limit || ''),
+        client_name:        fd.proposer_name || fd.name_of_insured || fd.full_name || fd.company_name || fd.contractor || '',
+        coverage:           fd.cover_type || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
         policy_type:        quote.product_label || '',
-        // Address fields if present
-        street1:            fd.property_address || fd.location || '',
-        // Dates
-        policy_period_from: fd.period_from || fd.voyage_date || '',
-        policy_period_to:   fd.period_to   || '',
-        // Remarks
-        ...(fd.remarks ? { coverage: fd.coverage || fd.cover_type || fd.remarks } : {}),
+        street1:            fd.property_address || fd.address_of_risk || fd.address || fd.location || '',
+        policy_period_from: fd.period_from || fd.departure_date || fd.voyage_date || '',
+        policy_period_to:   fd.period_to || fd.return_date || '',
+        email:              fd.email || '',
+        mobile_no:          fd.mobile || '',
+        telephone:          fd.telephone || '',
       };
       window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
     }, 1500);
+  };
+
+  const handleDeleteQuote = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'quotes', deleteTarget.id));
+      setQuotes(prev => prev.filter(q => q.id !== deleteTarget.id));
+      setToast({ open: true, msg: 'Quote deleted.', severity: 'info' });
+    } catch (err) {
+      setToast({ open: true, msg: err.message, severity: 'error' });
+    }
+    setDeleteTarget(null);
+    setDeleting(false);
   };
 
   const tabQuotes = [sentQuotes, receivedQuotes, compareQuotes];
@@ -747,6 +852,31 @@ const QuotationsPage = () => {
           </Box>
         </Stack>
 
+        {/* Product + Status filters */}
+        <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel>Product Type</InputLabel>
+            <Select value={filterProduct} label="Product Type" onChange={e => setFilterProduct(e.target.value)}>
+              <MenuItem value="all">All Products</MenuItem>
+              {PRODUCT_LIST.map(p => <MenuItem key={p.key} value={p.key}>{p.icon} {p.label}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Status</InputLabel>
+            <Select value={filterStatus} label="Status" onChange={e => setFilterStatus(e.target.value)}>
+              <MenuItem value="all">All Status</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+              <MenuItem value="sent">Sent</MenuItem>
+              <MenuItem value="partial">Partial</MenuItem>
+              <MenuItem value="confirmed">Confirmed</MenuItem>
+            </Select>
+          </FormControl>
+          {(filterProduct !== 'all' || filterStatus !== 'all') && (
+            <Button size="small" onClick={() => { setFilterProduct('all'); setFilterStatus('all'); }}
+              sx={{ fontSize: 12, color: '#9CA3AF' }}>Clear Filters</Button>
+          )}
+        </Stack>
+
         {/* Compare view */}
         {compareQuote ? (
           <ComparisonView quote={compareQuote} onBack={() => setCompareQuote(null)} onConfirm={handleConfirmQuote} />
@@ -776,7 +906,8 @@ const QuotationsPage = () => {
               tabQuotes[tab].map(q => (
                 <QuoteRow key={q.id} quote={q}
                   tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
-                  onSelect={setCompareQuote} />
+                  onSelect={setCompareQuote}
+                  onDelete={q => setDeleteTarget(q)} />
               ))
             )}
           </>
@@ -865,6 +996,21 @@ const QuotationsPage = () => {
             <Button variant="contained" startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <SendIcon />}
               onClick={handleSendQuotes} disabled={sending || !selectedCos.length}>
               {sending ? 'Sending…' : `Send to ${selectedCos.length} insurer${selectedCos.length !== 1 ? 's' : ''}`}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ color: '#ef4444' }}>Delete Quote?</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ fontSize: 13 }}>
+              Are you sure you want to delete quote <strong>{deleteTarget?.reference}</strong>? This cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteTarget(null)} sx={{ color: '#6B7280' }}>Cancel</Button>
+            <Button variant="contained" color="error" onClick={handleDeleteQuote} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogActions>
         </Dialog>

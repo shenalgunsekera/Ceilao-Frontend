@@ -282,17 +282,33 @@ const QuoteResponsePage = () => {
           <CardContent>
             <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 1.5, color: '#374151' }}>Quote Request Details</Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-              {Object.entries(quote?.form_data || {}).filter(([,v]) => v).map(([k, v]) => {
-                const fieldDef = product?.fields?.find(f => f.name === k);
-                return (
-                  <Box key={k}>
-                    <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {fieldDef?.label || k}
-                    </Typography>
-                    <Typography sx={{ fontSize: 13, color: '#1A1A2E', fontWeight: 500 }}>{v}</Typography>
-                  </Box>
+              {(() => {
+                const formData = quote?.form_data || {};
+                const noFields = new Set(
+                  (product?.fields || [])
+                    .filter(f => f.type === 'yesno' && formData[f.name] === 'No')
+                    .map(f => f.name)
                 );
-              })}
+                return Object.entries(formData)
+                  .filter(([k, v]) => {
+                    if (!v) return false;
+                    const fd = product?.fields?.find(f => f.name === k);
+                    if (fd?.type === 'yesno' && v === 'No') return false;
+                    if (fd?.showIf && noFields.has(fd.showIf.field)) return false;
+                    return true;
+                  })
+                  .map(([k, v]) => {
+                    const fieldDef = product?.fields?.find(f => f.name === k);
+                    return (
+                      <Box key={k}>
+                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {fieldDef?.label || k}
+                        </Typography>
+                        <Typography sx={{ fontSize: 13, color: '#1A1A2E', fontWeight: 500 }}>{v}</Typography>
+                      </Box>
+                    );
+                  });
+              })()}
             </Box>
           </CardContent>
         </Card>
