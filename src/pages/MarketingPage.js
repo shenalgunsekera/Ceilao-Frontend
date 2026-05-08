@@ -28,25 +28,18 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
-import Collapse from '@mui/material/Collapse';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 
-import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import SendIcon from '@mui/icons-material/Send';
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import HistoryIcon from '@mui/icons-material/History';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 
 const ACCENT   = '#25D366'; // WhatsApp green
 const ACCENT2  = '#128C7E';
@@ -272,10 +265,11 @@ const MarketingPage = () => {
     setSendProgress({ done: 0, total: targets.length, errors: 0 });
 
     const results = [];
-    let errors = 0;
+    let errorCount = 0;
 
     for (const client of targets) {
       const msg = replaceVars(selectedTpl.content, client);
+      let ok = false;
       try {
         const res = await fetch(`${API_URL}/send-whatsapp`, {
           method: 'POST',
@@ -288,15 +282,17 @@ const MarketingPage = () => {
           }),
         });
         const data = await res.json();
+        ok = res.ok;
         results.push({ name: client.client_name, phone: client.mobile_no, status: res.ok ? 'sent' : 'failed', error: !res.ok ? data.error : undefined });
-        if (!res.ok) errors++;
       } catch {
         results.push({ name: client.client_name, phone: client.mobile_no, status: 'failed' });
-        errors++;
       }
-      setSendProgress(p => ({ ...p, done: p.done + 1, errors }));
-      await new Promise(r => setTimeout(r, 300)); // respect rate limits
+      if (!ok) errorCount += 1;
+      const snap = errorCount;
+      setSendProgress(p => ({ ...p, done: p.done + 1, errors: snap }));
+      await new Promise(r => setTimeout(r, 300));
     }
+    const errors = errorCount;
 
     await addDoc(collection(db, 'marketing_campaigns'), {
       name:             campaignName.trim(),
