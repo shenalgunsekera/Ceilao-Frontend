@@ -23,7 +23,9 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import FormControl from '@mui/material/FormControl';
+import FormHelperText from '@mui/material/FormHelperText';
 import InputLabel from '@mui/material/InputLabel';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -60,6 +62,45 @@ const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
 // Initialise once — must be after all imports
 if (EMAILJS_KEY) emailjs.init({ publicKey: EMAILJS_KEY });
 
+/* ── form validation ─────────────────────────────────────────────────────── */
+function validateForm(product, values) {
+  const def = PRODUCTS[product];
+  const errors  = {};
+  const missing = [];
+  const invalid = [];
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  def.fields.forEach(f => {
+    if (f.autoCalc) return;
+    // skip fields hidden by showIf
+    if (f.showIf && values[f.showIf.field] !== f.showIf.value) return;
+
+    const raw = values[f.name];
+    const val = raw?.toString().trim() ?? '';
+
+    if (f.required && !val) {
+      errors[f.name] = 'Required';
+      missing.push(f.label);
+      return;
+    }
+
+    if (val && (f.type === 'number' || f.type === 'currency')) {
+      if (isNaN(Number(val)) || val === '') {
+        errors[f.name] = 'Must be a number';
+        invalid.push(`${f.label} — must be a number`);
+      }
+    }
+
+    if (val && f.type === 'email' && !EMAIL_RE.test(val)) {
+      errors[f.name] = 'Invalid email address';
+      invalid.push(`${f.label} — invalid email address`);
+    }
+  });
+
+  return { errors, missing, invalid };
+}
+
 /* ── generate reference number ────────────────────────────────────────────── */
 function genRef(productKey, customerName) {
   const prefix = PRODUCTS[productKey]?.prefix || 'QT';
@@ -71,7 +112,7 @@ function genRef(productKey, customerName) {
 }
 
 /* ── dynamic product form ─────────────────────────────────────────────────── */
-function ProductForm({ product, values, onChange }) {
+function ProductForm({ product, values, onChange, errors = {} }) {
   const def = PRODUCTS[product];
   if (!def) return null;
 
@@ -97,14 +138,19 @@ function ProductForm({ product, values, onChange }) {
     if (!isVisible(f)) return null;
     const isFullWidth = f.fullWidth || f.type === 'textarea' || f.name === 'remarks' || f.name === 'address' || f.name === 'address_of_risk' || f.name === 'operations_description' || f.name === 'goods_description' || f.name === 'product_description';
     const gridStyle = isFullWidth ? { gridColumn: '1 / -1' } : {};
+    const hasErr  = !!errors[f.name];
+    const errMsg  = errors[f.name];
 
     // Multi-select (chips)
     if (f.multiSelect || f.type === 'multiselect') {
       const selected = values[f.name] ? values[f.name].split(',').map(s => s.trim()).filter(Boolean) : [];
       return (
         <Box key={f.name} sx={{ gridColumn: '1 / -1' }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#6B7280', mb: 0.8 }}>{f.label}{f.required ? ' *' : ''}</Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 600, color: hasErr ? '#ef4444' : '#6B7280', mb: 0.8 }}>
+            {f.label}{f.required ? ' *' : ''}
+            {hasErr && <Box component="span" sx={{ ml: 1, fontSize: 11, color: '#ef4444' }}>— {errMsg}</Box>}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, p: hasErr ? 1 : 0, borderRadius: '8px', border: hasErr ? '1px solid #ef4444' : 'none' }}>
             {(f.options || []).map(opt => (
               <Chip key={opt} label={opt} size="small" clickable
                 onClick={() => {
@@ -130,7 +176,12 @@ function ProductForm({ product, values, onChange }) {
           label={f.label + (f.required ? ' *' : '')}
           value={values[f.name] ? new Date(values[f.name]) : null}
           onChange={v => onChange(f.name, v ? v.toISOString().split('T')[0] : '')}
-          slotProps={{ textField: { size: 'small', fullWidth: true } }}
+          slotProps={{
+            textField: {
+              size: 'small', fullWidth: true,
+              error: hasErr, helperText: errMsg,
+            },
+          }}
           sx={gridStyle} />
       );
     }
@@ -139,12 +190,13 @@ function ProductForm({ product, values, onChange }) {
     if (f.options || f.type === 'yesno' || f.type === 'select') {
       const opts = f.type === 'yesno' ? ['Yes', 'No'] : (f.options || []);
       return (
-        <FormControl key={f.name} size="small" fullWidth sx={gridStyle}>
+        <FormControl key={f.name} size="small" fullWidth sx={gridStyle} error={hasErr}>
           <InputLabel>{f.label}{f.required ? ' *' : ''}</InputLabel>
           <Select value={values[f.name] || ''} label={f.label + (f.required ? ' *' : '')}
             onChange={e => onChange(f.name, e.target.value)}>
             {opts.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </Select>
+          {hasErr && <FormHelperText>{errMsg}</FormHelperText>}
         </FormControl>
       );
     }
@@ -156,6 +208,7 @@ function ProductForm({ product, values, onChange }) {
           label={f.label + (f.required ? ' *' : '')}
           value={values[f.name] || ''}
           onChange={e => onChange(f.name, e.target.value)}
+          error={hasErr} helperText={errMsg}
           sx={{ gridColumn: '1 / -1' }} />
       );
     }
@@ -165,7 +218,6 @@ function ProductForm({ product, values, onChange }) {
       const fields = f.autoCalc.replace('sum:', '').split(',');
       const total = fields.reduce((acc, fn) => acc + (Number(values[fn.trim()]) || 0), 0);
       if (total !== Number(values[f.name] || 0)) {
-        // trigger update without causing infinite loop
         setTimeout(() => onChange(f.name, String(total)), 0);
       }
       return (
@@ -184,6 +236,7 @@ function ProductForm({ product, values, onChange }) {
         type={f.type === 'currency' ? 'number' : (f.type === 'email' ? 'email' : (f.type === 'number' ? 'number' : 'text'))}
         value={values[f.name] || ''}
         onChange={e => onChange(f.name, e.target.value)}
+        error={hasErr} helperText={errMsg}
         InputProps={f.type === 'currency' ? { startAdornment: <Box component="span" sx={{ color: '#9CA3AF', mr: 0.5, fontSize: 12 }}>LKR</Box> } : undefined}
         sx={gridStyle} />
     );
@@ -191,10 +244,19 @@ function ProductForm({ product, values, onChange }) {
 
   return (
     <Box>
-      {sections.map(sec => (
+      {sections.map(sec => {
+        const sectionHasError = sec.fields.some(f => errors[f.name] && isVisible(f));
+        return (
         <Box key={sec.name || 'default'} sx={{ mb: 3 }}>
           {sec.name && (
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5, pb: 0.5, borderBottom: '1px solid rgba(255,90,90,0.12)' }}>
+            <Typography sx={{
+              fontSize: 11, fontWeight: 800,
+              color: sectionHasError ? '#ef4444' : '#FF5A5A',
+              textTransform: 'uppercase', letterSpacing: 1, mb: 1.5, pb: 0.5,
+              borderBottom: `1px solid ${sectionHasError ? 'rgba(239,68,68,0.3)' : 'rgba(255,90,90,0.12)'}`,
+              display: 'flex', alignItems: 'center', gap: 0.8,
+            }}>
+              {sectionHasError && <WarningAmberRoundedIcon sx={{ fontSize: 13 }} />}
               {sec.name}
             </Typography>
           )}
@@ -202,7 +264,8 @@ function ProductForm({ product, values, onChange }) {
             {sec.fields.map(f => renderField(f))}
           </Box>
         </Box>
-      ))}
+        );
+      })}
     </Box>
   );
 }
@@ -705,6 +768,9 @@ const QuotationsPage = () => {
   const [filterStatus,   setFilterStatus]   = useState('all');
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [deleting,       setDeleting]       = useState(false);
+  const [fieldErrors,    setFieldErrors]    = useState({});
+  const [valIssues,      setValIssues]      = useState({ missing: [], invalid: [] });
+  const [valOpen,        setValOpen]        = useState(false);
 
   // Load companies
   useEffect(() => {
@@ -737,12 +803,20 @@ const QuotationsPage = () => {
   const receivedQuotes = filteredQuotes.filter(q => (q.responses?.length || 0) > 0);
   const compareQuotes  = receivedQuotes; // only quotes with at least 1 response can be compared
 
-  const setField = useCallback((name, val) => setFormValues(v => ({ ...v, [name]: val })), []);
+  const setField = useCallback((name, val) => {
+    setFormValues(v => ({ ...v, [name]: val }));
+    setFieldErrors(e => { const n = { ...e }; delete n[name]; return n; });
+  }, []);
 
   const handleCreateQuote = async () => {
-    const def = PRODUCTS[product];
-    const missing = def.fields.filter(f => f.required && !formValues[f.name]?.toString().trim());
-    if (missing.length) { setToast({ open: true, msg: `Required: ${missing.map(f => f.label).join(', ')}`, severity: 'error' }); return; }
+    const { errors, missing, invalid } = validateForm(product, formValues);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setValIssues({ missing, invalid });
+      setValOpen(true);
+      return;
+    }
+    setFieldErrors({});
 
     setSaving(true);
     try {
@@ -1031,7 +1105,7 @@ const QuotationsPage = () => {
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
               {PRODUCT_LIST.map(p => (
                 <Chip key={p.key} label={`${p.icon} ${p.label}`} clickable
-                  onClick={() => setProduct(p.key)}
+                  onClick={() => { setProduct(p.key); setFieldErrors({}); }}
                   sx={{
                     fontWeight: 700, fontSize: 12.5,
                     bgcolor: product === p.key ? `${p.color}18` : 'rgba(0,0,0,0.04)',
@@ -1043,7 +1117,7 @@ const QuotationsPage = () => {
               ))}
             </Box>
 
-            <ProductForm product={product} values={formValues} onChange={setField} />
+            <ProductForm product={product} values={formValues} onChange={setField} errors={fieldErrors} />
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(255,139,90,0.10)' }}>
             <Button onClick={() => setNewQuoteOpen(false)} variant="outlined"
@@ -1104,6 +1178,51 @@ const QuotationsPage = () => {
             <Button variant="contained" startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <SendIcon />}
               onClick={handleSendQuotes} disabled={sending || !selectedCos.length}>
               {sending ? 'Sending…' : `Send to ${selectedCos.length} insurer${selectedCos.length !== 1 ? 's' : ''}`}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* ── Validation errors dialog ── */}
+        <Dialog open={valOpen} onClose={() => setValOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+            <WarningAmberRoundedIcon sx={{ color: '#f59e0b', fontSize: 22 }} />
+            <span>Please fix these issues</span>
+          </DialogTitle>
+          <DialogContent>
+            {valIssues.missing.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: 0.6, mb: 1 }}>
+                  Required fields not filled
+                </Typography>
+                {valIssues.missing.map(label => (
+                  <Box key={label} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.6 }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#ef4444', mt: 0.7, flexShrink: 0 }} />
+                    <Typography sx={{ fontSize: 13 }}>{label}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            {valIssues.invalid.length > 0 && (
+              <Box>
+                <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: 0.6, mb: 1 }}>
+                  Invalid values
+                </Typography>
+                {valIssues.invalid.map(msg => (
+                  <Box key={msg} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.6 }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#d97706', mt: 0.7, flexShrink: 0 }} />
+                    <Typography sx={{ fontSize: 13 }}>{msg}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            <Typography sx={{ fontSize: 12, color: '#9CA3AF', mt: 2 }}>
+              Fields with issues are highlighted in red on the form.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button variant="contained" onClick={() => setValOpen(false)}
+              sx={{ background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)', minWidth: 100 }}>
+              OK, fix them
             </Button>
           </DialogActions>
         </Dialog>
