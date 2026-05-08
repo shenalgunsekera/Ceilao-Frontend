@@ -117,9 +117,9 @@ function genRef(productKey, customerName) {
 
 /* ── dynamic product form ─────────────────────────────────────────────────── */
 function ProductForm({ product, values, onChange, errors = {} }) {
+  const [fileUploading, setFileUploading] = useState({});
   const def = PRODUCTS[product];
   if (!def) return null;
-  const [fileUploading, setFileUploading] = useState({});
 
   // Group fields by section
   const sections = [];
