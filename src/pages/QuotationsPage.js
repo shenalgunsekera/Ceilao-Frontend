@@ -863,6 +863,7 @@ const QuotationsPage = () => {
         _quote_id:          quote.id,
         // Insurer & policy
         insurance_provider: response.company_name,
+        insurer:            response.company_name,
         policy_type:        quote.product_label || '',
         main_class:         quote.product_label || '',
         coverage:           fd.cover_type || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
@@ -878,23 +879,24 @@ const QuotationsPage = () => {
         commission_type:    response.commission_type || '',
         // Risk / sum insured from quote form
         sum_insured:        String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || ''),
-        // Client details from quote form
-        client_name:        fd.proposer_name || fd.name_of_insured || fd.full_name || fd.company_name || fd.contractor || '',
-        customer_type:      fd.customer_type || '',
+        // Client details — standardised field names across all 14 products
+        client_name:        fd.proposer_name || fd.company_name || fd.full_name || '',
+        customer_type:      fd.customer_type === 'Corporate' ? 'Company' : (fd.customer_type || ''),
         introducer_code:    fd.introducer    || '',
         email:              fd.email         || '',
         mobile_no:          fd.mobile        || '',
         telephone:          fd.telephone     || '',
-        nic_br:             fd.nic_br || fd.nic_passport || fd.nic_passport_br || fd.business_reg || '',
+        contact_person:     fd.contact_person || '',
+        // NIC or Business Registration
+        nic_br:             fd.nic_no || fd.business_reg || '',
         // Address
-        street1:            fd.property_address || fd.address_of_risk || fd.address || fd.location || '',
-        city:               fd.city    || fd.district || '',
+        street1:            fd.address || fd.property_address || fd.address_of_risk || '',
+        city:               fd.city || fd.district || '',
         // Policy period
-        policy_period_from: fd.period_from || fd.departure_date || fd.voyage_date || fd.loan_start || '',
-        policy_period_to:   fd.period_to   || fd.return_date    || fd.loan_end    || '',
+        policy_period_from: fd.period_from || fd.departure_date || fd.loan_start || '',
+        policy_period_to:   fd.period_to   || fd.return_date    || fd.loan_end   || '',
         // Vehicle (motor)
-        vehicle_number:     fd.vehicle_no  || '',
-        insurer:            response.company_name,
+        vehicle_number:     fd.vehicle_no || '',
       };
       window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
     }, 1500);
