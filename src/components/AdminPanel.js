@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   collection, getDocs, doc, updateDoc, deleteDoc,
-  query, orderBy, serverTimestamp
+  query, orderBy, serverTimestamp, where
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
@@ -50,6 +50,9 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import FolderZipOutlinedIcon from '@mui/icons-material/FolderZipOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 
 /* ── colour maps ─────────────────────────────────────────────────────────── */
 const PRIORITY_COLORS = {
@@ -420,6 +423,8 @@ const AdminPanel = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [backupOpen,    setBackupOpen]    = useState(false);
+  const [reditRequests, setReditRequests] = useState([]);
+  const [reditLoading,  setReditLoading]  = useState(false);
   const [backupState,   setBackupState]   = useState({ step: '', progress: 0, done: false });
   const [createAccOpen, setCreateAccOpen] = useState(false);
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
@@ -443,7 +448,29 @@ const AdminPanel = () => {
     setTicketLoad(false);
   }, []);
 
+  const loadReditRequests = useCallback(async () => {
+    setReditLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'quote_redit_requests'), orderBy('requested_at', 'desc')));
+      setReditRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch { /* ignore */ }
+    setReditLoading(false);
+  }, []);
+
+  const handleReditDecision = async (reqId, decision) => {
+    const approvedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await updateDoc(doc(db, 'quote_redit_requests', reqId), {
+      status:          decision,
+      ...(decision === 'approved' ? { approved_until: approvedUntil } : {}),
+      reviewed_by:     userProfile?.full_name || user?.email || '',
+      reviewed_at:     serverTimestamp(),
+    });
+    setReditRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: decision } : r));
+    setToast({ open: true, msg: `Re-edit request ${decision}.`, severity: decision === 'approved' ? 'success' : 'info' });
+  };
+
   useEffect(() => { loadTickets(); }, [loadTickets]);
+  useEffect(() => { if (tab === 6) loadReditRequests(); }, [tab, loadReditRequests]);
 
   const saveTicket = async (id, updates) => {
     await updateDoc(doc(db, 'tickets', id), updates);
@@ -549,6 +576,8 @@ const AdminPanel = () => {
         <Tab icon={<BusinessOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Insurers" />
         <Tab icon={<LockOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Module Access" />
         <Tab icon={<BackupOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Data Backup" />
+        <Tab icon={<EditOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start"
+          label={`Re-edit Requests${reditRequests.filter(r => r.status === 'pending').length ? ` (${reditRequests.filter(r => r.status === 'pending').length})` : ''}`} />
       </Tabs>
 
       {/* ── TICKETS TAB ── */}
@@ -720,6 +749,93 @@ const AdminPanel = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── RE-EDIT REQUESTS TAB ── */}
+      {tab === 6 && (
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>Re-edit Requests</Typography>
+              <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>
+                Insurance companies requesting permission to edit a submitted quote response
+              </Typography>
+            </Box>
+            <Button size="small" variant="outlined" onClick={loadReditRequests}
+              sx={{ borderColor: 'rgba(255,139,90,0.3)', color: '#FF8B5A', fontSize: 12 }}>
+              Refresh
+            </Button>
+          </Box>
+
+          {reditLoading ? (
+            <Typography sx={{ color: '#9CA3AF', fontSize: 13 }}>Loading…</Typography>
+          ) : reditRequests.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <EditOutlinedIcon sx={{ fontSize: 40, color: 'rgba(255,90,90,0.2)', mb: 1 }} />
+              <Typography sx={{ color: '#9CA3AF' }}>No re-edit requests yet.</Typography>
+            </Box>
+          ) : reditRequests.map(r => {
+            const statusMap = {
+              pending:  { color: '#d97706', bg: 'rgba(245,158,11,0.08)',  label: 'Pending' },
+              approved: { color: '#059669', bg: 'rgba(16,185,129,0.08)', label: 'Approved' },
+              denied:   { color: '#ef4444', bg: 'rgba(239,68,68,0.08)',   label: 'Denied' },
+            };
+            const s = statusMap[r.status] || statusMap.pending;
+            const requestedAt = r.requested_at?.toDate?.()?.toLocaleString('en-GB') || '—';
+
+            return (
+              <Card key={r.id} sx={{ mb: 1.5, border: '1px solid rgba(255,139,90,0.12)' }}>
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{r.company_name}</Typography>
+                        <Chip label={s.label} size="small"
+                          sx={{ bgcolor: s.bg, color: s.color, fontWeight: 700, fontSize: 10 }} />
+                      </Stack>
+                      <Typography sx={{ fontSize: 12, color: '#6B7280', mb: 0.5 }}>
+                        Quote: <strong>{r.quote_ref}</strong> · {r.product} · {requestedAt}
+                      </Typography>
+                      <Box sx={{ p: 1.5, borderRadius: '8px', bgcolor: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)', mt: 1 }}>
+                        <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, mb: 0.5 }}>
+                          Reason
+                        </Typography>
+                        <Typography sx={{ fontSize: 13 }}>{r.reason}</Typography>
+                      </Box>
+                    </Box>
+                    {r.status === 'pending' && (
+                      <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                        <Button variant="contained" size="small" startIcon={<CheckIcon />}
+                          onClick={() => handleReditDecision(r.id, 'approved')}
+                          sx={{ background: 'linear-gradient(135deg,#10B981,#059669)', fontSize: 12 }}>
+                          Approve
+                        </Button>
+                        <Button variant="outlined" size="small" startIcon={<CloseIcon />}
+                          onClick={() => handleReditDecision(r.id, 'denied')}
+                          sx={{ borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 12 }}>
+                          Deny
+                        </Button>
+                      </Stack>
+                    )}
+                    {r.status === 'approved' && (
+                      <Typography sx={{ fontSize: 11, color: '#059669', fontWeight: 600, flexShrink: 0 }}>
+                        ✓ Approved<br/>
+                        <Box component="span" sx={{ fontSize: 10, color: '#9CA3AF', fontWeight: 400 }}>
+                          by {r.reviewed_by}
+                        </Box>
+                      </Typography>
+                    )}
+                    {r.status === 'denied' && (
+                      <Typography sx={{ fontSize: 11, color: '#ef4444', fontWeight: 600, flexShrink: 0 }}>
+                        ✗ Denied
+                      </Typography>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
+      )}
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(t => ({ ...t, open: false }))}>
         <Alert severity={toast.severity} variant="filled" sx={{ width: '100%' }}>{toast.msg}</Alert>
