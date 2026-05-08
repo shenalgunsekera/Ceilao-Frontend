@@ -174,8 +174,45 @@ const QuoteResponsePage = () => {
     (Number(form.vat_amount)    || 0) +
     (Number(form.other_premium) || 0);
 
+  // ── Validation ────────────────────────────────────────────────────────
+  const REQUIRED_FIELDS = [
+    { key: 'basic_premium',    label: 'Basic Premium',         num: true  },
+    { key: 'srcc_premium',     label: 'SRCC Premium',          num: true  },
+    { key: 'tc_premium',       label: 'TC Premium',            num: true  },
+    { key: 'admin_fee',        label: 'Admin Fee',             num: true  },
+    { key: 'vat_amount',       label: 'VAT',                   num: true  },
+    { key: 'commission_type',  label: 'Commission Type',       num: false },
+    { key: 'deductible',       label: 'Deductible / Excess',   num: false },
+    { key: 'validity_days',    label: 'Quote Validity (days)', num: true  },
+  ];
+
+  const validateInsurer = () => {
+    const errs = {};
+    const missing = [];
+    const invalid = [];
+    REQUIRED_FIELDS.forEach(({ key, label, num }) => {
+      const val = form[key]?.toString().trim() || '';
+      if (!val) { errs[key] = 'Required'; missing.push(label); return; }
+      if (num && isNaN(Number(val))) { errs[key] = 'Must be a number'; invalid.push(`${label} — must be a valid number`); }
+    });
+    return { errs, missing, invalid };
+  };
+
+  const setFE = (key, val) => {
+    setForm(f => ({ ...f, [key]: val }));
+    setFieldErrors(e => { const n = { ...e }; delete n[key]; return n; });
+  };
+
   const handleSubmit = async () => {
-    if (!form.basic_premium) { setError('Basic Premium is required.'); return; }
+    const { errs, missing, invalid } = validateInsurer();
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setValIssues({ missing, invalid });
+      setValOpen(true);
+      return;
+    }
+    setFieldErrors({});
+    setError('');
     setSaving(true);
     try {
       const responseId = `${cid}_${Date.now()}`;
@@ -479,23 +516,28 @@ const QuoteResponsePage = () => {
             <Stack spacing={2.5}>
 
               {/* ── Premium Breakdown ── */}
-              <Box sx={{ p: 2, borderRadius: '12px', border: '1px solid rgba(255,90,90,0.15)', bgcolor: 'rgba(255,90,90,0.02)' }}>
+              <Box sx={{ p: 2, borderRadius: '12px', border: `1px solid ${['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount'].some(k => fieldErrors[k]) ? 'rgba(239,68,68,0.4)' : 'rgba(255,90,90,0.15)'}`, bgcolor: 'rgba(255,90,90,0.02)' }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
                   Premium Breakdown
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                   <TextField label="Basic Premium (LKR) *" type="number" size="small" fullWidth
-                    value={form.basic_premium} onChange={e => setForm(f => ({ ...f, basic_premium: e.target.value }))} />
+                    error={!!fieldErrors.basic_premium} helperText={fieldErrors.basic_premium}
+                    value={form.basic_premium} onChange={e => setFE('basic_premium', e.target.value)} />
                   <TextField label="SRCC (LKR) *" type="number" size="small" fullWidth
-                    value={form.srcc_premium} onChange={e => setForm(f => ({ ...f, srcc_premium: e.target.value }))} />
+                    error={!!fieldErrors.srcc_premium} helperText={fieldErrors.srcc_premium}
+                    value={form.srcc_premium} onChange={e => setFE('srcc_premium', e.target.value)} />
                   <TextField label="TC (LKR) *" type="number" size="small" fullWidth
-                    value={form.tc_premium} onChange={e => setForm(f => ({ ...f, tc_premium: e.target.value }))} />
+                    error={!!fieldErrors.tc_premium} helperText={fieldErrors.tc_premium}
+                    value={form.tc_premium} onChange={e => setFE('tc_premium', e.target.value)} />
                   <TextField label="Admin Fee (LKR) *" type="number" size="small" fullWidth
-                    value={form.admin_fee} onChange={e => setForm(f => ({ ...f, admin_fee: e.target.value }))} />
+                    error={!!fieldErrors.admin_fee} helperText={fieldErrors.admin_fee}
+                    value={form.admin_fee} onChange={e => setFE('admin_fee', e.target.value)} />
                   <TextField label="VAT (LKR) *" type="number" size="small" fullWidth
-                    value={form.vat_amount} onChange={e => setForm(f => ({ ...f, vat_amount: e.target.value }))} />
+                    error={!!fieldErrors.vat_amount} helperText={fieldErrors.vat_amount}
+                    value={form.vat_amount} onChange={e => setFE('vat_amount', e.target.value)} />
                   <TextField label="Other (LKR)" type="number" size="small" fullWidth
-                    value={form.other_premium} onChange={e => setForm(f => ({ ...f, other_premium: e.target.value }))} />
+                    value={form.other_premium} onChange={e => setFE('other_premium', e.target.value)} />
                 </Box>
                 <Box sx={{ mt: 1.5, p: 1.5, borderRadius: '8px', bgcolor: 'rgba(255,90,90,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Total Premium (LKR)</Typography>
@@ -507,15 +549,15 @@ const QuoteResponsePage = () => {
 
               {/* ── Commission (broker-internal) ── */}
               <Box>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#6B7280', mb: 0.8 }}>
-                  Commission Type
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: fieldErrors.commission_type ? '#ef4444' : '#6B7280', mb: 0.8 }}>
+                  Commission Type *
                   <Box component="span" sx={{ ml: 1, px: 0.8, py: 0.2, borderRadius: '4px', bgcolor: 'rgba(99,102,241,0.1)', color: '#6366f1', fontSize: 10, fontWeight: 700 }}>
                     FOR BROKER USE ONLY
                   </Box>
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1, border: fieldErrors.commission_type ? '1px solid #ef4444' : 'none', borderRadius: '8px', p: fieldErrors.commission_type ? 0.5 : 0 }}>
                   {['Standard', 'Special'].map(opt => (
-                    <Box key={opt} onClick={() => setForm(f => ({ ...f, commission_type: opt }))}
+                    <Box key={opt} onClick={() => setFE('commission_type', opt)}
                       sx={{
                         flex: 1, py: 1, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
                         border: `1.5px solid ${form.commission_type === opt ? '#6366f1' : 'rgba(0,0,0,0.12)'}`,
@@ -528,18 +570,21 @@ const QuoteResponsePage = () => {
                     </Box>
                   ))}
                 </Box>
+                {fieldErrors.commission_type && <Typography sx={{ fontSize: 11, color: '#ef4444', mt: 0.5, ml: 0.5 }}>{fieldErrors.commission_type}</Typography>}
               </Box>
 
               <TextField label="Special Terms" multiline minRows={2} fullWidth size="small"
-                value={form.special_terms} onChange={e => setForm(f => ({ ...f, special_terms: e.target.value }))} />
+                value={form.special_terms} onChange={e => setFE('special_terms', e.target.value)} />
 
               <TextField label="Excesses" multiline minRows={2} fullWidth size="small"
-                value={form.excesses} onChange={e => setForm(f => ({ ...f, excesses: e.target.value }))} />
+                value={form.excesses} onChange={e => setFE('excesses', e.target.value)} />
 
-              <TextField label="Deductible / Excess" fullWidth size="small"
-                value={form.deductible} onChange={e => setForm(f => ({ ...f, deductible: e.target.value }))} />
-              <TextField label="Quote Validity (days)" type="number" fullWidth size="small"
-                value={form.validity_days} onChange={e => setForm(f => ({ ...f, validity_days: e.target.value }))} />
+              <TextField label="Deductible / Excess *" fullWidth size="small"
+                error={!!fieldErrors.deductible} helperText={fieldErrors.deductible}
+                value={form.deductible} onChange={e => setFE('deductible', e.target.value)} />
+              <TextField label="Quote Validity (days) *" type="number" fullWidth size="small"
+                error={!!fieldErrors.validity_days} helperText={fieldErrors.validity_days}
+                value={form.validity_days} onChange={e => setFE('validity_days', e.target.value)} />
 
               {/* Comparison data fields */}
               <Box>
@@ -617,6 +662,51 @@ const QuoteResponsePage = () => {
           Ceilao Insurance Brokers (Pvt) Ltd — Confidential Quotation Portal
         </Typography>
       </Box>
+
+      {/* ── Validation dialog ── */}
+      <Dialog open={valOpen} onClose={() => setValOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+          <WarningAmberRoundedIcon sx={{ color: '#f59e0b', fontSize: 22 }} />
+          <span>Please fix these issues</span>
+        </DialogTitle>
+        <DialogContent>
+          {valIssues.missing.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: 0.6, mb: 1 }}>
+                Required fields not filled
+              </Typography>
+              {valIssues.missing.map(label => (
+                <Box key={label} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.6 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#ef4444', mt: 0.7, flexShrink: 0 }} />
+                  <Typography sx={{ fontSize: 13 }}>{label}</Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+          {valIssues.invalid.length > 0 && (
+            <Box>
+              <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: 0.6, mb: 1 }}>
+                Invalid values
+              </Typography>
+              {valIssues.invalid.map(msg => (
+                <Box key={msg} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.6 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#d97706', mt: 0.7, flexShrink: 0 }} />
+                  <Typography sx={{ fontSize: 13 }}>{msg}</Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+          <Typography sx={{ fontSize: 12, color: '#9CA3AF', mt: 2 }}>
+            Fields with issues are highlighted in red above.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button variant="contained" onClick={() => setValOpen(false)}
+            sx={{ background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)', minWidth: 100 }}>
+            OK, fix them
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
