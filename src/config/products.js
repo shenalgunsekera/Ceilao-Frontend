@@ -158,7 +158,7 @@ export const PRODUCTS = {
       { name: 'annual_turnover',           label: 'Estimated Annual Turnover',           section: 'Policy Details', type: 'currency' },
       { name: 'annual_shipment_count',     label: 'Estimated Annual Shipment Count',     section: 'Policy Details', type: 'number' },
       { name: 'commodity_type',            label: 'Commodity Type',                      section: 'Shipment / Cargo Details', required: true, type: 'select', options: ['Tea', 'Garments', 'Electronics', 'Machinery', 'Food', 'Chemicals', 'Pharmaceuticals', 'Other'] },
-      { name: 'packing_type',              label: 'Packing Type',                        section: 'Shipment / Cargo Details', required: true, type: 'select', options: ['Full Containerized', 'Less Containerized / On-Deck', 'Cartons', 'Wooden Cases', 'Pallets', 'Bulk Cargo', 'Drums', 'Refrigerated'] },
+      { name: 'packing_type',              label: 'Packing Type',                        section: 'Shipment / Cargo Details', required: true, type: 'select', options: ['Full Containerized', 'Less Containerized', 'On-Deck', 'Cartons', 'Wooden Cases', 'Pallets', 'Bulk Cargo', 'Drums', 'Refrigerated'] },
       { name: 'nature_of_cargo',           label: 'Nature of Cargo',                     section: 'Shipment / Cargo Details', type: 'multiselect', options: ['Fragile', 'Perishable', 'Hazardous', 'Temperature Sensitive', 'High Theft Risk'] },
       { name: 'cargo_condition',           label: 'Cargo Condition',                     section: 'Shipment / Cargo Details', type: 'select', options: ['New', 'Used', 'Reconditioned'] },
       { name: 'country_of_origin',         label: 'Country of Origin',                   section: 'Shipment / Cargo Details' },
