@@ -534,6 +534,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
   const [custEmail,  setCustEmail]  = useState('');
   const [sending,    setSending]    = useState(false);
   const [sendDone,   setSendDone]   = useState(false);
+  const [sendError,  setSendError]  = useState('');
 
   const sendToCustomer = async () => {
     if (!custEmail.trim()) return;
@@ -588,7 +589,10 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       setSendDone(true);
       setTimeout(() => setSendDone(false), 4000);
     } catch (err) {
-      console.error('Customer email error:', err?.text || err?.message);
+      const msg = err?.text || err?.message || JSON.stringify(err);
+      console.error('Customer email error:', msg);
+      setSendError(msg);
+      setTimeout(() => setSendError(''), 8000);
     }
     setSending(false);
   };
@@ -698,6 +702,11 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           {sending ? 'Sending…' : sendDone ? '✓ Sent!' : 'Send Comparison'}
         </Button>
       </Box>
+      {sendError && (
+        <Alert severity="error" sx={{ mb: 2, fontSize: 12 }}>
+          Email failed: {sendError}
+        </Alert>
+      )}
 
       {responses.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 6 }}>
