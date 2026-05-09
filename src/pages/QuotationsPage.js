@@ -295,7 +295,8 @@ function ProductForm({ product, values, onChange, errors = {} }) {
             type="tel"
             value={values[f.name] || ''}
             onChange={e => onChange(f.name, e.target.value)}
-            error={hasErr} helperText={errMsg} />
+            error={hasErr} helperText={errMsg}
+            inputProps={{ maxLength: 9, placeholder: '7XXXXXXXX' }} />
         </Box>
       );
     }
@@ -352,6 +353,7 @@ function ProductForm({ product, values, onChange, errors = {} }) {
         value={values[f.name] || ''}
         onChange={e => onChange(f.name, e.target.value)}
         error={hasErr} helperText={errMsg}
+        inputProps={f.maxLength ? { maxLength: f.maxLength } : undefined}
         InputProps={f.type === 'currency' ? { startAdornment: <Box component="span" sx={{ color: '#9CA3AF', mr: 0.5, fontSize: 12 }}>LKR</Box> } : undefined}
         sx={gridStyle} />
     );
