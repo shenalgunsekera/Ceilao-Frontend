@@ -23,9 +23,100 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+
+// Sections filled by insurer — excluded from the read-only quote summary
+const INSURER_SECTIONS = new Set([
+  'Covers Required', 'Cover Required', 'Additional Clauses', 'Document Uploads',
+]);
+
+function buildInfoSections(product, formData) {
+  if (!product || !formData) return [];
+  const noFields = new Set(
+    (product.fields || [])
+      .filter(f => f.type === 'yesno' && formData[f.name] === 'No')
+      .map(f => f.name)
+  );
+  const sectionMap = {};
+  const sectionOrder = [];
+  (product.fields || []).forEach(f => {
+    if (!f.section || INSURER_SECTIONS.has(f.section)) return;
+    if (f.type === 'file') return;
+    if (f.showIf && formData[f.showIf.field] !== f.showIf.value) return;
+    if (noFields.has(f.name)) return;
+    const val = formData[f.name];
+    if (!val) return;
+    if (!sectionMap[f.section]) {
+      sectionMap[f.section] = [];
+      sectionOrder.push(f.section);
+    }
+    sectionMap[f.section].push({ field: f, value: val });
+  });
+  return sectionOrder
+    .filter(name => sectionMap[name].length > 0)
+    .map(name => ({ name, fields: sectionMap[name] }));
+}
+
+function getYesnoFields(product, ...sectionNames) {
+  if (!product) return [];
+  return (product.fields || []).filter(
+    f => sectionNames.includes(f.section) && f.type === 'yesno'
+  );
+}
+
+const clientBadge = (val) => ({
+  display: 'inline-block', padding: '2px 10px', borderRadius: '20px',
+  fontSize: 12, fontWeight: 700,
+  background: val === 'Yes' ? 'rgba(16,185,129,0.1)' : 'rgba(107,114,128,0.1)',
+  color: val === 'Yes' ? '#059669' : '#6B7280',
+});
+
+const CoverTable = ({ fields, responses, setResponses, quoteFormData, headerLabel }) => (
+  <Box sx={{ overflowX: 'auto' }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 580 }}>
+      <thead>
+        <tr style={{ background: 'rgba(255,90,90,0.05)', borderBottom: '2px solid rgba(255,90,90,0.15)' }}>
+          {[headerLabel, 'Client Requested', 'We Provide', 'Special Terms'].map(h => (
+            <th key={h} style={{ padding: '10px 14px', textAlign: h === headerLabel ? 'left' : 'center', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {fields.map((f, i) => {
+          const clientVal = quoteFormData?.[f.name] || 'No';
+          const cr = responses[f.name] || { provided: '', terms: '' };
+          return (
+            <tr key={f.name} style={{ background: i % 2 === 0 ? '#fff' : '#FFF8F5', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+              <td style={{ padding: '10px 14px', fontSize: 13.5, fontWeight: 600, color: '#374151', minWidth: 190 }}>{f.label}</td>
+              <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                <span style={clientBadge(clientVal)}>{clientVal}</span>
+              </td>
+              <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                <Select size="small" value={cr.provided} displayEmpty
+                  onChange={e => setResponses(prev => ({ ...prev, [f.name]: { ...cr, provided: e.target.value } }))}
+                  sx={{ minWidth: 88, fontSize: 13 }}>
+                  <MenuItem value="">—</MenuItem>
+                  <MenuItem value="Yes">Yes</MenuItem>
+                  <MenuItem value="No">No</MenuItem>
+                </Select>
+              </td>
+              <td style={{ padding: '8px 14px', minWidth: 200 }}>
+                <TextField size="small" placeholder="Any special terms…" fullWidth
+                  value={cr.terms}
+                  onChange={e => setResponses(prev => ({ ...prev, [f.name]: { ...cr, terms: e.target.value } }))}
+                  sx={{ '& .MuiInputBase-root': { fontSize: 13 } }} />
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </Box>
+);
 
 const QuoteResponsePage = () => {
   const [params]    = useSearchParams();
@@ -46,10 +137,12 @@ const QuoteResponsePage = () => {
   const [form, setForm] = useState({
     basic_premium: '', srcc_premium: '', tc_premium: '',
     admin_fee: '', vat_amount: '', other_premium: '',
-    deductible: '', validity_days: '', notes: '',
-    special_terms: '', excesses: '', commission_type: '',
-    comparison_data: {},
+    deductible: '', excesses: '', commission_type: '',
+    validity_days: '', notes: '',
   });
+
+  const [coverResponses,  setCoverResponses]  = useState({});
+  const [clauseResponses, setClauseResponses] = useState({});
 
   const [submittedData,  setSubmittedData]  = useState(null);
   const [editing,        setEditing]        = useState(false);
@@ -65,8 +158,6 @@ const QuoteResponsePage = () => {
 
   useEffect(() => {
     if (!qid) { setError('Invalid link — missing quote ID.'); setLoading(false); return; }
-
-    // Sign in anonymously so Firestore rules allow unauthenticated public access
     signInAnonymously(auth)
       .catch(() => {})
       .finally(() => {
@@ -84,7 +175,6 @@ const QuoteResponsePage = () => {
               if (new Date() < windowEnd) {
                 setEditWindowOpen(true);
               } else {
-                // check for an approved re-edit request
                 getDocs(query(
                   collection(db, 'quote_redit_requests'),
                   where('quote_id', '==', snap.id),
@@ -93,7 +183,6 @@ const QuoteResponsePage = () => {
                 )).then(rsnap => {
                   const valid = rsnap.docs.find(d => new Date(d.data().approved_until) > new Date());
                   if (valid) { setReditApproved(true); return; }
-                  // check for a pending request
                   getDocs(query(
                     collection(db, 'quote_redit_requests'),
                     where('quote_id', '==', snap.id),
@@ -110,7 +199,6 @@ const QuoteResponsePage = () => {
       });
   }, [qid, cid]);
 
-  // Poll every 20s while re-edit request is pending — auto-unlocks when broker approves
   useEffect(() => {
     if (!reditPending || !qid || !cid) return;
     const iv = setInterval(async () => {
@@ -154,16 +242,13 @@ const QuoteResponsePage = () => {
     setFileName(file.name);
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'ceilao/quote-responses', (pct) => setUploadPct(pct));
+      const url = await uploadToCloudinary(file, 'ceilao/quote-responses', pct => setUploadPct(pct));
       setFileUrl(url);
     } catch (err) {
       setError(err.message);
     }
     setUploading(false);
   };
-
-  const setCompRow = (key, val) =>
-    setForm(f => ({ ...f, comparison_data: { ...f.comparison_data, [key]: val } }));
 
   const totalPremium =
     (Number(form.basic_premium) || 0) +
@@ -173,16 +258,15 @@ const QuoteResponsePage = () => {
     (Number(form.vat_amount)    || 0) +
     (Number(form.other_premium) || 0);
 
-  // ── Validation ────────────────────────────────────────────────────────
   const REQUIRED_FIELDS = [
-    { key: 'basic_premium',    label: 'Basic Premium',         num: true  },
-    { key: 'srcc_premium',     label: 'SRCC Premium',          num: true  },
-    { key: 'tc_premium',       label: 'TC Premium',            num: true  },
-    { key: 'admin_fee',        label: 'Admin Fee',             num: true  },
-    { key: 'vat_amount',       label: 'VAT',                   num: true  },
-    { key: 'commission_type',  label: 'Commission Type',       num: false },
-    { key: 'deductible',       label: 'Deductible / Excess',   num: false },
-    { key: 'validity_days',    label: 'Quote Validity (days)', num: true  },
+    { key: 'basic_premium',   label: 'Basic Premium',         num: true  },
+    { key: 'srcc_premium',    label: 'SRCC Premium',          num: true  },
+    { key: 'tc_premium',      label: 'TC Premium',            num: true  },
+    { key: 'admin_fee',       label: 'Admin Fee',             num: true  },
+    { key: 'vat_amount',      label: 'VAT',                   num: true  },
+    { key: 'commission_type', label: 'Commission Type',       num: false },
+    { key: 'deductible',      label: 'Deductibles',           num: false },
+    { key: 'validity_days',   label: 'Quote Validity (days)', num: true  },
   ];
 
   const validateInsurer = () => {
@@ -226,18 +310,17 @@ const QuoteResponsePage = () => {
         admin_fee:       Number(form.admin_fee)     || 0,
         vat_amount:      Number(form.vat_amount)    || 0,
         other_premium:   Number(form.other_premium) || 0,
-        special_terms:   form.special_terms,
+        deductible:      form.deductible,
         excesses:        form.excesses,
         commission_type: form.commission_type,
-        deductible:      form.deductible,
         validity_days:   form.validity_days,
         notes:           form.notes,
-        comparison_data: form.comparison_data,
+        cover_responses:  coverResponses,
+        clause_responses: clauseResponses,
         quote_file_url:  fileUrl,
         submitted_at:    new Date().toISOString(),
       };
 
-      // If editing, remove previous response for this company first
       if (editing) {
         const snap = await (await import('firebase/firestore')).getDoc(
           (await import('firebase/firestore')).doc(db, 'quotes', qid)
@@ -272,7 +355,6 @@ const QuoteResponsePage = () => {
     const { default: autoTable } = await import('jspdf-autotable');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    // Header band
     pdf.setFillColor(255, 90, 90);
     pdf.rect(0, 0, 210, 38, 'F');
     pdf.setTextColor(255, 255, 255);
@@ -281,39 +363,73 @@ const QuoteResponsePage = () => {
     pdf.setFontSize(11); pdf.setFont('helvetica', 'normal');
     pdf.text('Quotation Submission Receipt', 14, 23);
     pdf.setFontSize(9);
-    pdf.text(`Ref: ${quote?.reference || qid}   |   ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}`, 14, 31);
+    pdf.text(`Ref: ${quote?.reference || qid}   |   ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 31);
 
-    // Sub-header
     pdf.setFillColor(26, 26, 46);
     pdf.rect(0, 38, 210, 12, 'F');
     pdf.setTextColor(255, 139, 90);
     pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
     pdf.text(`SUBMITTED BY: ${companyName}`, 14, 46);
-    pdf.setTextColor(255,255,255);
+    pdf.setTextColor(255, 255, 255);
     pdf.text(`PRODUCT: ${quote?.product_label || ''}`, 120, 46);
 
-    // Submission details table
-    const rows = [
-      ['Annual Premium (LKR)', Number(submittedData?.premium || form.premium).toLocaleString()],
-      ['Deductible / Excess',  submittedData?.deductible      || form.deductible     || '—'],
-      ['Quote Validity (days)',submittedData?.validity_days   || form.validity_days  || '—'],
-      ['Notes / Terms',        submittedData?.notes           || form.notes          || '—'],
-      ...(submittedData?.quote_file_url ? [['Uploaded Document', submittedData.quote_file_url]] : []),
-      ...Object.entries(submittedData?.comparison_data || {})
-        .filter(([,v]) => v)
-        .map(([k, v]) => [k, String(v)]),
+    const premRows = [
+      ['Total Premium (LKR)', Number(submittedData?.premium || 0).toLocaleString()],
+      ['Basic Premium (LKR)', Number(submittedData?.basic_premium || 0).toLocaleString()],
+      ['SRCC (LKR)',          Number(submittedData?.srcc_premium || 0).toLocaleString()],
+      ['TC (LKR)',            Number(submittedData?.tc_premium || 0).toLocaleString()],
+      ['Admin Fee (LKR)',     Number(submittedData?.admin_fee || 0).toLocaleString()],
+      ['VAT (LKR)',           Number(submittedData?.vat_amount || 0).toLocaleString()],
+      ['Deductibles',         submittedData?.deductible || '—'],
+      ['Excesses',            submittedData?.excesses || '—'],
+      ['Quote Validity',      submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
+      ['Notes / Terms',       submittedData?.notes || '—'],
     ];
 
     autoTable(pdf, {
       startY: 56,
       head: [['Field', 'Value']],
-      body: rows,
-      headStyles: { fillColor: [255, 139, 90], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+      body: premRows,
+      headStyles: { fillColor: [255, 90, 90], textColor: 255, fontStyle: 'bold', fontSize: 10 },
       alternateRowStyles: { fillColor: [255, 248, 245] },
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 65 } },
       styles: { fontSize: 9.5, cellPadding: 4 },
       margin: { left: 14, right: 14 },
     });
+
+    const prod = quote ? PRODUCTS[quote.product_key] : null;
+    const coverEntries = Object.entries(submittedData?.cover_responses || {})
+      .filter(([, v]) => v.provided);
+    if (coverEntries.length > 0) {
+      autoTable(pdf, {
+        startY: pdf.lastAutoTable.finalY + 8,
+        head: [['Cover / Clause', 'Provided', 'Special Terms']],
+        body: coverEntries.map(([k, v]) => {
+          const field = prod?.fields?.find(f => f.name === k);
+          return [field?.label || k, v.provided || '—', v.terms || '—'];
+        }),
+        headStyles: { fillColor: [26, 26, 46], textColor: [255, 139, 90], fontSize: 10 },
+        alternateRowStyles: { fillColor: [255, 248, 245] },
+        styles: { fontSize: 9.5, cellPadding: 4 },
+        margin: { left: 14, right: 14 },
+      });
+    }
+    const clauseEntries = Object.entries(submittedData?.clause_responses || {})
+      .filter(([, v]) => v.provided);
+    if (clauseEntries.length > 0) {
+      autoTable(pdf, {
+        startY: pdf.lastAutoTable.finalY + 8,
+        head: [['Additional Clause', 'Included', 'Special Terms']],
+        body: clauseEntries.map(([k, v]) => {
+          const field = prod?.fields?.find(f => f.name === k);
+          return [field?.label || k, v.provided || '—', v.terms || '—'];
+        }),
+        headStyles: { fillColor: [26, 26, 46], textColor: [255, 139, 90], fontSize: 10 },
+        alternateRowStyles: { fillColor: [255, 248, 245] },
+        styles: { fontSize: 9.5, cellPadding: 4 },
+        margin: { left: 14, right: 14 },
+      });
+    }
 
     const finalY = pdf.lastAutoTable.finalY + 10;
     pdf.setTextColor(150, 150, 150); pdf.setFontSize(8); pdf.setFont('helvetica', 'italic');
@@ -323,20 +439,45 @@ const QuoteResponsePage = () => {
   };
 
   const canEdit = editWindowOpen || reditApproved;
+
   const handleEdit = () => {
     if (!canEdit) return;
+    if (submittedData) {
+      setForm({
+        basic_premium:   submittedData.basic_premium?.toString()  || '',
+        srcc_premium:    submittedData.srcc_premium?.toString()   || '',
+        tc_premium:      submittedData.tc_premium?.toString()     || '',
+        admin_fee:       submittedData.admin_fee?.toString()      || '',
+        vat_amount:      submittedData.vat_amount?.toString()     || '',
+        other_premium:   submittedData.other_premium?.toString()  || '',
+        deductible:      submittedData.deductible     || '',
+        excesses:        submittedData.excesses       || '',
+        commission_type: submittedData.commission_type || '',
+        validity_days:   submittedData.validity_days?.toString()  || '',
+        notes:           submittedData.notes          || '',
+      });
+      setCoverResponses(submittedData.cover_responses  || {});
+      setClauseResponses(submittedData.clause_responses || {});
+      setFileUrl(submittedData.quote_file_url || '');
+      setFileName('');
+    }
     setSubmitted(false);
     setEditing(true);
   };
 
-  const product = quote ? PRODUCTS[quote.product_key] : null;
+  const product      = quote ? PRODUCTS[quote.product_key] : null;
+  const infoSections = buildInfoSections(product, quote?.form_data);
+  const coverFields  = getYesnoFields(product, 'Covers Required', 'Cover Required');
+  const clauseFields = getYesnoFields(product, 'Additional Clauses');
 
+  // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <CircularProgress sx={{ color: '#FF5A5A' }} />
     </Box>
   );
 
+  // ── Success / submitted view ─────────────────────────────────────────────────
   if (submitted) return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', py: 4, px: 2 }}>
       <Box sx={{ maxWidth: 560, mx: 'auto' }}>
@@ -351,7 +492,6 @@ const QuoteResponsePage = () => {
             </Typography>
           </Box>
           <CardContent sx={{ p: 3 }}>
-            {/* Receipt summary */}
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
               Submission Summary
             </Typography>
@@ -363,12 +503,12 @@ const QuoteResponsePage = () => {
                 ['TC',              submittedData?.tc_premium    ? `LKR ${Number(submittedData.tc_premium).toLocaleString()}`    : '—'],
                 ['Admin Fee',       submittedData?.admin_fee     ? `LKR ${Number(submittedData.admin_fee).toLocaleString()}`     : '—'],
                 ['VAT',             submittedData?.vat_amount    ? `LKR ${Number(submittedData.vat_amount).toLocaleString()}`    : '—'],
-                ['Deductible',      submittedData?.deductible    || '—'],
+                ['Deductibles',     submittedData?.deductible    || '—'],
+                ['Excesses',        submittedData?.excesses      || '—'],
                 ['Validity',        submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
                 ['Submitted',       new Date(submittedData?.submitted_at || Date.now()).toLocaleString('en-GB')],
               ].map(([l, v]) => (
-                <Box key={l} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.8,
-                                    borderBottom: '1px solid rgba(255,139,90,0.08)' }}>
+                <Box key={l} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.8, borderBottom: '1px solid rgba(255,139,90,0.08)' }}>
                   <Typography sx={{ fontSize: 13, color: '#6B7280' }}>{l}</Typography>
                   <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>{v}</Typography>
                 </Box>
@@ -380,7 +520,6 @@ const QuoteResponsePage = () => {
                 sx={{ py: 1.2, fontSize: 13, background: 'linear-gradient(135deg,#1A1A2E,#2d2d42)' }}>
                 Download PDF Receipt
               </Button>
-              {/* Edit / re-edit access control */}
               {canEdit ? (
                 <Button fullWidth variant="outlined" onClick={handleEdit}
                   sx={{ py: 1.2, fontSize: 13, borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A' }}>
@@ -390,14 +529,12 @@ const QuoteResponsePage = () => {
                 <Box sx={{ p: 2, borderRadius: '10px', bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', textAlign: 'center' }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#d97706', mb: 0.5 }}>Re-edit Request Pending</Typography>
                   <Typography sx={{ fontSize: 12, color: '#6B7280' }}>
-                    Your request is awaiting broker approval. This page will automatically unlock once approved.
+                    Awaiting broker approval. This page will automatically unlock once approved.
                   </Typography>
                 </Box>
               ) : showReditForm ? (
                 <Box sx={{ p: 2, borderRadius: '10px', border: '1px solid rgba(255,90,90,0.2)' }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: '#374151' }}>
-                    Request Re-edit Access
-                  </Typography>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: '#374151' }}>Request Re-edit Access</Typography>
                   <TextField fullWidth size="small" multiline rows={3}
                     label="Reason for re-edit *"
                     placeholder="Briefly explain why you need to update your submission…"
@@ -435,6 +572,7 @@ const QuoteResponsePage = () => {
     </Box>
   );
 
+  // ── Fatal error (no quote found) ─────────────────────────────────────────────
   if (error && !quote) return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
       <Card sx={{ maxWidth: 480, width: '100%' }}>
@@ -446,9 +584,11 @@ const QuoteResponsePage = () => {
     </Box>
   );
 
+  // ── Main form view ───────────────────────────────────────────────────────────
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', py: 4, px: 2 }}>
-      <Box sx={{ maxWidth: 680, mx: 'auto' }}>
+      <Box sx={{ maxWidth: 780, mx: 'auto' }}>
+
         {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <Box sx={{
@@ -458,7 +598,7 @@ const QuoteResponsePage = () => {
           }}>
             {product?.icon || '📋'}
           </Box>
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.5 }}>Submit Your Quotation</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.5 }}>Generate Your Quotation</Typography>
           <Typography sx={{ fontSize: 13.5, color: '#6B7280' }}>
             From <strong>{companyName}</strong> · Reference: <strong>{quote?.reference}</strong>
           </Typography>
@@ -467,46 +607,81 @@ const QuoteResponsePage = () => {
           </Typography>
         </Box>
 
-        {/* Quote request summary */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 1.5, color: '#374151' }}>Quote Request Details</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-              {(() => {
-                const formData = quote?.form_data || {};
-                const noFields = new Set(
-                  (product?.fields || [])
-                    .filter(f => f.type === 'yesno' && formData[f.name] === 'No')
-                    .map(f => f.name)
-                );
-                return Object.entries(formData)
-                  .filter(([k, v]) => {
-                    if (!v) return false;
-                    const fd = product?.fields?.find(f => f.name === k);
-                    if (fd?.type === 'yesno' && v === 'No') return false;
-                    if (fd?.showIf && noFields.has(fd.showIf.field)) return false;
-                    return true;
-                  })
-                  .map(([k, v]) => {
-                    const fieldDef = product?.fields?.find(f => f.name === k);
-                    return (
-                      <Box key={k}>
-                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                          {fieldDef?.label || k}
+        {/* ── SECTION 1: QUOTATION (read-only summary) ── */}
+        <Card sx={{ mb: 3, overflow: 'hidden' }}>
+          <Box sx={{ background: '#1A1A2E', px: 3, py: 2 }}>
+            <Typography sx={{ fontWeight: 800, fontSize: 15, color: '#FF8B5A', letterSpacing: 0.5 }}>Quotation</Typography>
+            <Typography sx={{ fontSize: 12, color: '#94A3B8', mt: 0.3 }}>
+              Reference: {quote?.reference} · {product?.label}
+            </Typography>
+          </Box>
+          <CardContent sx={{ p: 3 }}>
+            {infoSections.length === 0 ? (
+              <Typography sx={{ color: '#9CA3AF', fontSize: 13 }}>No additional details provided.</Typography>
+            ) : (
+              infoSections.map((sec, si) => (
+                <Box key={sec.name} sx={{ mb: si < infoSections.length - 1 ? 3 : 0 }}>
+                  <Typography sx={{
+                    fontSize: 11, fontWeight: 800, color: '#FF5A5A',
+                    textTransform: 'uppercase', letterSpacing: 1,
+                    mb: 1.5, pb: 0.5, borderBottom: '1px solid rgba(255,90,90,0.12)',
+                  }}>
+                    {sec.name}
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                    {sec.fields.map(({ field, value }) => (
+                      <Box key={field.name} sx={field.type === 'textarea' || field.type === 'multiselect' ? { gridColumn: '1 / -1' } : {}}>
+                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.4, mb: 0.3 }}>
+                          {field.label}
                         </Typography>
-                        <Typography sx={{ fontSize: 13, color: '#1A1A2E', fontWeight: 500 }}>{v}</Typography>
+                        <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, lineHeight: 1.5 }}>{value}</Typography>
                       </Box>
-                    );
-                  });
-              })()}
-            </Box>
+                    ))}
+                  </Box>
+                </Box>
+              ))
+            )}
           </CardContent>
         </Card>
 
-        {/* Response form */}
+        {/* ── SECTION 2: COVERS REQUIRED ── */}
+        {coverFields.length > 0 && (
+          <Card sx={{ mb: 3, overflow: 'hidden' }}>
+            <Box sx={{ background: '#1A1A2E', px: 3, py: 2 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: 15, color: '#FF8B5A' }}>Covers Required</Typography>
+              <Typography sx={{ fontSize: 12, color: '#94A3B8', mt: 0.3 }}>Indicate which covers your policy provides and any special terms</Typography>
+            </Box>
+            <CoverTable
+              fields={coverFields}
+              responses={coverResponses}
+              setResponses={setCoverResponses}
+              quoteFormData={quote?.form_data}
+              headerLabel="Cover"
+            />
+          </Card>
+        )}
+
+        {/* ── SECTION 3: ADDITIONAL CLAUSES ── */}
+        {clauseFields.length > 0 && (
+          <Card sx={{ mb: 3, overflow: 'hidden' }}>
+            <Box sx={{ background: '#1A1A2E', px: 3, py: 2 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: 15, color: '#FF8B5A' }}>Additional Clauses</Typography>
+              <Typography sx={{ fontSize: 12, color: '#94A3B8', mt: 0.3 }}>Indicate which additional clauses are included in your quotation</Typography>
+            </Box>
+            <CoverTable
+              fields={clauseFields}
+              responses={clauseResponses}
+              setResponses={setClauseResponses}
+              quoteFormData={quote?.form_data}
+              headerLabel="Clause"
+            />
+          </Card>
+        )}
+
+        {/* ── SECTION 4: YOUR QUOTATION DETAILS ── */}
         <Card>
           <CardContent>
-            <Typography sx={{ fontWeight: 700, fontSize: 14, mb: 2.5, color: '#1A1A2E' }}>
+            <Typography sx={{ fontWeight: 800, fontSize: 14, mb: 2.5, color: '#1A1A2E' }}>
               {editing ? '✏️ Editing Submission — Update your details below' : 'Your Quotation Details'}
             </Typography>
 
@@ -514,8 +689,12 @@ const QuoteResponsePage = () => {
 
             <Stack spacing={2.5}>
 
-              {/* ── Premium Breakdown ── */}
-              <Box sx={{ p: 2, borderRadius: '12px', border: `1px solid ${['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount'].some(k => fieldErrors[k]) ? 'rgba(239,68,68,0.4)' : 'rgba(255,90,90,0.15)'}`, bgcolor: 'rgba(255,90,90,0.02)' }}>
+              {/* Premium Breakdown */}
+              <Box sx={{
+                p: 2, borderRadius: '12px',
+                border: `1px solid ${['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount'].some(k => fieldErrors[k]) ? 'rgba(239,68,68,0.4)' : 'rgba(255,90,90,0.15)'}`,
+                bgcolor: 'rgba(255,90,90,0.02)',
+              }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
                   Premium Breakdown
                 </Typography>
@@ -546,7 +725,21 @@ const QuoteResponsePage = () => {
                 </Box>
               </Box>
 
-              {/* ── Commission (broker-internal) ── */}
+              {/* Deductibles & Excesses */}
+              <Box sx={{ p: 2, borderRadius: '12px', border: `1px solid ${fieldErrors.deductible ? 'rgba(239,68,68,0.4)' : 'rgba(0,0,0,0.1)'}` }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
+                  Deductibles & Excesses
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                  <TextField label="Deductibles *" size="small" fullWidth
+                    error={!!fieldErrors.deductible} helperText={fieldErrors.deductible}
+                    value={form.deductible} onChange={e => setFE('deductible', e.target.value)} />
+                  <TextField label="Excesses" size="small" fullWidth
+                    value={form.excesses} onChange={e => setFE('excesses', e.target.value)} />
+                </Box>
+              </Box>
+
+              {/* Commission */}
               <Box>
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: fieldErrors.commission_type ? '#ef4444' : '#6B7280', mb: 0.8 }}>
                   Commission Type *
@@ -572,34 +765,9 @@ const QuoteResponsePage = () => {
                 {fieldErrors.commission_type && <Typography sx={{ fontSize: 11, color: '#ef4444', mt: 0.5, ml: 0.5 }}>{fieldErrors.commission_type}</Typography>}
               </Box>
 
-              <TextField label="Special Terms" multiline minRows={2} fullWidth size="small"
-                value={form.special_terms} onChange={e => setFE('special_terms', e.target.value)} />
-
-              <TextField label="Excesses" multiline minRows={2} fullWidth size="small"
-                value={form.excesses} onChange={e => setFE('excesses', e.target.value)} />
-
-              <TextField label="Deductible / Excess *" fullWidth size="small"
-                error={!!fieldErrors.deductible} helperText={fieldErrors.deductible}
-                value={form.deductible} onChange={e => setFE('deductible', e.target.value)} />
               <TextField label="Quote Validity (days) *" type="number" fullWidth size="small"
                 error={!!fieldErrors.validity_days} helperText={fieldErrors.validity_days}
                 value={form.validity_days} onChange={e => setFE('validity_days', e.target.value)} />
-
-              {/* Comparison data fields */}
-              <Box>
-                <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: '#374151', mb: 1.5 }}>
-                  Comparison Fields (optional — helps with side-by-side comparison)
-                </Typography>
-                <Stack spacing={1.5}>
-                  {(product?.comparisonRows || [])
-                    .filter(r => !['Annual Premium (LKR)', 'Validity (days)'].includes(r))
-                    .map(row => (
-                      <TextField key={row} label={row} fullWidth size="small"
-                        value={form.comparison_data[row] || ''}
-                        onChange={e => setCompRow(row, e.target.value)} />
-                    ))}
-                </Stack>
-              </Box>
 
               <TextField label="Notes / Terms & Conditions" multiline minRows={3} fullWidth size="small"
                 value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
@@ -631,7 +799,7 @@ const QuoteResponsePage = () => {
                     </Box>
                   ) : fileUrl ? (
                     <Typography sx={{ fontSize: 13, color: '#10B981', fontWeight: 600 }}>
-                      ✓ {fileName} uploaded
+                      ✓ {fileName || 'Document uploaded'}
                     </Typography>
                   ) : (
                     <Box>
@@ -644,10 +812,11 @@ const QuoteResponsePage = () => {
                   )}
                 </Box>
               </Box>
+
             </Stack>
 
             <Button fullWidth variant="contained" onClick={handleSubmit} disabled={saving || uploading}
-              sx={{ mt: 3, py: 1.3, fontSize: 14, fontWeight: 700 }}>
+              sx={{ mt: 3, py: 1.3, fontSize: 14, fontWeight: 700, background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)' }}>
               {saving ? 'Submitting…' : editing ? 'Update Quotation' : 'Submit Quotation'}
             </Button>
 
@@ -662,7 +831,7 @@ const QuoteResponsePage = () => {
         </Typography>
       </Box>
 
-      {/* ── Validation dialog ── */}
+      {/* Validation dialog */}
       <Dialog open={valOpen} onClose={() => setValOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
           <WarningAmberRoundedIcon sx={{ color: '#f59e0b', fontSize: 22 }} />
@@ -696,7 +865,7 @@ const QuoteResponsePage = () => {
             </Box>
           )}
           <Typography sx={{ fontSize: 12, color: '#9CA3AF', mt: 2 }}>
-            Fields with issues are highlighted in red above.
+            Fields with issues are highlighted above.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
