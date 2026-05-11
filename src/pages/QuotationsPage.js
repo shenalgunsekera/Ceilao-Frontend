@@ -542,8 +542,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     if (!custEmail.trim()) return;
     setSending(true);
     try {
-      // Build an HTML table of the comparison
-      const compRows = (product?.comparisonRows || []);
+      // Build an HTML comparison table for the customer
       const headerCells = responses.map(r => `<th style="background:#FF5A5A;color:#fff;padding:10px 14px;font-size:13px;">${r.company_name}</th>`).join('');
       const fmt = n => n ? Number(n).toLocaleString() : '—';
       // Premium breakdown rows — shown to customer, commission excluded
@@ -558,11 +557,9 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       ].map(([label, getter], i) =>
         `<tr style="background:${i%2===0?'#FFF8F5':'#fff'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`
       ).join('');
-      const excessRow = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
-      const termsRow  = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Special Terms</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.special_terms||'—'}</td>`).join('')}</tr>`;
-      const dataRows = compRows.filter(r => r !== 'Annual Premium (LKR)').map((row, i) =>
-        `<tr style="background:${i%2===0?'#fff':'#FFF8F5'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${row}</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:right;">${r.comparison_data?.[row]||'—'}</td>`).join('')}</tr>`
-      ).join('');
+      const deductiblesRow = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Deductibles</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.deductible||'—'}</td>`).join('')}</tr>`;
+      const excessRow      = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
+      const validityRow    = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Validity (days)</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:right;">${r.validity_days||'—'}</td>`).join('')}</tr>`;
       const isImg = (url) => url && /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(url);
       const docRow = `<tr style="background:#F9F9FB"><td style="padding:10px 14px;font-weight:600;color:#374151;">Uploaded Quote</td>${
         responses.map(r => r.quote_file_url
@@ -573,7 +570,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         ).join('')
       }</tr>`;
 
-      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${excessRow}${termsRow}${dataRows}${docRow}</tbody></table>`;
+      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${docRow}</tbody></table>`;
 
       await emailjs.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
