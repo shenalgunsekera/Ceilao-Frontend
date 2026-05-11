@@ -45,7 +45,6 @@ function buildInfoSections(product, formData) {
   const sectionOrder = [];
   (product.fields || []).forEach(f => {
     if (!f.section || INSURER_SECTIONS.has(f.section)) return;
-    if (f.type === 'file') return;
     if (f.showIf && formData[f.showIf.field] !== f.showIf.value) return;
     if (noFields.has(f.name)) return;
     const val = formData[f.name];
@@ -54,7 +53,8 @@ function buildInfoSections(product, formData) {
       sectionMap[f.section] = [];
       sectionOrder.push(f.section);
     }
-    sectionMap[f.section].push({ field: f, value: val });
+    const fileName = f.type === 'file' ? (formData[f.name + '_filename'] || f.label) : null;
+    sectionMap[f.section].push({ field: f, value: val, fileName });
   });
   return sectionOrder
     .filter(name => sectionMap[name].length > 0)
@@ -629,12 +629,19 @@ const QuoteResponsePage = () => {
                     {sec.name}
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-                    {sec.fields.map(({ field, value }) => (
-                      <Box key={field.name} sx={field.type === 'textarea' || field.type === 'multiselect' ? { gridColumn: '1 / -1' } : {}}>
+                    {sec.fields.map(({ field, value, fileName }) => (
+                      <Box key={field.name} sx={field.type === 'textarea' || field.type === 'multiselect' || field.type === 'file' ? { gridColumn: '1 / -1' } : {}}>
                         <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.4, mb: 0.3 }}>
                           {field.label}
                         </Typography>
-                        <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, lineHeight: 1.5 }}>{value}</Typography>
+                        {field.type === 'file' ? (
+                          <Typography component="a" href={value} target="_blank" rel="noopener noreferrer"
+                            sx={{ fontSize: 13, color: '#6366f1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 0.5, fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}>
+                            📄 {fileName}
+                          </Typography>
+                        ) : (
+                          <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, lineHeight: 1.5 }}>{value}</Typography>
+                        )}
                       </Box>
                     ))}
                   </Box>
