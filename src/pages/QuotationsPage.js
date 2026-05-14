@@ -749,7 +749,6 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     setExportError('');
     try {
     const { default: ExcelJS } = await import('exceljs');
-    const { saveAs }           = await import('file-saver');
     const wb = new ExcelJS.Workbook();
     wb.creator   = 'Ceilao Insurance Brokers';
     wb.created   = new Date();
@@ -872,36 +871,18 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     addSection('NOTES / TERMS & CONDITIONS');
     addDataRow('Notes', responses.map(r => r.notes || '—'), false, false, 0);
 
-    // ── Client submitted documents ──
-    const docFields = (product?.fields || []).filter(f => f.type === 'file' && quote.form_data?.[f.name]);
-    if (docFields.length > 0) {
-      addSection('CLIENT SUBMITTED DOCUMENTS');
-      docFields.forEach((f, i) => {
-        const url      = quote.form_data[f.name] || '';
-        const filename = quote.form_data?.[f.name + '_filename'] || f.label;
-        const r = ws.addRow([f.label, url ? filename : 'Not uploaded', ...Array(Math.max(0, colCount - 2)).fill('')]);
-        r.height = 17;
-        if (colCount > 2) ws.mergeCells(r.number, 2, r.number, colCount);
-        const bg = i % 2 === 0 ? WHITE : LIGHT;
-        const lc = r.getCell(1);
-        lc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        lc.font      = { bold: true, size: 9.5, name: 'Calibri', color: { argb: DARK } };
-        lc.alignment = { vertical: 'middle', indent: 2 };
-        const vc = r.getCell(2);
-        vc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        vc.alignment = { horizontal: 'left', vertical: 'middle', indent: 2 };
-        if (url) {
-          vc.value = { text: `📄 ${filename}`, hyperlink: url, tooltip: url };
-          vc.font  = { size: 9.5, name: 'Calibri', color: { argb: 'FF6366F1' }, underline: true };
-        } else {
-          vc.font = { size: 9.5, name: 'Calibri', color: { argb: 'FF9CA3AF' } };
-        }
-      });
-    }
-
     // ── Insurer quote documents ──
     addSection('UPLOADED QUOTATION DOCUMENTS');
-    addDataRow('Document Link', responses.map(r => r.quote_file_url || 'Not uploaded'), false, false, 0);
+    addDataRow('Document Link', responses.map(r => r.quote_file_url ? r.quote_file_url : 'Not uploaded'), false, false, 0);
+    // Make the document link cells actual hyperlinks
+    const docRow = ws.lastRow;
+    responses.forEach((r, ci) => {
+      if (r.quote_file_url) {
+        const cell = docRow.getCell(ci + 2);
+        cell.value = { text: 'Open Document ↗', hyperlink: r.quote_file_url, tooltip: r.quote_file_url };
+        cell.font  = { ...cell.font, color: { argb: 'FF6366F1' }, underline: true };
+      }
+    });
 
     ws.addRow([]);
 
@@ -920,9 +901,16 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     foot2.getCell(1).font      = { size: 8, color: { argb: 'FFD1D5DB' }, italic: true, name: 'Calibri' };
     foot2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    const buf = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-      `CeilaoIB_Comparison_${quote.reference}.xlsx`);
+    const buf  = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const dlUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = dlUrl;
+    a.download = `CeilaoIB_Comparison_${quote.reference}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(dlUrl), 1000);
     } catch (err) {
       console.error('Excel export error:', err);
       setExportError(err?.message || 'Excel export failed — please try again.');
@@ -1047,51 +1035,40 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       },
     });
 
-    // ── Client Documents Page ──────────────────────────────────────────────────
-    const pdfDocFields = (product?.fields || []).filter(f => f.type === 'file' && quote.form_data?.[f.name]);
-    if (pdfDocFields.length > 0) {
+    // ── Insurer Quote Documents Page ───────────────────────────────────────────
+    const insurerDocs = responses.filter(r => r.quote_file_url);
+    if (insurerDocs.length > 0) {
       pdf.addPage();
       drawHeader();
 
-      const margL = 12, usableW = pw - 24, gap = 8, cols = 2;
-      const colW = (usableW - gap * (cols - 1)) / cols;
-      const labelH = 14, imgMaxH = 72, cellH = labelH + imgMaxH + 10;
+      const margL = 12, usableW = pw - 24;
+      const cols  = Math.min(insurerDocs.length, 3);
+      const gap   = 8;
+      const colW  = (usableW - gap * (cols - 1)) / cols;
+      const imgMaxH = 140;
       let curDocY = 30;
 
       // Section header
       pdf.setFillColor(26, 26, 46);
       pdf.rect(margL, curDocY, usableW, 10, 'F');
       pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 139, 90);
-      pdf.text('CLIENT SUBMITTED DOCUMENTS', pw / 2, curDocY + 6.5, { align: 'center' });
+      pdf.text('INSURER UPLOADED QUOTE DOCUMENTS', pw / 2, curDocY + 6.5, { align: 'center' });
       curDocY += 14;
 
-      let docCol = 0, rowBaseY = curDocY;
-      for (let di = 0; di < pdfDocFields.length; di++) {
-        const f   = pdfDocFields[di];
-        const url = quote.form_data[f.name];
-        const filename = quote.form_data?.[f.name + '_filename'] || f.label;
-        const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
-        const cx = margL + docCol * (colW + gap);
+      for (let di = 0; di < insurerDocs.length; di++) {
+        const r   = insurerDocs[di];
+        const url = r.quote_file_url;
+        const col = di % cols;
+        if (di > 0 && col === 0) curDocY += imgMaxH + 20;
+        const cx = margL + col * (colW + gap);
 
-        if (rowBaseY + cellH > ph - 20) {
-          pdf.addPage(); drawHeader(); drawFooter();
-          rowBaseY = 30; docCol = 0;
-          pdf.setFillColor(26, 26, 46);
-          pdf.rect(margL, rowBaseY, usableW, 10, 'F');
-          pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 139, 90);
-          pdf.text('CLIENT SUBMITTED DOCUMENTS (cont.)', pw / 2, rowBaseY + 6.5, { align: 'center' });
-          rowBaseY += 14;
-        }
+        // Company name label
+        pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(26, 26, 46);
+        pdf.text(r.company_name, cx + colW / 2, curDocY + 6, { align: 'center', maxWidth: colW });
 
-        // Label row
-        pdf.setFontSize(8.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(26, 26, 46);
-        pdf.text(f.label, cx, rowBaseY + 5);
-        pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(107, 114, 128);
-        const truncFn = filename.length > 48 ? filename.slice(0, 45) + '…' : filename;
-        pdf.text(truncFn, cx, rowBaseY + 10, { maxWidth: colW });
+        const imgBoxY = curDocY + 10;
+        const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url) || url.includes('/image/upload/');
 
-        // Image box
-        const imgBoxY = rowBaseY + labelH;
         pdf.setFillColor(245, 247, 250);
         pdf.rect(cx, imgBoxY, colW, imgMaxH, 'F');
         pdf.setDrawColor(210, 215, 225); pdf.setLineWidth(0.3);
@@ -1100,6 +1077,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         if (isImg) {
           try {
             const b64 = await fetchBase64(url);
+            if (!b64.startsWith('data:image/')) throw new Error('not an image');
             const dims = await new Promise(res => {
               const img = new window.Image();
               img.onload  = () => res({ w: img.naturalWidth, h: img.naturalHeight });
@@ -1118,13 +1096,10 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           }
         } else {
           pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(99, 102, 241);
-          pdf.text('PDF FILE', cx + colW / 2, imgBoxY + imgMaxH / 2 - 4, { align: 'center' });
+          pdf.text('PDF DOCUMENT', cx + colW / 2, imgBoxY + imgMaxH / 2 - 4, { align: 'center' });
           pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(120, 124, 180);
-          pdf.text('Document uploaded', cx + colW / 2, imgBoxY + imgMaxH / 2 + 3, { align: 'center' });
+          pdf.text('Open via digital copy', cx + colW / 2, imgBoxY + imgMaxH / 2 + 4, { align: 'center' });
         }
-
-        docCol++;
-        if (docCol >= cols) { docCol = 0; rowBaseY += cellH; }
       }
       drawFooter();
     }
