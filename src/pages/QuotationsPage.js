@@ -788,7 +788,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">
             ${responses.map(r => `<a href="${baseUrl}/quote-select?qid=${quote.id}&cid=${encodeURIComponent(r.company_id)}&cn=${encodeURIComponent(r.company_name)}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#FF5A5A,#FF8B5A);color:#fff;padding:11px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;margin:3px;">Go with ${r.company_name} →</a>`).join('')}
           </div>
-          ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" style="display:inline-block;background:#1A1A2E;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">📄 Download PDF Comparison</a>` : ''}
+          <a href="${baseUrl}/comparison-pdf?qid=${quote.id}" target="_blank" style="display:inline-block;background:#1A1A2E;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">📄 Download PDF Comparison</a>
         </div>`;
 
       await emailjs.send(
