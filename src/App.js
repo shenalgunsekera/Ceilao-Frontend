@@ -24,6 +24,7 @@ const AdminPanel       = lazy(() => import('./components/AdminPanel'));
 const OperationalMenu  = lazy(() => import('./pages/OperationalMenu'));
 const QuotationsPage   = lazy(() => import('./pages/QuotationsPage'));
 const QuoteResponsePage= lazy(() => import('./pages/QuoteResponsePage'));
+const QuoteSelectPage  = lazy(() => import('./pages/QuoteSelectPage'));
 const RenewalsPage     = lazy(() => import('./pages/RenewalsPage'));
 const ClaimsPage       = lazy(() => import('./pages/ClaimsPage'));
 const MarketingPage    = lazy(() => import('./pages/MarketingPage'));
@@ -308,6 +309,8 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             {/* Public — insurance companies submit quotes without logging in */}
             <Route path="/quote-respond" element={<Suspense fallback={null}><QuoteResponsePage /></Suspense>} />
+            {/* Public — customer selects preferred insurer */}
+            <Route path="/quote-select"  element={<Suspense fallback={null}><QuoteSelectPage /></Suspense>} />
 
             <Route path="/*" element={
               <RequireAuth>
