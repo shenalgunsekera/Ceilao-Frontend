@@ -533,6 +533,8 @@ function QuoteRow({ quote, onSelect, tab, onDelete }) {
 function ComparisonView({ quote, onBack, onConfirm }) {
   const product   = PRODUCTS[quote?.product_key];
   const responses = quote?.responses || [];
+  const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno');
+  const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
   const [custEmail,  setCustEmail]  = useState('');
   const [sending,    setSending]    = useState(false);
   const [sendDone,   setSendDone]   = useState(false);
@@ -557,9 +559,33 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       ].map(([label, getter], i) =>
         `<tr style="background:${i%2===0?'#FFF8F5':'#fff'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`
       ).join('');
-      const deductiblesRow = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Deductibles</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.deductible||'—'}</td>`).join('')}</tr>`;
-      const excessRow      = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
-      const validityRow    = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Validity (days)</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:right;">${r.validity_days||'—'}</td>`).join('')}</tr>`;
+      const deductiblesRow = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Deductibles</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.deductible||'—'}</td>`).join('')}</tr>`;
+      const excessRow      = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
+      const validityRow    = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Validity (days)</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:center;">${r.validity_days||'—'}</td>`).join('')}</tr>`;
+      // Covers section
+      const cvFields = (product?.fields || []).filter(f => ['Covers Required','Cover Required'].includes(f.section) && f.type === 'yesno');
+      const clFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
+      const sectionHeader = (label) => `<tr><td colspan="${responses.length+1}" style="background:#1A1A2E;padding:10px 14px;font-size:11px;font-weight:800;color:#FF8B5A;text-transform:uppercase;letter-spacing:1px;">${label}</td></tr>`;
+      const coverRows = cvFields.length > 0 ? sectionHeader('Covers Required') + cvFields.map((f,i) => {
+        const cells = responses.map(r => {
+          const cr = r.cover_responses?.[f.name];
+          const p = cr?.provided || '—';
+          const c = p === 'Yes' ? '#059669' : p === 'No' ? '#dc2626' : '#9CA3AF';
+          const t = cr?.terms ? `<br/><span style="font-size:10px;color:#9CA3AF;">${cr.terms}</span>` : '';
+          return `<td style="padding:8px 14px;text-align:center;"><span style="font-weight:700;color:${c};">${p}</span>${t}</td>`;
+        }).join('');
+        return `<tr style="background:${i%2===0?'#fff':'#FFF8F5'}"><td style="padding:8px 14px 8px 22px;font-weight:600;color:#374151;font-size:12px;">${f.label}</td>${cells}</tr>`;
+      }).join('') : '';
+      const clauseRows = clFields.length > 0 ? sectionHeader('Additional Clauses') + clFields.map((f,i) => {
+        const cells = responses.map(r => {
+          const cr = r.clause_responses?.[f.name];
+          const p = cr?.provided || '—';
+          const c = p === 'Yes' ? '#059669' : p === 'No' ? '#dc2626' : '#9CA3AF';
+          const t = cr?.terms ? `<br/><span style="font-size:10px;color:#9CA3AF;">${cr.terms}</span>` : '';
+          return `<td style="padding:8px 14px;text-align:center;"><span style="font-weight:700;color:${c};">${p}</span>${t}</td>`;
+        }).join('');
+        return `<tr style="background:${i%2===0?'#fff':'#FFF8F5'}"><td style="padding:8px 14px 8px 22px;font-weight:600;color:#374151;font-size:12px;">${f.label}</td>${cells}</tr>`;
+      }).join('') : '';
       const isImg = (url) => url && /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(url);
       const docRow = `<tr style="background:#F9F9FB"><td style="padding:10px 14px;font-weight:600;color:#374151;">Uploaded Quote</td>${
         responses.map(r => r.quote_file_url
@@ -570,7 +596,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         ).join('')
       }</tr>`;
 
-      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${docRow}</tbody></table>`;
+      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
 
       await emailjs.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
@@ -774,33 +800,92 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                   </TableCell>
                 ))}
               </TableRow>
-              {/* Excesses & Special Terms */}
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Excesses</TableCell>
-                {responses.map(r => (
-                  <TableCell key={r.id} sx={{ fontSize: 12, color: '#6B7280', whiteSpace: 'pre-wrap' }}>
-                    {r.excesses || '—'}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow sx={{ bgcolor: 'rgba(255,248,245,0.6)' }}>
-                <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Special Terms</TableCell>
-                {responses.map(r => (
-                  <TableCell key={r.id} sx={{ fontSize: 12, color: '#6B7280', whiteSpace: 'pre-wrap' }}>
-                    {r.special_terms || '—'}
-                  </TableCell>
-                ))}
-              </TableRow>
-              {(product?.comparisonRows || []).filter(row => row !== 'Annual Premium (LKR)').map((row, i) => (
-                <TableRow key={row} sx={{ bgcolor: i % 2 === 0 ? '#fff' : 'rgba(255,248,245,0.6)' }}>
-                  <TableCell sx={{ fontWeight: 600, color: '#374151' }}>{row}</TableCell>
+              {/* Deductibles & Excesses & Validity */}
+              {[
+                { key: 'deductible',   label: 'Deductibles' },
+                { key: 'excesses',     label: 'Excesses' },
+                { key: 'validity_days', label: 'Validity (days)' },
+              ].map((row, i) => (
+                <TableRow key={row.key} sx={{ bgcolor: i % 2 === 0 ? 'rgba(107,114,128,0.04)' : '#fff' }}>
+                  <TableCell sx={{ fontWeight: 600, color: '#374151', fontSize: 12.5 }}>{row.label}</TableCell>
                   {responses.map(r => (
-                    <TableCell key={r.id} align="center" sx={{ fontSize: 12.5 }}>
-                      {r.comparison_data?.[row] || '—'}
+                    <TableCell key={r.id} align="center" sx={{ fontSize: 12.5, color: '#4B5563' }}>
+                      {r[row.key] || '—'}
                     </TableCell>
                   ))}
                 </TableRow>
               ))}
+
+              {/* Covers Required */}
+              {coverFields.length > 0 && (
+                <>
+                  <TableRow>
+                    <TableCell colSpan={responses.length + 1}
+                      sx={{ background: '#1A1A2E', color: '#FF8B5A', fontWeight: 800, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', py: 1.2 }}>
+                      Covers Required
+                    </TableCell>
+                  </TableRow>
+                  {coverFields.map((f, i) => (
+                    <TableRow key={f.name} sx={{ bgcolor: i % 2 === 0 ? '#fff' : 'rgba(255,248,245,0.5)' }}>
+                      <TableCell sx={{ fontWeight: 600, color: '#374151', fontSize: 12.5, pl: 3 }}>{f.label}</TableCell>
+                      {responses.map(r => {
+                        const cr = r.cover_responses?.[f.name];
+                        const p = cr?.provided || '';
+                        return (
+                          <TableCell key={r.id} align="center">
+                            {p ? (
+                              <Box>
+                                <Box component="span" sx={{
+                                  display: 'inline-block', px: 1.2, py: 0.3, borderRadius: '12px', fontSize: 11.5, fontWeight: 700,
+                                  bgcolor: p === 'Yes' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
+                                  color: p === 'Yes' ? '#059669' : '#dc2626',
+                                }}>{p}</Box>
+                                {cr?.terms && <Typography sx={{ fontSize: 10, color: '#9CA3AF', mt: 0.3, maxWidth: 160 }}>{cr.terms}</Typography>}
+                              </Box>
+                            ) : <Typography sx={{ color: '#D1D5DB', fontSize: 13 }}>—</Typography>}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </>
+              )}
+
+              {/* Additional Clauses */}
+              {clauseFields.length > 0 && (
+                <>
+                  <TableRow>
+                    <TableCell colSpan={responses.length + 1}
+                      sx={{ background: '#1A1A2E', color: '#FF8B5A', fontWeight: 800, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', py: 1.2 }}>
+                      Additional Clauses
+                    </TableCell>
+                  </TableRow>
+                  {clauseFields.map((f, i) => (
+                    <TableRow key={f.name} sx={{ bgcolor: i % 2 === 0 ? '#fff' : 'rgba(255,248,245,0.5)' }}>
+                      <TableCell sx={{ fontWeight: 600, color: '#374151', fontSize: 12.5, pl: 3 }}>{f.label}</TableCell>
+                      {responses.map(r => {
+                        const cr = r.clause_responses?.[f.name];
+                        const p = cr?.provided || '';
+                        return (
+                          <TableCell key={r.id} align="center">
+                            {p ? (
+                              <Box>
+                                <Box component="span" sx={{
+                                  display: 'inline-block', px: 1.2, py: 0.3, borderRadius: '12px', fontSize: 11.5, fontWeight: 700,
+                                  bgcolor: p === 'Yes' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
+                                  color: p === 'Yes' ? '#059669' : '#dc2626',
+                                }}>{p}</Box>
+                                {cr?.terms && <Typography sx={{ fontSize: 10, color: '#9CA3AF', mt: 0.3, maxWidth: 160 }}>{cr.terms}</Typography>}
+                              </Box>
+                            ) : <Typography sx={{ color: '#D1D5DB', fontSize: 13 }}>—</Typography>}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </>
+              )}
+
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Notes / T&Cs</TableCell>
                 {responses.map(r => (
