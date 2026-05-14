@@ -596,7 +596,72 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         ).join('')
       }</tr>`;
 
-      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
+      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;border-radius:10px;overflow:hidden;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
+
+      // Generate comparison PDF and upload to Cloudinary
+      let pdfUrl = '';
+      try {
+        const { default: jsPDF }     = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+        const { uploadToCloudinary: uploadPdf } = await import('../cloudinary');
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        pdf.setFillColor(255, 90, 90);
+        pdf.rect(0, 0, 297, 22, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(14); pdf.setFont('helvetica', 'bold');
+        pdf.text('Ceilao Insurance Brokers — Quote Comparison', 14, 10);
+        pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+        pdf.text(`Ref: ${quote.reference}  |  ${product?.label || ''}  |  ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}`, 14, 17);
+
+        const fmtP = n => n ? `LKR ${Number(n).toLocaleString()}` : '—';
+        const columns = [{ header: 'Field', dataKey: 'field' }, ...responses.map(r => ({ header: r.company_name, dataKey: r.company_id }))];
+        const mkRow = (label, getter, meta = {}) => ({ field: label, ...Object.fromEntries(responses.map(r => [r.company_id, getter(r)])), ...meta });
+        const pdfRows = [
+          mkRow('PREMIUM BREAKDOWN', () => '', { _h: true }),
+          mkRow('Basic Premium',  r => fmtP(r.basic_premium)),
+          mkRow('SRCC',           r => fmtP(r.srcc_premium)),
+          mkRow('TC',             r => fmtP(r.tc_premium)),
+          mkRow('Admin Fee',      r => fmtP(r.admin_fee)),
+          mkRow('VAT',            r => fmtP(r.vat_amount)),
+          mkRow('Total Premium',  r => fmtP(r.premium), { _t: true }),
+          mkRow('Deductibles',    r => r.deductible || '—'),
+          mkRow('Excesses',       r => r.excesses || '—'),
+          mkRow('Validity (days)',r => r.validity_days || '—'),
+          ...(cvFields.length > 0 ? [mkRow('COVERS REQUIRED', () => '', { _h: true }), ...cvFields.map(f => mkRow(f.label, r => r.cover_responses?.[f.name]?.provided || '—'))] : []),
+          ...(clFields.length > 0 ? [mkRow('ADDITIONAL CLAUSES', () => '', { _h: true }), ...clFields.map(f => mkRow(f.label, r => r.clause_responses?.[f.name]?.provided || '—'))] : []),
+          mkRow('Notes / Terms', r => r.notes || '—'),
+        ];
+        autoTable(pdf, {
+          startY: 26, columns, body: pdfRows,
+          headStyles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 9 },
+          alternateRowStyles: { fillColor: [255,248,245] },
+          columnStyles: { field: { fontStyle: 'bold', cellWidth: 52, fontSize: 8.5 } },
+          styles: { fontSize: 8.5, cellPadding: 3, overflow: 'linebreak' },
+          margin: { left: 12, right: 12 },
+          didParseCell: ({ row, cell }) => {
+            if (row.raw._h) { cell.styles.fillColor = [26,26,46]; cell.styles.textColor = [255,139,90]; cell.styles.fontStyle = 'bold'; }
+            else if (row.raw._t) { cell.styles.fillColor = [255,90,90]; cell.styles.textColor = [255,255,255]; cell.styles.fontStyle = 'bold'; }
+          },
+        });
+        const finalY = pdf.lastAutoTable.finalY + 8;
+        pdf.setTextColor(150,150,150); pdf.setFontSize(7); pdf.setFont('helvetica','italic');
+        pdf.text('Ceilao Insurance Brokers (Pvt) Ltd — Confidential Comparison Report — Commission details excluded', 12, finalY);
+        const blob = pdf.output('blob');
+        const file = new File([blob], `comparison_${quote.reference}.pdf`, { type: 'application/pdf' });
+        pdfUrl = await uploadPdf(file, 'ceilao/comparisons');
+      } catch (pdfErr) { console.warn('PDF generation skipped:', pdfErr); }
+
+      // Selection buttons + PDF download for email
+      const baseUrl = window.location.origin;
+      const selectionSection = `
+        <div style="margin-top:28px;padding:20px 0;border-top:2px solid rgba(255,90,90,0.15);text-align:center;">
+          <p style="margin:0 0 14px;color:#1A1A2E;font-size:15px;font-weight:700;">Select Your Preferred Insurer</p>
+          <p style="margin:0 0 18px;color:#6B7280;font-size:13px;">Click the company you'd like to proceed with:</p>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">
+            ${responses.map(r => `<a href="${baseUrl}/quote-select?qid=${quote.id}&cid=${encodeURIComponent(r.company_id)}&cn=${encodeURIComponent(r.company_name)}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#FF5A5A,#FF8B5A);color:#fff;padding:11px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;margin:3px;">Go with ${r.company_name} →</a>`).join('')}
+          </div>
+          ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" style="display:inline-block;background:#1A1A2E;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">📄 Download PDF Comparison</a>` : ''}
+        </div>`;
 
       await emailjs.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
@@ -606,7 +671,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           to_name:       'Valued Client',
           reference:     quote.reference,
           product:       product?.label || quote.product_key,
-          table_html:    tableHtml,
+          table_html:    tableHtml + selectionSection,
           company_count: responses.length,
         },
         { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY || '' }
@@ -733,6 +798,16 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         </Alert>
       )}
 
+      {/* Customer selection indicator */}
+      {quote.customer_selection && (
+        <Alert icon="🏆" severity="success" sx={{ mb: 2.5, fontWeight: 600, fontSize: 13 }}>
+          <strong>Customer's Preferred Insurer: {quote.customer_selection.company_name}</strong>
+          <Box component="span" sx={{ ml: 1.5, fontSize: 12, color: '#4B5563', fontWeight: 400 }}>
+            — selected on {new Date(quote.customer_selection.selected_at).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+          </Box>
+        </Alert>
+      )}
+
       {responses.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 6 }}>
           <Typography sx={{ color: '#9CA3AF' }}>No responses received yet for this quote.</Typography>
@@ -743,10 +818,14 @@ function ComparisonView({ quote, onBack, onConfirm }) {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>Field</TableCell>
-                {responses.map(r => (
-                  <TableCell key={r.id} align="center" sx={{ fontWeight: 700, minWidth: 160 }}>
+                {responses.map(r => {
+                  const isSelected = quote.customer_selection?.company_id === r.company_id;
+                  return (
+                  <TableCell key={r.id} align="center" sx={{ fontWeight: 700, minWidth: 160, bgcolor: isSelected ? 'rgba(16,185,129,0.06)' : 'transparent' }}>
                     <Box>
                       <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{r.company_name}</Typography>
+                      {isSelected && <Box component="span" sx={{ fontSize: 10, color: '#059669', fontWeight: 700, bgcolor: 'rgba(16,185,129,0.12)', px: 1, py: 0.2, borderRadius: '10px', display: 'inline-block', mt: 0.3 }}>🏆 Customer's Choice</Box>}
+
                       {r.quote_file_url && (
                         <Button size="small" href={r.quote_file_url} target="_blank"
                           sx={{ fontSize: 10, p: 0, color: '#6366f1', minWidth: 'auto' }}>
@@ -755,7 +834,8 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                       )}
                     </Box>
                   </TableCell>
-                ))}
+                  );
+                })}
               </TableRow>
             </TableHead>
             <TableBody>
