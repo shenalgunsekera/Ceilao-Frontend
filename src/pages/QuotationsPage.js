@@ -690,19 +690,27 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           pdf.text('INSURANCE BROKING & RISK MANAGEMENT  ·  SRI LANKA', ppw/2, 15, { align:'center' });
         };
         const drawPFtr = () => {
-          pdf.setFillColor(26,26,46); pdf.rect(0, pph-10, ppw, 10, 'F');
-          pdf.setFontSize(7); pdf.setFont('helvetica','italic'); pdf.setTextColor(148,163,184);
-          pdf.text('This comparison is prepared exclusively for you by Ceilao Insurance Brokers. Prices are subject to final confirmation from insurers.', ppw/2, pph-4, { align:'center' });
+          const pn = pdf.internal.getCurrentPageInfo().pageNumber;
+          const tp = pdf.internal.getNumberOfPages();
+          pdf.setFillColor(26,26,46); pdf.rect(0, pph-14, ppw, 14, 'F');
+          pdf.setFillColor(255,90,90); pdf.rect(0, pph-14, ppw, 1, 'F');
+          pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(255,139,90);
+          pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', 12, pph-8);
+          pdf.setFont('helvetica','normal'); pdf.setFontSize(7.5); pdf.setTextColor(148,163,184);
+          pdf.text('This comparison is prepared exclusively for you. Prices are subject to final confirmation.', ppw/2, pph-8, { align:'center' });
           pdf.setTextColor(107,114,128);
-          pdf.text(`Generated: ${pToday}`, 12, pph-4);
+          pdf.text(`Page ${pn} / ${tp}`, ppw-12, pph-8, { align:'right' });
+          pdf.setFont('helvetica','italic'); pdf.setFontSize(6.5); pdf.setTextColor(100,116,139);
+          pdf.text(`Generated: ${pToday}`, 12, pph-3.5);
+          pdf.text('Insurance Broking & Risk Management  ·  Sri Lanka', ppw-12, pph-3.5, { align:'right' });
         };
 
         drawPHdr();
-        pdf.setFillColor(249,250,251); pdf.rect(0,23,ppw,10,'F');
-        pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
-        pdf.text('PERSONALISED INSURANCE COMPARISON REPORT', 14, 30);
+        pdf.setFillColor(249,250,251); pdf.rect(0,23,ppw,12,'F');
+        pdf.setFontSize(10); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
+        pdf.text('PERSONALISED INSURANCE COMPARISON REPORT', 14, 31);
         pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(107,114,128);
-        pdf.text(`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${pToday}`, ppw-14, 30, { align:'right' });
+        pdf.text(`Ref: ${quote.reference}   ·   ${product?.label || ''}   ·   ${pToday}`, ppw-14, 31, { align:'right' });
 
         const mkCSec = (label) => [{ content: label, colSpan: responses.length+1, styles:{ fillColor:[26,26,46], textColor:[255,139,90], fontStyle:'bold', fontSize:8, cellPadding:{top:3,bottom:3,left:5,right:5} } }];
         const mkCRow = (label, vals, isTotal=false, i=0) => [
@@ -745,10 +753,9 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           body: custBody,
           columnStyles: { 0: { cellWidth: 52 } },
           styles: { fontSize:8.5, cellPadding:{top:3,bottom:3,left:4,right:4}, overflow:'linebreak', minCellHeight:8 },
-          margin: { left:10, right:10, bottom:14 },
-          didDrawPage: () => { drawPHdr(); drawPFtr(); },
+          margin: { left:10, right:10, top:25, bottom:17 },
+          didDrawPage: (data) => { if (data.pageNumber > 1) drawPHdr(); drawPFtr(); },
         });
-        drawPFtr();
 
         const blob = pdf.output('blob');
         const file = new File([blob], `CeilaoIB_Comparison_${quote.reference}.pdf`, { type:'application/pdf' });
@@ -793,7 +800,6 @@ function ComparisonView({ quote, onBack, onConfirm }) {
 
   // ── helpers shared by both exports ─────────────────────────────────────────
   const colCount = responses.length + 1;
-  const fmtLKR   = n => n ? `LKR ${Number(n).toLocaleString()}` : '—';
   const today    = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
   // ── Export Excel ────────────────────────────────────────────────────────────
@@ -981,26 +987,38 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     };
 
     const drawFooter = () => {
+      const pn = pdf.internal.getCurrentPageInfo().pageNumber;
+      const tp = pdf.internal.getNumberOfPages();
       pdf.setFillColor(26, 26, 46);
-      pdf.rect(0, ph - 10, pw, 10, 'F');
-      pdf.setFontSize(7); pdf.setFont('helvetica', 'italic');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd  ·  CONFIDENTIAL  ·  Commission details are for internal broker use only', pw / 2, ph - 4, { align: 'center' });
+      pdf.rect(0, ph - 14, pw, 14, 'F');
+      pdf.setFillColor(255, 90, 90);
+      pdf.rect(0, ph - 14, pw, 1, 'F');
+      // left: company
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(255, 139, 90);
+      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', 12, ph - 8);
+      // centre: confidential
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(148, 163, 184);
+      pdf.text('CONFIDENTIAL  ·  Commission details for internal broker use only', pw / 2, ph - 8, { align: 'center' });
+      // right: page
       pdf.setTextColor(107, 114, 128);
-      pdf.text(`Generated: ${today}`, 14, ph - 4);
+      pdf.text(`Page ${pn} / ${tp}`, pw - 12, ph - 8, { align: 'right' });
+      // bottom line
+      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(100, 116, 139);
+      pdf.text(`Generated: ${today}`, 12, ph - 3.5);
+      pdf.text('Insurance Broking & Risk Management  ·  Sri Lanka', pw - 12, ph - 3.5, { align: 'right' });
     };
 
     drawHeader();
 
-    // Info band
+    // Info band (page 1 only)
     pdf.setFillColor(249, 250, 251);
-    pdf.rect(0, 23, pw, 10, 'F');
-    pdf.setFontSize(9); pdf.setFont('helvetica', 'bold');
+    pdf.rect(0, 23, pw, 12, 'F');
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(26, 26, 46);
-    pdf.text('QUOTE COMPARISON REPORT', 14, 30);
+    pdf.text('QUOTE COMPARISON REPORT', 14, 31);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
     pdf.setTextColor(107, 114, 128);
-    pdf.text(`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${today}`, pw - 14, 30, { align: 'right' });
+    pdf.text(`Ref: ${quote.reference}   ·   ${product?.label || ''}   ·   ${today}`, pw - 14, 31, { align: 'right' });
 
     // Build table body
     const mkSectionRow = (label) => [{ content: label, colSpan: colCount, styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } } }];
@@ -1051,11 +1069,13 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       body,
       columnStyles: { 0: { cellWidth: 52 } },
       styles: { fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, overflow: 'linebreak', minCellHeight: 8 },
-      margin: { left: 10, right: 10, bottom: 14 },
-      didDrawPage: () => { drawHeader(); drawFooter(); },
+      margin: { left: 10, right: 10, top: 25, bottom: 17 },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) drawHeader();
+        drawFooter();
+      },
     });
 
-    drawFooter();
     pdf.save(`CeilaoIB_Comparison_${quote.reference}.pdf`);
   };
 
