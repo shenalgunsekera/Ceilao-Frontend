@@ -31,7 +31,7 @@ import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
 // Sections filled by insurer — excluded from the read-only quote summary
 const INSURER_SECTIONS = new Set([
-  'Covers Required', 'Cover Required', 'Additional Clauses', 'Document Uploads',
+  'Covers Required', 'Cover Required', 'Additional Clauses',
 ]);
 
 function buildInfoSections(product, formData) {
