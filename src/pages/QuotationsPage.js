@@ -537,9 +537,11 @@ function ComparisonView({ quote, onBack, onConfirm }) {
   const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
 
   // ── Broker response-edit state ──────────────────────────────────────────────
-  const [editTarget,  setEditTarget]  = useState(null); // response object being edited
-  const [editForm,    setEditForm]    = useState({});
-  const [editSaving,  setEditSaving]  = useState(false);
+  const [editTarget,       setEditTarget]       = useState(null);
+  const [editForm,         setEditForm]         = useState({});
+  const [editCoverResp,    setEditCoverResp]    = useState({});
+  const [editClauseResp,   setEditClauseResp]   = useState({});
+  const [editSaving,       setEditSaving]       = useState(false);
 
   const openEdit = (r) => {
     setEditTarget(r);
@@ -556,7 +558,12 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       validity_days:   r.validity_days?.toString()  || '',
       notes:           r.notes          || '',
     });
+    setEditCoverResp(r.cover_responses   ? JSON.parse(JSON.stringify(r.cover_responses))  : {});
+    setEditClauseResp(r.clause_responses ? JSON.parse(JSON.stringify(r.clause_responses)) : {});
   };
+
+  const setECover  = (name, key, val) => setEditCoverResp(prev  => ({ ...prev, [name]: { ...(prev[name]  || {}), [key]: val } }));
+  const setEClause = (name, key, val) => setEditClauseResp(prev => ({ ...prev, [name]: { ...(prev[name] || {}), [key]: val } }));
 
   const saveEdit = async () => {
     if (!editTarget) return;
@@ -576,18 +583,20 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           const op = Number(editForm.other_premium) || 0;
           return {
             ...r,
-            basic_premium:   bp,
-            srcc_premium:    sp,
-            tc_premium:      tc,
-            admin_fee:       af,
-            vat_amount:      vt,
-            other_premium:   op,
-            premium:         bp + sp + tc + af + vt + op,
-            deductible:      editForm.deductible,
-            excesses:        editForm.excesses,
-            commission_type: editForm.commission_type,
-            validity_days:   editForm.validity_days,
-            notes:           editForm.notes,
+            basic_premium:    bp,
+            srcc_premium:     sp,
+            tc_premium:       tc,
+            admin_fee:        af,
+            vat_amount:       vt,
+            other_premium:    op,
+            premium:          bp + sp + tc + af + vt + op,
+            deductible:       editForm.deductible,
+            excesses:         editForm.excesses,
+            commission_type:  editForm.commission_type,
+            validity_days:    editForm.validity_days,
+            notes:            editForm.notes,
+            cover_responses:  editCoverResp,
+            clause_responses: editClauseResp,
             edited_by_broker: true,
             broker_edited_at: new Date().toISOString(),
           };
@@ -1111,60 +1120,140 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       )}
 
       {/* ── Broker edit dialog ─────────────────────────────────────────────── */}
-      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="md" fullWidth
+        PaperProps={{ sx: { maxHeight: '90vh' } }}>
+        <DialogTitle sx={{ pb: 1, fontWeight: 800 }}>
           ✏️ Edit Response — {editTarget?.company_name}
         </DialogTitle>
-        <DialogContent>
-          <Alert severity="info" sx={{ mb: 2, fontSize: 12 }}>
-            Changes saved here override the insurer's original submission. A "Broker edited" note will appear in the comparison.
+        <DialogContent dividers sx={{ pt: 2 }}>
+          <Alert severity="info" sx={{ mb: 2.5, fontSize: 12 }}>
+            All changes are saved directly to the comparison. A "Broker edited" note will appear on this response.
           </Alert>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1 }}>
+
+          {/* Premium Breakdown */}
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5 }}>
+            Premium Breakdown
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2.5 }}>
             {[
-              { key: 'basic_premium',  label: 'Basic Premium (LKR)',  num: true  },
-              { key: 'srcc_premium',   label: 'SRCC (LKR)',           num: true  },
-              { key: 'tc_premium',     label: 'TC (LKR)',             num: true  },
-              { key: 'admin_fee',      label: 'Admin Fee (LKR)',      num: true  },
-              { key: 'vat_amount',     label: 'VAT (LKR)',            num: true  },
-              { key: 'other_premium',  label: 'Other (LKR)',          num: true  },
-              { key: 'deductible',     label: 'Deductibles',          num: false },
-              { key: 'excesses',       label: 'Excesses',             num: false },
-              { key: 'validity_days',  label: 'Validity (days)',      num: true  },
-            ].map(({ key, label, num }) => (
-              <TextField key={key} size="small" fullWidth label={label}
-                type={num ? 'number' : 'text'}
+              { key: 'basic_premium', label: 'Basic Premium (LKR)' },
+              { key: 'srcc_premium',  label: 'SRCC (LKR)'          },
+              { key: 'tc_premium',    label: 'TC (LKR)'             },
+              { key: 'admin_fee',     label: 'Admin Fee (LKR)'      },
+              { key: 'vat_amount',    label: 'VAT (LKR)'            },
+              { key: 'other_premium', label: 'Other (LKR)'          },
+            ].map(({ key, label }) => (
+              <TextField key={key} size="small" fullWidth label={label} type="number"
                 value={editForm[key] || ''}
                 onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
             ))}
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#6B7280', mb: 0.8, textTransform: 'uppercase' }}>
-                Commission Type (Broker Only)
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                {['Standard', 'Special'].map(opt => (
-                  <Box key={opt} onClick={() => setEditForm(f => ({ ...f, commission_type: opt }))}
-                    sx={{ flex: 1, py: 1, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
-                      border: `1.5px solid ${editForm.commission_type === opt ? '#6366f1' : 'rgba(0,0,0,0.12)'}`,
-                      bgcolor: editForm.commission_type === opt ? 'rgba(99,102,241,0.08)' : 'transparent',
-                      color: editForm.commission_type === opt ? '#6366f1' : '#6B7280',
-                      fontWeight: editForm.commission_type === opt ? 700 : 400, fontSize: 13 }}>
-                    {opt}
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-            <TextField size="small" fullWidth multiline rows={3} label="Notes / Terms & Conditions"
-              sx={{ gridColumn: '1 / -1' }}
-              value={editForm.notes || ''}
-              onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
           </Box>
+
+          {/* Deductibles / Excesses / Validity */}
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5 }}>
+            Deductibles, Excesses & Validity
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5, mb: 2.5 }}>
+            <TextField size="small" fullWidth label="Deductibles"
+              value={editForm.deductible || ''}
+              onChange={e => setEditForm(f => ({ ...f, deductible: e.target.value }))} />
+            <TextField size="small" fullWidth label="Excesses"
+              value={editForm.excesses || ''}
+              onChange={e => setEditForm(f => ({ ...f, excesses: e.target.value }))} />
+            <TextField size="small" fullWidth label="Validity (days)" type="number"
+              value={editForm.validity_days || ''}
+              onChange={e => setEditForm(f => ({ ...f, validity_days: e.target.value }))} />
+          </Box>
+
+          {/* Commission */}
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1, mb: 1 }}>
+            Commission Type (Broker Only)
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
+            {['Standard', 'Special'].map(opt => (
+              <Box key={opt} onClick={() => setEditForm(f => ({ ...f, commission_type: opt }))}
+                sx={{ flex: 1, py: 1, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
+                  border: `1.5px solid ${editForm.commission_type === opt ? '#6366f1' : 'rgba(0,0,0,0.12)'}`,
+                  bgcolor: editForm.commission_type === opt ? 'rgba(99,102,241,0.08)' : 'transparent',
+                  color: editForm.commission_type === opt ? '#6366f1' : '#6B7280',
+                  fontWeight: editForm.commission_type === opt ? 700 : 400, fontSize: 13 }}>
+                {opt}
+              </Box>
+            ))}
+          </Box>
+
+          {/* Covers Required */}
+          {coverFields.length > 0 && (
+            <>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5 }}>
+                Covers Required
+              </Typography>
+              <Box sx={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: '10px', overflow: 'hidden', mb: 2.5 }}>
+                {coverFields.map((f, i) => {
+                  const cr = editCoverResp[f.name] || { provided: '', terms: '' };
+                  return (
+                    <Box key={f.name} sx={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr', gap: 1.5, alignItems: 'center', p: 1.2, bgcolor: i % 2 === 0 ? '#fff' : 'rgba(255,248,245,0.5)', borderBottom: i < coverFields.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{f.label}</Typography>
+                      <Select size="small" value={cr.provided} displayEmpty fullWidth
+                        onChange={e => setECover(f.name, 'provided', e.target.value)}>
+                        <MenuItem value="">—</MenuItem>
+                        <MenuItem value="Yes">Yes</MenuItem>
+                        <MenuItem value="No">No</MenuItem>
+                      </Select>
+                      <TextField size="small" placeholder="Special terms…" fullWidth
+                        value={cr.terms}
+                        onChange={e => setECover(f.name, 'terms', e.target.value)}
+                        sx={{ '& .MuiInputBase-root': { fontSize: 12 } }} />
+                    </Box>
+                  );
+                })}
+              </Box>
+            </>
+          )}
+
+          {/* Additional Clauses */}
+          {clauseFields.length > 0 && (
+            <>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5 }}>
+                Additional Clauses
+              </Typography>
+              <Box sx={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: '10px', overflow: 'hidden', mb: 2.5 }}>
+                {clauseFields.map((f, i) => {
+                  const cr = editClauseResp[f.name] || { provided: '', terms: '' };
+                  return (
+                    <Box key={f.name} sx={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr', gap: 1.5, alignItems: 'center', p: 1.2, bgcolor: i % 2 === 0 ? '#fff' : 'rgba(255,248,245,0.5)', borderBottom: i < clauseFields.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{f.label}</Typography>
+                      <Select size="small" value={cr.provided} displayEmpty fullWidth
+                        onChange={e => setEClause(f.name, 'provided', e.target.value)}>
+                        <MenuItem value="">—</MenuItem>
+                        <MenuItem value="Yes">Yes</MenuItem>
+                        <MenuItem value="No">No</MenuItem>
+                      </Select>
+                      <TextField size="small" placeholder="Terms…" fullWidth
+                        value={cr.terms}
+                        onChange={e => setEClause(f.name, 'terms', e.target.value)}
+                        sx={{ '& .MuiInputBase-root': { fontSize: 12 } }} />
+                    </Box>
+                  );
+                })}
+              </Box>
+            </>
+          )}
+
+          {/* Notes */}
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 1, mb: 1 }}>
+            Notes / Terms & Conditions
+          </Typography>
+          <TextField size="small" fullWidth multiline rows={3}
+            value={editForm.notes || ''}
+            onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
           <Button variant="outlined" onClick={() => setEditTarget(null)}
             sx={{ borderColor: '#e0e0e0', color: '#6B7280' }}>Cancel</Button>
           <Button variant="contained" onClick={saveEdit} disabled={editSaving}
-            sx={{ background: 'linear-gradient(135deg,#6366f1,#818cf8)', minWidth: 120 }}>
-            {editSaving ? 'Saving…' : 'Save Changes'}
+            sx={{ background: 'linear-gradient(135deg,#6366f1,#818cf8)', minWidth: 130 }}>
+            {editSaving ? 'Saving…' : 'Save All Changes'}
           </Button>
         </DialogActions>
       </Dialog>
