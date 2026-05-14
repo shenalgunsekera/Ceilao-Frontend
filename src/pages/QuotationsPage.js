@@ -561,6 +561,9 @@ function ComparisonView({ quote, onBack, onConfirm }) {
   const [editCoverResp,    setEditCoverResp]    = useState({});
   const [editClauseResp,   setEditClauseResp]   = useState({});
   const [editSaving,       setEditSaving]       = useState(false);
+  const [exportingExcel,   setExportingExcel]   = useState(false);
+  const [exportingPdf,     setExportingPdf]     = useState(false);
+  const [exportError,      setExportError]      = useState('');
 
   const openEdit = (r) => {
     setEditTarget(r);
@@ -729,8 +732,22 @@ function ComparisonView({ quote, onBack, onConfirm }) {
   const colCount = responses.length + 1;
   const today    = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
+  const fetchBase64 = async (url) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // ── Export Excel ────────────────────────────────────────────────────────────
   const exportExcel = async () => {
+    setExportingExcel(true);
+    setExportError('');
+    try {
     const { default: ExcelJS } = await import('exceljs');
     const { saveAs }           = await import('file-saver');
     const wb = new ExcelJS.Workbook();
@@ -855,7 +872,34 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     addSection('NOTES / TERMS & CONDITIONS');
     addDataRow('Notes', responses.map(r => r.notes || '—'), false, false, 0);
 
-    // ── Quote documents ──
+    // ── Client submitted documents ──
+    const docFields = (product?.fields || []).filter(f => f.type === 'file' && quote.form_data?.[f.name]);
+    if (docFields.length > 0) {
+      addSection('CLIENT SUBMITTED DOCUMENTS');
+      docFields.forEach((f, i) => {
+        const url      = quote.form_data[f.name] || '';
+        const filename = quote.form_data?.[f.name + '_filename'] || f.label;
+        const r = ws.addRow([f.label, url ? filename : 'Not uploaded', ...Array(Math.max(0, colCount - 2)).fill('')]);
+        r.height = 17;
+        if (colCount > 2) ws.mergeCells(r.number, 2, r.number, colCount);
+        const bg = i % 2 === 0 ? WHITE : LIGHT;
+        const lc = r.getCell(1);
+        lc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        lc.font      = { bold: true, size: 9.5, name: 'Calibri', color: { argb: DARK } };
+        lc.alignment = { vertical: 'middle', indent: 2 };
+        const vc = r.getCell(2);
+        vc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        vc.alignment = { horizontal: 'left', vertical: 'middle', indent: 2 };
+        if (url) {
+          vc.value = { text: `📄 ${filename}`, hyperlink: url, tooltip: url };
+          vc.font  = { size: 9.5, name: 'Calibri', color: { argb: 'FF6366F1' }, underline: true };
+        } else {
+          vc.font = { size: 9.5, name: 'Calibri', color: { argb: 'FF9CA3AF' } };
+        }
+      });
+    }
+
+    // ── Insurer quote documents ──
     addSection('UPLOADED QUOTATION DOCUMENTS');
     addDataRow('Document Link', responses.map(r => r.quote_file_url || 'Not uploaded'), false, false, 0);
 
@@ -879,10 +923,18 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     const buf = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       `CeilaoIB_Comparison_${quote.reference}.xlsx`);
+    } catch (err) {
+      console.error('Excel export error:', err);
+      setExportError(err?.message || 'Excel export failed — please try again.');
+    }
+    setExportingExcel(false);
   };
 
   // ── Export PDF (broker) ─────────────────────────────────────────────────────
   const exportPdf = async () => {
+    setExportingPdf(true);
+    setExportError('');
+    try {
     const { default: jsPDF }     = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
 
@@ -995,7 +1047,94 @@ function ComparisonView({ quote, onBack, onConfirm }) {
       },
     });
 
+    // ── Client Documents Page ──────────────────────────────────────────────────
+    const pdfDocFields = (product?.fields || []).filter(f => f.type === 'file' && quote.form_data?.[f.name]);
+    if (pdfDocFields.length > 0) {
+      pdf.addPage();
+      drawHeader();
+
+      const margL = 12, usableW = pw - 24, gap = 8, cols = 2;
+      const colW = (usableW - gap * (cols - 1)) / cols;
+      const labelH = 14, imgMaxH = 72, cellH = labelH + imgMaxH + 10;
+      let curDocY = 30;
+
+      // Section header
+      pdf.setFillColor(26, 26, 46);
+      pdf.rect(margL, curDocY, usableW, 10, 'F');
+      pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 139, 90);
+      pdf.text('CLIENT SUBMITTED DOCUMENTS', pw / 2, curDocY + 6.5, { align: 'center' });
+      curDocY += 14;
+
+      let docCol = 0, rowBaseY = curDocY;
+      for (let di = 0; di < pdfDocFields.length; di++) {
+        const f   = pdfDocFields[di];
+        const url = quote.form_data[f.name];
+        const filename = quote.form_data?.[f.name + '_filename'] || f.label;
+        const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
+        const cx = margL + docCol * (colW + gap);
+
+        if (rowBaseY + cellH > ph - 20) {
+          pdf.addPage(); drawHeader(); drawFooter();
+          rowBaseY = 30; docCol = 0;
+          pdf.setFillColor(26, 26, 46);
+          pdf.rect(margL, rowBaseY, usableW, 10, 'F');
+          pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 139, 90);
+          pdf.text('CLIENT SUBMITTED DOCUMENTS (cont.)', pw / 2, rowBaseY + 6.5, { align: 'center' });
+          rowBaseY += 14;
+        }
+
+        // Label row
+        pdf.setFontSize(8.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(26, 26, 46);
+        pdf.text(f.label, cx, rowBaseY + 5);
+        pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(107, 114, 128);
+        const truncFn = filename.length > 48 ? filename.slice(0, 45) + '…' : filename;
+        pdf.text(truncFn, cx, rowBaseY + 10, { maxWidth: colW });
+
+        // Image box
+        const imgBoxY = rowBaseY + labelH;
+        pdf.setFillColor(245, 247, 250);
+        pdf.rect(cx, imgBoxY, colW, imgMaxH, 'F');
+        pdf.setDrawColor(210, 215, 225); pdf.setLineWidth(0.3);
+        pdf.rect(cx, imgBoxY, colW, imgMaxH, 'S');
+
+        if (isImg) {
+          try {
+            const b64 = await fetchBase64(url);
+            const dims = await new Promise(res => {
+              const img = new window.Image();
+              img.onload  = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+              img.onerror = () => res({ w: 4, h: 3 });
+              img.src = b64;
+            });
+            const aspect = dims.w / dims.h;
+            const bW = colW - 6, bH = imgMaxH - 6;
+            let dw = bW, dh = dw / aspect;
+            if (dh > bH) { dh = bH; dw = dh * aspect; }
+            const fmt = /\.png(\?|$)/i.test(url) ? 'PNG' : 'JPEG';
+            pdf.addImage(b64, fmt, cx + (colW - dw) / 2, imgBoxY + (imgMaxH - dh) / 2, dw, dh, undefined, 'FAST');
+          } catch {
+            pdf.setFontSize(7.5); pdf.setTextColor(180, 180, 190);
+            pdf.text('Image unavailable', cx + colW / 2, imgBoxY + imgMaxH / 2, { align: 'center' });
+          }
+        } else {
+          pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(99, 102, 241);
+          pdf.text('PDF FILE', cx + colW / 2, imgBoxY + imgMaxH / 2 - 4, { align: 'center' });
+          pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(120, 124, 180);
+          pdf.text('Document uploaded', cx + colW / 2, imgBoxY + imgMaxH / 2 + 3, { align: 'center' });
+        }
+
+        docCol++;
+        if (docCol >= cols) { docCol = 0; rowBaseY += cellH; }
+      }
+      drawFooter();
+    }
+
     pdf.save(`CeilaoIB_Comparison_${quote.reference}.pdf`);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      setExportError(err?.message || 'PDF export failed — please try again.');
+    }
+    setExportingPdf(false);
   };
 
   if (!quote) return null;
@@ -1012,17 +1151,24 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         </Typography>
         <Chip label={product?.label} sx={{ bgcolor: 'rgba(255,90,90,0.08)', color: '#FF5A5A', fontWeight: 700 }} />
         <Box sx={{ flex: 1 }} />
-        <Button variant="outlined" size="small" startIcon={<FileDownloadOutlinedIcon />}
-          onClick={exportExcel}
+        <Button variant="outlined" size="small"
+          startIcon={exportingExcel ? <CircularProgress size={12} color="inherit" /> : <FileDownloadOutlinedIcon />}
+          onClick={exportExcel} disabled={exportingExcel}
           sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.3)', color: '#FF8B5A' }}>
-          Export Excel
+          {exportingExcel ? 'Exporting…' : 'Export Excel'}
         </Button>
-        <Button variant="outlined" size="small" startIcon={<FileDownloadOutlinedIcon />}
-          onClick={exportPdf}
+        <Button variant="outlined" size="small"
+          startIcon={exportingPdf ? <CircularProgress size={12} color="inherit" /> : <FileDownloadOutlinedIcon />}
+          onClick={exportPdf} disabled={exportingPdf}
           sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.3)', color: '#6366f1' }}>
-          Export PDF
+          {exportingPdf ? 'Generating PDF…' : 'Export PDF'}
         </Button>
       </Stack>
+      {exportError && (
+        <Alert severity="error" sx={{ mb: 2, fontSize: 12 }} onClose={() => setExportError('')}>
+          {exportError}
+        </Alert>
+      )}
 
       {/* ── Send comparison to customer ── */}
       <Box sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'center', flexWrap: 'wrap',
