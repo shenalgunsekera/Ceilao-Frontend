@@ -670,58 +670,90 @@ function ComparisonView({ quote, onBack, onConfirm }) {
 
       const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;border-radius:10px;overflow:hidden;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
 
-      // Generate comparison PDF and upload to Cloudinary
+      // Generate professional customer comparison PDF → upload to Cloudinary
       let pdfUrl = '';
       try {
         const { default: jsPDF }     = await import('jspdf');
         const { default: autoTable } = await import('jspdf-autotable');
         const { uploadToCloudinary: uploadPdf } = await import('../cloudinary');
-        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-        pdf.setFillColor(255, 90, 90);
-        pdf.rect(0, 0, 297, 22, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(14); pdf.setFont('helvetica', 'bold');
-        pdf.text('Ceilao Insurance Brokers — Quote Comparison', 14, 10);
-        pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
-        pdf.text(`Ref: ${quote.reference}  |  ${product?.label || ''}  |  ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}`, 14, 17);
+        const pdf  = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const ppw  = pdf.internal.pageSize.getWidth();
+        const pph  = pdf.internal.pageSize.getHeight();
+        const pToday = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
 
-        const fmtP = n => n ? `LKR ${Number(n).toLocaleString()}` : '—';
-        const columns = [{ header: 'Field', dataKey: 'field' }, ...responses.map(r => ({ header: r.company_name, dataKey: r.company_id }))];
-        const mkRow = (label, getter, meta = {}) => ({ field: label, ...Object.fromEntries(responses.map(r => [r.company_id, getter(r)])), ...meta });
-        const pdfRows = [
-          mkRow('PREMIUM BREAKDOWN', () => '', { _h: true }),
-          mkRow('Basic Premium',  r => fmtP(r.basic_premium)),
-          mkRow('SRCC',           r => fmtP(r.srcc_premium)),
-          mkRow('TC',             r => fmtP(r.tc_premium)),
-          mkRow('Admin Fee',      r => fmtP(r.admin_fee)),
-          mkRow('VAT',            r => fmtP(r.vat_amount)),
-          mkRow('Total Premium',  r => fmtP(r.premium), { _t: true }),
-          mkRow('Deductibles',    r => r.deductible || '—'),
-          mkRow('Excesses',       r => r.excesses || '—'),
-          mkRow('Validity (days)',r => r.validity_days || '—'),
-          ...(cvFields.length > 0 ? [mkRow('COVERS REQUIRED', () => '', { _h: true }), ...cvFields.map(f => mkRow(f.label, r => r.cover_responses?.[f.name]?.provided || '—'))] : []),
-          ...(clFields.length > 0 ? [mkRow('ADDITIONAL CLAUSES', () => '', { _h: true }), ...clFields.map(f => mkRow(f.label, r => r.clause_responses?.[f.name]?.provided || '—'))] : []),
-          mkRow('Notes / Terms', r => r.notes || '—'),
+        const drawPHdr = () => {
+          pdf.setFillColor(26,26,46);  pdf.rect(0, 0, ppw, 20, 'F');
+          pdf.setFillColor(255,90,90); pdf.rect(0, 20, ppw, 3, 'F');
+          pdf.setTextColor(255,139,90); pdf.setFontSize(13); pdf.setFont('helvetica','bold');
+          pdf.text('CEILAO INSURANCE BROKERS (PVT) LTD', ppw/2, 9, { align:'center' });
+          pdf.setTextColor(148,163,184); pdf.setFontSize(8); pdf.setFont('helvetica','normal');
+          pdf.text('INSURANCE BROKING & RISK MANAGEMENT  ·  SRI LANKA', ppw/2, 15, { align:'center' });
+        };
+        const drawPFtr = () => {
+          pdf.setFillColor(26,26,46); pdf.rect(0, pph-10, ppw, 10, 'F');
+          pdf.setFontSize(7); pdf.setFont('helvetica','italic'); pdf.setTextColor(148,163,184);
+          pdf.text('This comparison is prepared exclusively for you by Ceilao Insurance Brokers. Prices are subject to final confirmation from insurers.', ppw/2, pph-4, { align:'center' });
+          pdf.setTextColor(107,114,128);
+          pdf.text(`Generated: ${pToday}`, 12, pph-4);
+        };
+
+        drawPHdr();
+        pdf.setFillColor(249,250,251); pdf.rect(0,23,ppw,10,'F');
+        pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
+        pdf.text('PERSONALISED INSURANCE COMPARISON REPORT', 14, 30);
+        pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(107,114,128);
+        pdf.text(`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${pToday}`, ppw-14, 30, { align:'right' });
+
+        const mkCSec = (label) => [{ content: label, colSpan: responses.length+1, styles:{ fillColor:[26,26,46], textColor:[255,139,90], fontStyle:'bold', fontSize:8, cellPadding:{top:3,bottom:3,left:5,right:5} } }];
+        const mkCRow = (label, vals, isTotal=false, i=0) => [
+          { content:label, styles:{ fontStyle: isTotal?'bold':'normal', fontSize:isTotal?9:8.5, fillColor: isTotal?[255,90,90]: i%2===0?[255,255,255]:[255,248,245], textColor: isTotal?[255,255,255]:[26,26,46] } },
+          ...vals.map(v => ({ content:v, styles:{ halign:'center', fontStyle:isTotal?'bold':'normal', fontSize:isTotal?9:8.5, fillColor:isTotal?[255,90,90]: i%2===0?[255,255,255]:[255,248,245], textColor:isTotal?[255,255,255]:[55,65,81] } })),
         ];
+
+        const custBody = [
+          mkCSec('PREMIUM BREAKDOWN'),
+          ...['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount','other_premium'].map((k,i)=>
+            mkCRow(['Basic Premium (LKR)','SRCC (LKR)','TC (LKR)','Admin Fee (LKR)','VAT (LKR)','Other (LKR)'][i],
+                   responses.map(r=>r[k]?`LKR ${Number(r[k]).toLocaleString()}`:'—'), false, i)),
+          mkCRow('TOTAL PREMIUM (LKR)', responses.map(r=>`LKR ${Number(r.premium||0).toLocaleString()}`), true),
+          mkCSec('DEDUCTIBLES, EXCESSES & VALIDITY'),
+          mkCRow('Deductibles',    responses.map(r=>r.deductible||'—'), false, 0),
+          mkCRow('Excesses',       responses.map(r=>r.excesses||'—'), false, 1),
+          mkCRow('Validity (days)',responses.map(r=>r.validity_days||'—'), false, 2),
+          ...(cvFields.length>0 ? [
+            mkCSec('COVERS INCLUDED'),
+            ...cvFields.map((f,i)=>mkCRow(f.label, responses.map(r=>{
+              const cr=r.cover_responses?.[f.name]; return cr?.provided?`${cr.provided}${cr.terms?'\n'+cr.terms:''}`:'—';
+            }), false, i)),
+          ]:[]),
+          ...(clFields.length>0 ? [
+            mkCSec('ADDITIONAL CLAUSES'),
+            ...clFields.map((f,i)=>mkCRow(f.label, responses.map(r=>{
+              const cr=r.clause_responses?.[f.name]; return cr?.provided?`${cr.provided}${cr.terms?'\n'+cr.terms:''}`:'—';
+            }), false, i)),
+          ]:[]),
+          mkCSec('NOTES & SPECIAL TERMS'),
+          mkCRow('Notes / Terms', responses.map(r=>r.notes||'—'), false, 0),
+        ];
+
         autoTable(pdf, {
-          startY: 26, columns, body: pdfRows,
-          headStyles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 9 },
-          alternateRowStyles: { fillColor: [255,248,245] },
-          columnStyles: { field: { fontStyle: 'bold', cellWidth: 52, fontSize: 8.5 } },
-          styles: { fontSize: 8.5, cellPadding: 3, overflow: 'linebreak' },
-          margin: { left: 12, right: 12 },
-          didParseCell: ({ row, cell }) => {
-            if (row.raw._h) { cell.styles.fillColor = [26,26,46]; cell.styles.textColor = [255,139,90]; cell.styles.fontStyle = 'bold'; }
-            else if (row.raw._t) { cell.styles.fillColor = [255,90,90]; cell.styles.textColor = [255,255,255]; cell.styles.fontStyle = 'bold'; }
-          },
+          startY: 35,
+          head: [[
+            { content:'Field', styles:{fillColor:[26,26,46],textColor:[255,139,90],fontStyle:'bold',fontSize:9} },
+            ...responses.map(r=>({ content:r.company_name, styles:{fillColor:[255,90,90],textColor:[255,255,255],fontStyle:'bold',fontSize:9,halign:'center'} })),
+          ]],
+          body: custBody,
+          columnStyles: { 0: { cellWidth: 52 } },
+          styles: { fontSize:8.5, cellPadding:{top:3,bottom:3,left:4,right:4}, overflow:'linebreak', minCellHeight:8 },
+          margin: { left:10, right:10, bottom:14 },
+          didDrawPage: () => { drawPHdr(); drawPFtr(); },
         });
-        const finalY = pdf.lastAutoTable.finalY + 8;
-        pdf.setTextColor(150,150,150); pdf.setFontSize(7); pdf.setFont('helvetica','italic');
-        pdf.text('Ceilao Insurance Brokers (Pvt) Ltd — Confidential Comparison Report — Commission details excluded', 12, finalY);
+        drawPFtr();
+
         const blob = pdf.output('blob');
-        const file = new File([blob], `comparison_${quote.reference}.pdf`, { type: 'application/pdf' });
+        const file = new File([blob], `CeilaoIB_Comparison_${quote.reference}.pdf`, { type:'application/pdf' });
         pdfUrl = await uploadPdf(file, 'ceilao/comparisons');
-      } catch (pdfErr) { console.warn('PDF generation skipped:', pdfErr); }
+      } catch (pdfErr) { console.warn('Customer PDF skipped:', pdfErr); }
 
       // Selection buttons + PDF download for email
       const baseUrl = window.location.origin;
@@ -759,66 +791,272 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     setSending(false);
   };
 
+  // ── helpers shared by both exports ─────────────────────────────────────────
+  const colCount = responses.length + 1;
+  const fmtLKR   = n => n ? `LKR ${Number(n).toLocaleString()}` : '—';
+  const today    = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  // ── Export Excel ────────────────────────────────────────────────────────────
   const exportExcel = async () => {
     const { default: ExcelJS } = await import('exceljs');
-    const { saveAs } = await import('file-saver');
+    const { saveAs }           = await import('file-saver');
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Quote Comparison');
-    ws.columns = [
-      { width: 28 },
-      ...responses.map(() => ({ width: 22 })),
-    ];
+    wb.creator   = 'Ceilao Insurance Brokers';
+    wb.created   = new Date();
+    const ws = wb.addWorksheet('Quote Comparison', { pageSetup: { orientation: 'landscape', fitToPage: true } });
+    ws.columns = [{ width: 34 }, ...responses.map(() => ({ width: 24 }))];
 
-    // Header
-    const headerRow = ws.addRow(['', ...responses.map(r => r.company_name)]);
-    headerRow.eachCell((cell, ci) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ci === 1 ? 'FF1A1A2E' : 'FFFF5A5A' } };
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    });
-    headerRow.height = 22;
+    const DARK  = 'FF1A1A2E';
+    const RED   = 'FFFF5A5A';
+    const AMBER = 'FFFF8B5A';
+    const WHITE = 'FFFFFFFF';
+    const LIGHT = 'FFFFF8F5';
+    const GREY  = 'FFF9FAFB';
 
-    // Reference row
-    ws.addRow(['Reference', ...responses.map(() => quote.reference)]);
-
-    // Premium breakdown
-    const breakdownLabels = [
-      ['Basic Premium (LKR)', 'basic_premium'],
-      ['SRCC (LKR)',          'srcc_premium'],
-      ['TC (LKR)',            'tc_premium'],
-      ['Admin Fee (LKR)',     'admin_fee'],
-      ['VAT (LKR)',           'vat_amount'],
-      ['Other (LKR)',         'other_premium'],
-      ['Total Premium (LKR)', 'premium'],
-    ];
-    breakdownLabels.forEach(([label, key], i) => {
-      const row = ws.addRow([label, ...responses.map(r => r[key] ? Number(r[key]) : '—')]);
-      row.eachCell((cell, ci) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFFFFFFF' : 'FFFFF8F5' } };
-        if (ci === 1) cell.font = { bold: true, size: 10, name: 'Calibri' };
-        if (key === 'premium' && ci > 1) { cell.font = { bold: true, color: { argb: 'FFFF5A5A' }, size: 11, name: 'Calibri' }; }
+    const applyHeader = (row, bg, fg = WHITE, sz = 10) => {
+      row.height = 20;
+      row.eachCell(cell => {
+        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.font   = { bold: true, color: { argb: fg }, size: sz, name: 'Calibri' };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = { bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } } };
       });
-    });
+    };
 
-    ws.addRow(['Commission Type (Internal)', ...responses.map(r => r.commission_type || '—')]);
-    ws.addRow(['Excesses',      ...responses.map(r => r.excesses     || '—')]);
-    ws.addRow(['Special Terms', ...responses.map(r => r.special_terms || '—')]);
+    const addSection = (label) => {
+      const r = ws.addRow([label, ...responses.map(() => '')]);
+      r.height = 18;
+      ws.mergeCells(r.number, 1, r.number, colCount);
+      r.getCell(1).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+      r.getCell(1).font   = { bold: true, color: { argb: AMBER }, size: 9, name: 'Calibri' };
+      r.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    };
 
-    // Comparison rows
-    (product?.comparisonRows || []).forEach((label, i) => {
-      const row = ws.addRow([label, ...responses.map(r => r.comparison_data?.[label] || '—')]);
-      row.eachCell((cell, ci) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFFFFFFF' : 'FFFFF8F5' } };
-        if (ci === 1) cell.font = { bold: true, size: 10, name: 'Calibri' };
+    const addDataRow = (label, values, isTotal = false, isInternal = false, rowIdx = 0) => {
+      const r = ws.addRow([label, ...values]);
+      r.height = 16;
+      r.eachCell((cell, ci) => {
+        const bg = isTotal ? RED : isInternal ? 'FFE8E8FF' : rowIdx % 2 === 0 ? WHITE : LIGHT;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.font = {
+          bold: ci === 1 || isTotal,
+          color: { argb: isTotal ? WHITE : isInternal ? 'FF4338CA' : DARK },
+          size: isTotal ? 11 : 9.5,
+          name: 'Calibri',
+        };
+        cell.alignment = { horizontal: ci === 1 ? 'left' : 'center', vertical: 'middle', wrapText: true, indent: ci === 1 ? 1 : 0 };
+        cell.border = { bottom: { style: 'hair', color: { argb: 'FFEEEEEE' } } };
       });
-    });
+    };
+
+    // ── Title block ──
+    const title = ws.addRow(['CEILAO INSURANCE BROKERS (PVT) LTD', ...responses.map(() => '')]);
+    ws.mergeCells(title.number, 1, title.number, colCount);
+    applyHeader(title, RED, WHITE, 14);
+    title.height = 28;
+
+    const sub = ws.addRow(['INSURANCE BROKING & RISK MANAGEMENT  ·  Sri Lanka', ...responses.map(() => '')]);
+    ws.mergeCells(sub.number, 1, sub.number, colCount);
+    applyHeader(sub, DARK, AMBER, 9);
 
     ws.addRow([]);
-    ws.addRow(['Notes / Terms', ...responses.map(r => r.notes || '')]);
-    ws.addRow(['Quote File URL', ...responses.map(r => r.quote_file_url || '')]);
+
+    // ── Reference / product info ──
+    const infoRow = ws.addRow([`QUOTE COMPARISON REPORT`, ...responses.map(() => '')]);
+    ws.mergeCells(infoRow.number, 1, infoRow.number, colCount);
+    applyHeader(infoRow, GREY, DARK, 10);
+    infoRow.getCell(1).font.color = { argb: DARK };
+
+    const refRow = ws.addRow([`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${today}`, ...responses.map(() => '')]);
+    ws.mergeCells(refRow.number, 1, refRow.number, colCount);
+    refRow.height = 16;
+    refRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY } };
+    refRow.getCell(1).font = { size: 9, name: 'Calibri', color: { argb: 'FF6B7280' } };
+    refRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+    ws.addRow([]);
+
+    // ── Company header row ──
+    const compRow = ws.addRow(['FIELD', ...responses.map(r => r.company_name)]);
+    applyHeader(compRow, DARK, AMBER, 10);
+
+    // ── Premium Breakdown ──
+    addSection('PREMIUM BREAKDOWN');
+    [
+      ['Basic Premium (LKR)',  'basic_premium'],
+      ['SRCC (LKR)',           'srcc_premium'],
+      ['TC (LKR)',             'tc_premium'],
+      ['Admin Fee (LKR)',      'admin_fee'],
+      ['VAT (LKR)',            'vat_amount'],
+      ['Other (LKR)',          'other_premium'],
+    ].forEach(([label, key], i) => addDataRow(label, responses.map(r => r[key] ? Number(r[key]).toLocaleString() : '—'), false, false, i));
+    addDataRow('TOTAL PREMIUM (LKR)', responses.map(r => Number(r.premium || 0).toLocaleString()), true);
+
+    // ── Deductibles & Validity ──
+    addSection('DEDUCTIBLES, EXCESSES & VALIDITY');
+    addDataRow('Deductibles',    responses.map(r => r.deductible    || '—'), false, false, 0);
+    addDataRow('Excesses',       responses.map(r => r.excesses      || '—'), false, false, 1);
+    addDataRow('Validity (days)',responses.map(r => r.validity_days  || '—'), false, false, 2);
+
+    // ── Commission (broker only) ──
+    addSection('COMMISSION — INTERNAL USE ONLY');
+    addDataRow('Commission Type', responses.map(r => r.commission_type || '—'), false, true, 0);
+
+    // ── Covers Required ──
+    if (coverFields.length > 0) {
+      addSection('COVERS REQUIRED');
+      coverFields.forEach((f, i) => {
+        const vals = responses.map(r => {
+          const cr = r.cover_responses?.[f.name];
+          return cr?.provided ? `${cr.provided}${cr.terms ? ` — ${cr.terms}` : ''}` : '—';
+        });
+        addDataRow(f.label, vals, false, false, i);
+      });
+    }
+
+    // ── Additional Clauses ──
+    if (clauseFields.length > 0) {
+      addSection('ADDITIONAL CLAUSES');
+      clauseFields.forEach((f, i) => {
+        const vals = responses.map(r => {
+          const cr = r.clause_responses?.[f.name];
+          return cr?.provided ? `${cr.provided}${cr.terms ? ` — ${cr.terms}` : ''}` : '—';
+        });
+        addDataRow(f.label, vals, false, false, i);
+      });
+    }
+
+    // ── Notes ──
+    addSection('NOTES / TERMS & CONDITIONS');
+    addDataRow('Notes', responses.map(r => r.notes || '—'), false, false, 0);
+
+    // ── Quote documents ──
+    addSection('UPLOADED QUOTATION DOCUMENTS');
+    addDataRow('Document Link', responses.map(r => r.quote_file_url || 'Not uploaded'), false, false, 0);
+
+    ws.addRow([]);
+
+    // ── Footer ──
+    const foot1 = ws.addRow([`Ceilao Insurance Brokers (Pvt) Ltd  ·  Insurance Broking & Risk Management  ·  Sri Lanka`, ...responses.map(() => '')]);
+    ws.mergeCells(foot1.number, 1, foot1.number, colCount);
+    foot1.height = 16;
+    foot1.getCell(1).fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+    foot1.getCell(1).font      = { size: 9, color: { argb: AMBER }, name: 'Calibri' };
+    foot1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const foot2 = ws.addRow([`CONFIDENTIAL — This comparison report is prepared for internal use. Commission details are not shared with clients.`, ...responses.map(() => '')]);
+    ws.mergeCells(foot2.number, 1, foot2.number, colCount);
+    foot2.height = 14;
+    foot2.getCell(1).fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
+    foot2.getCell(1).font      = { size: 8, color: { argb: 'FFD1D5DB' }, italic: true, name: 'Calibri' };
+    foot2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
     const buf = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `comparison_${quote.reference}.xlsx`);
+    saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `CeilaoIB_Comparison_${quote.reference}.xlsx`);
+  };
+
+  // ── Export PDF (broker) ─────────────────────────────────────────────────────
+  const exportPdf = async () => {
+    const { default: jsPDF }     = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pw  = pdf.internal.pageSize.getWidth();
+    const ph  = pdf.internal.pageSize.getHeight();
+
+    const drawHeader = () => {
+      // Dark top band
+      pdf.setFillColor(26, 26, 46);
+      pdf.rect(0, 0, pw, 20, 'F');
+      // Red accent line
+      pdf.setFillColor(255, 90, 90);
+      pdf.rect(0, 20, pw, 3, 'F');
+      pdf.setTextColor(255, 139, 90);
+      pdf.setFontSize(13); pdf.setFont('helvetica', 'bold');
+      pdf.text('CEILAO INSURANCE BROKERS (PVT) LTD', pw / 2, 9, { align: 'center' });
+      pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('INSURANCE BROKING & RISK MANAGEMENT  ·  SRI LANKA', pw / 2, 15, { align: 'center' });
+    };
+
+    const drawFooter = () => {
+      pdf.setFillColor(26, 26, 46);
+      pdf.rect(0, ph - 10, pw, 10, 'F');
+      pdf.setFontSize(7); pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd  ·  CONFIDENTIAL  ·  Commission details are for internal broker use only', pw / 2, ph - 4, { align: 'center' });
+      pdf.setTextColor(107, 114, 128);
+      pdf.text(`Generated: ${today}`, 14, ph - 4);
+    };
+
+    drawHeader();
+
+    // Info band
+    pdf.setFillColor(249, 250, 251);
+    pdf.rect(0, 23, pw, 10, 'F');
+    pdf.setFontSize(9); pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(26, 26, 46);
+    pdf.text('QUOTE COMPARISON REPORT', 14, 30);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+    pdf.setTextColor(107, 114, 128);
+    pdf.text(`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${today}`, pw - 14, 30, { align: 'right' });
+
+    // Build table body
+    const mkSectionRow = (label) => [{ content: label, colSpan: colCount, styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } } }];
+    const mkRow = (label, vals, isTotal = false, isInternal = false, i = 0) => [
+      { content: label, styles: { fontStyle: isTotal ? 'bold' : 'normal', fontSize: isTotal ? 9 : 8.5, fillColor: isTotal ? [255,90,90] : isInternal ? [232,232,255] : i%2===0 ? [255,255,255] : [255,248,245], textColor: isTotal ? [255,255,255] : isInternal ? [67,56,202] : [26,26,46] } },
+      ...vals.map(v => ({ content: v, styles: { halign: 'center', fontStyle: isTotal ? 'bold' : 'normal', fontSize: isTotal ? 9 : 8.5, fillColor: isTotal ? [255,90,90] : isInternal ? [232,232,255] : i%2===0 ? [255,255,255] : [255,248,245], textColor: isTotal ? [255,255,255] : isInternal ? [67,56,202] : [55,65,81] } })),
+    ];
+
+    const body = [
+      mkSectionRow('PREMIUM BREAKDOWN'),
+      ...['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount','other_premium'].map((k,i) =>
+        mkRow(['Basic Premium (LKR)','SRCC (LKR)','TC (LKR)','Admin Fee (LKR)','VAT (LKR)','Other (LKR)'][i],
+              responses.map(r => r[k] ? `LKR ${Number(r[k]).toLocaleString()}` : '—'), false, false, i)),
+      mkRow('TOTAL PREMIUM (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true),
+
+      mkSectionRow('DEDUCTIBLES, EXCESSES & VALIDITY'),
+      mkRow('Deductibles',    responses.map(r => r.deductible   || '—'), false, false, 0),
+      mkRow('Excesses',       responses.map(r => r.excesses     || '—'), false, false, 1),
+      mkRow('Validity (days)',responses.map(r => r.validity_days || '—'), false, false, 2),
+
+      mkSectionRow('COMMISSION — INTERNAL USE ONLY'),
+      mkRow('Commission Type', responses.map(r => r.commission_type || '—'), false, true, 0),
+
+      ...(coverFields.length > 0 ? [
+        mkSectionRow('COVERS REQUIRED'),
+        ...coverFields.map((f,i) => mkRow(f.label, responses.map(r => {
+          const cr = r.cover_responses?.[f.name]; return cr?.provided ? `${cr.provided}${cr.terms ? `\n${cr.terms}` : ''}` : '—';
+        }), false, false, i)),
+      ] : []),
+
+      ...(clauseFields.length > 0 ? [
+        mkSectionRow('ADDITIONAL CLAUSES'),
+        ...clauseFields.map((f,i) => mkRow(f.label, responses.map(r => {
+          const cr = r.clause_responses?.[f.name]; return cr?.provided ? `${cr.provided}${cr.terms ? `\n${cr.terms}` : ''}` : '—';
+        }), false, false, i)),
+      ] : []),
+
+      mkSectionRow('NOTES / TERMS & CONDITIONS'),
+      mkRow('Notes', responses.map(r => r.notes || '—'), false, false, 0),
+    ];
+
+    autoTable(pdf, {
+      startY: 35,
+      head: [[
+        { content: 'Field', styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 9 } },
+        ...responses.map(r => ({ content: r.company_name + (r.edited_by_broker ? '\n(Broker Edited)' : ''), styles: { fillColor: [255,90,90], textColor: [255,255,255], fontStyle: 'bold', fontSize: 9, halign: 'center' } })),
+      ]],
+      body,
+      columnStyles: { 0: { cellWidth: 52 } },
+      styles: { fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, overflow: 'linebreak', minCellHeight: 8 },
+      margin: { left: 10, right: 10, bottom: 14 },
+      didDrawPage: () => { drawHeader(); drawFooter(); },
+    });
+
+    drawFooter();
+    pdf.save(`CeilaoIB_Comparison_${quote.reference}.pdf`);
   };
 
   if (!quote) return null;
@@ -841,7 +1079,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           Export Excel
         </Button>
         <Button variant="outlined" size="small" startIcon={<FileDownloadOutlinedIcon />}
-          onClick={() => window.print()}
+          onClick={exportPdf}
           sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.3)', color: '#6366f1' }}>
           Export PDF
         </Button>
