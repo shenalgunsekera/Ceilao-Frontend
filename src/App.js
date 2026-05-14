@@ -24,7 +24,8 @@ const AdminPanel       = lazy(() => import('./components/AdminPanel'));
 const OperationalMenu  = lazy(() => import('./pages/OperationalMenu'));
 const QuotationsPage   = lazy(() => import('./pages/QuotationsPage'));
 const QuoteResponsePage= lazy(() => import('./pages/QuoteResponsePage'));
-const QuoteSelectPage  = lazy(() => import('./pages/QuoteSelectPage'));
+const QuoteSelectPage     = lazy(() => import('./pages/QuoteSelectPage'));
+const ComparisonPdfPage   = lazy(() => import('./pages/ComparisonPdfPage'));
 const RenewalsPage     = lazy(() => import('./pages/RenewalsPage'));
 const ClaimsPage       = lazy(() => import('./pages/ClaimsPage'));
 const MarketingPage    = lazy(() => import('./pages/MarketingPage'));
@@ -311,6 +312,8 @@ function App() {
             <Route path="/quote-respond" element={<Suspense fallback={null}><QuoteResponsePage /></Suspense>} />
             {/* Public — customer selects preferred insurer */}
             <Route path="/quote-select"  element={<Suspense fallback={null}><QuoteSelectPage /></Suspense>} />
+            {/* Public — customer downloads comparison PDF */}
+            <Route path="/comparison-pdf" element={<Suspense fallback={null}><ComparisonPdfPage /></Suspense>} />
 
             <Route path="/*" element={
               <RequireAuth>
