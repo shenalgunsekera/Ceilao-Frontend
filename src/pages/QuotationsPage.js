@@ -745,7 +745,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         ];
 
         autoTable(pdf, {
-          startY: 35,
+          startY: 38,
           head: [[
             { content:'Field', styles:{fillColor:[26,26,46],textColor:[255,139,90],fontStyle:'bold',fontSize:9} },
             ...responses.map(r=>({ content:r.company_name, styles:{fillColor:[255,90,90],textColor:[255,255,255],fontStyle:'bold',fontSize:9,halign:'center'} })),
@@ -753,7 +753,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           body: custBody,
           columnStyles: { 0: { cellWidth: 52 } },
           styles: { fontSize:8.5, cellPadding:{top:3,bottom:3,left:4,right:4}, overflow:'linebreak', minCellHeight:8 },
-          margin: { left:10, right:10, top:25, bottom:17 },
+          margin: { left:10, right:10, top:28, bottom:18 },
           didDrawPage: (data) => { if (data.pageNumber > 1) drawPHdr(); drawPFtr(); },
         });
 
@@ -819,72 +819,64 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     const LIGHT = 'FFFFF8F5';
     const GREY  = 'FFF9FAFB';
 
-    const applyHeader = (row, bg, fg = WHITE, sz = 10) => {
-      row.height = 20;
-      row.eachCell(cell => {
-        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        cell.font   = { bold: true, color: { argb: fg }, size: sz, name: 'Calibri' };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        cell.border = { bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } } };
-      });
+    const mergedRow = (text, bg, fg, sz, h = 20, align = 'center') => {
+      const r = ws.addRow([text, ...Array(colCount - 1).fill('')]);
+      ws.mergeCells(r.number, 1, r.number, colCount);
+      r.height = h;
+      const c = r.getCell(1);
+      c.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      c.font      = { bold: true, color: { argb: fg }, size: sz, name: 'Calibri' };
+      c.alignment = { horizontal: align, vertical: 'middle', indent: align === 'left' ? 2 : 0, wrapText: false };
+      return r;
     };
 
     const addSection = (label) => {
-      const r = ws.addRow([label, ...responses.map(() => '')]);
-      r.height = 18;
-      ws.mergeCells(r.number, 1, r.number, colCount);
-      r.getCell(1).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
-      r.getCell(1).font   = { bold: true, color: { argb: AMBER }, size: 9, name: 'Calibri' };
-      r.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      // Spacer row
+      const sp = ws.addRow(Array(colCount).fill(''));
+      sp.height = 6;
+      sp.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }; });
+      // Section header
+      mergedRow(label, DARK, AMBER, 9, 18, 'left');
     };
 
     const addDataRow = (label, values, isTotal = false, isInternal = false, rowIdx = 0) => {
       const r = ws.addRow([label, ...values]);
-      r.height = 16;
+      r.height = isTotal ? 20 : 17;
+      const sides = { style: 'thin', color: { argb: 'FFE5E7EB' } };
       r.eachCell((cell, ci) => {
-        const bg = isTotal ? RED : isInternal ? 'FFE8E8FF' : rowIdx % 2 === 0 ? WHITE : LIGHT;
+        const bg = isTotal ? RED : isInternal ? 'FFEEF2FF' : rowIdx % 2 === 0 ? WHITE : LIGHT;
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
         cell.font = {
           bold: ci === 1 || isTotal,
-          color: { argb: isTotal ? WHITE : isInternal ? 'FF4338CA' : DARK },
-          size: isTotal ? 11 : 9.5,
-          name: 'Calibri',
+          color: { argb: isTotal ? WHITE : isInternal ? 'FF4F46E5' : DARK },
+          size: isTotal ? 10.5 : 9.5, name: 'Calibri',
         };
-        cell.alignment = { horizontal: ci === 1 ? 'left' : 'center', vertical: 'middle', wrapText: true, indent: ci === 1 ? 1 : 0 };
-        cell.border = { bottom: { style: 'hair', color: { argb: 'FFEEEEEE' } } };
+        cell.alignment = { horizontal: ci === 1 ? 'left' : 'center', vertical: 'middle', wrapText: true, indent: ci === 1 ? 2 : 0 };
+        cell.border = { top: { style: 'hair', color: { argb: 'FFF3F4F6' } }, bottom: { style: 'hair', color: { argb: 'FFF3F4F6' } }, left: sides, right: sides };
       });
     };
 
     // ── Title block ──
-    const title = ws.addRow(['CEILAO INSURANCE BROKERS (PVT) LTD', ...responses.map(() => '')]);
-    ws.mergeCells(title.number, 1, title.number, colCount);
-    applyHeader(title, RED, WHITE, 14);
-    title.height = 28;
+    mergedRow('CEILAO INSURANCE BROKERS (PVT) LTD', RED, WHITE, 15, 30, 'center');
+    mergedRow('INSURANCE BROKING & RISK MANAGEMENT  ·  Sri Lanka', DARK, AMBER, 9, 18, 'center');
 
-    const sub = ws.addRow(['INSURANCE BROKING & RISK MANAGEMENT  ·  Sri Lanka', ...responses.map(() => '')]);
-    ws.mergeCells(sub.number, 1, sub.number, colCount);
-    applyHeader(sub, DARK, AMBER, 9);
+    // ── Reference info block ──
+    mergedRow('QUOTE COMPARISON REPORT', GREY, DARK, 11, 22, 'center');
+    mergedRow(`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${today}`, GREY, 'FF6B7280', 9, 16, 'center');
 
-    ws.addRow([]);
-
-    // ── Reference / product info ──
-    const infoRow = ws.addRow([`QUOTE COMPARISON REPORT`, ...responses.map(() => '')]);
-    ws.mergeCells(infoRow.number, 1, infoRow.number, colCount);
-    applyHeader(infoRow, GREY, DARK, 10);
-    infoRow.getCell(1).font.color = { argb: DARK };
-
-    const refRow = ws.addRow([`Reference: ${quote.reference}   |   Product: ${product?.label || ''}   |   Date: ${today}`, ...responses.map(() => '')]);
-    ws.mergeCells(refRow.number, 1, refRow.number, colCount);
-    refRow.height = 16;
-    refRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY } };
-    refRow.getCell(1).font = { size: 9, name: 'Calibri', color: { argb: 'FF6B7280' } };
-    refRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-
-    ws.addRow([]);
+    // Spacer
+    const sp0 = ws.addRow(Array(colCount).fill(''));
+    sp0.height = 4;
 
     // ── Company header row ──
-    const compRow = ws.addRow(['FIELD', ...responses.map(r => r.company_name)]);
-    applyHeader(compRow, DARK, AMBER, 10);
+    const compRow = ws.addRow(['FIELD', ...responses.map(r => r.company_name + (r.edited_by_broker ? ' ✎' : ''))]);
+    compRow.height = 24;
+    compRow.eachCell((cell, ci) => {
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: ci === 1 ? DARK : RED } };
+      cell.font      = { bold: true, color: { argb: AMBER }, size: 10, name: 'Calibri' };
+      cell.alignment = { horizontal: ci === 1 ? 'left' : 'center', vertical: 'middle', indent: ci === 1 ? 2 : 0 };
+      cell.border    = { bottom: { style: 'medium', color: { argb: RED } } };
+    });
 
     // ── Premium Breakdown ──
     addSection('PREMIUM BREAKDOWN');
@@ -1061,15 +1053,15 @@ function ComparisonView({ quote, onBack, onConfirm }) {
     ];
 
     autoTable(pdf, {
-      startY: 35,
+      startY: 38,
       head: [[
         { content: 'Field', styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 9 } },
-        ...responses.map(r => ({ content: r.company_name + (r.edited_by_broker ? '\n(Broker Edited)' : ''), styles: { fillColor: [255,90,90], textColor: [255,255,255], fontStyle: 'bold', fontSize: 9, halign: 'center' } })),
+        ...responses.map(r => ({ content: r.company_name + (r.edited_by_broker ? '\n✎ Broker Edited' : ''), styles: { fillColor: [255,90,90], textColor: [255,255,255], fontStyle: 'bold', fontSize: 9, halign: 'center' } })),
       ]],
       body,
       columnStyles: { 0: { cellWidth: 52 } },
-      styles: { fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, overflow: 'linebreak', minCellHeight: 8 },
-      margin: { left: 10, right: 10, top: 25, bottom: 17 },
+      styles: { fontSize: 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 }, overflow: 'linebreak', minCellHeight: 9 },
+      margin: { left: 10, right: 10, top: 28, bottom: 18 },
       didDrawPage: (data) => {
         if (data.pageNumber > 1) drawHeader();
         drawFooter();
