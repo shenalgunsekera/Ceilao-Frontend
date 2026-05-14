@@ -398,8 +398,21 @@ function QuoteRow({ quote, onSelect, tab, onDelete }) {
     ? quote.created_at.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
 
+  const hasSelection = !!quote.customer_selection;
+
   return (
-    <Card sx={{ mb: 1.5, border: '1px solid rgba(255,139,90,0.12)' }}>
+    <Card sx={{ mb: 1.5, border: `1px solid ${hasSelection ? 'rgba(16,185,129,0.35)' : 'rgba(255,139,90,0.12)'}`, boxShadow: hasSelection ? '0 0 0 2px rgba(16,185,129,0.08)' : 'none' }}>
+      {hasSelection && (
+        <Box sx={{ background: 'linear-gradient(90deg,#059669,#10B981)', px: 2.5, py: 0.9, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ fontSize: 16 }}>🏆</Box>
+          <Typography sx={{ fontWeight: 700, fontSize: 12.5, color: '#fff' }}>
+            Customer selected <strong>{quote.customer_selection.company_name}</strong>
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', ml: 'auto' }}>
+            {new Date(quote.customer_selection.selected_at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+          </Typography>
+        </Box>
+      )}
       <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
         <Box sx={{ px: 2.5, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5,
                     cursor: 'pointer', '&:hover': { bgcolor: 'rgba(255,90,90,0.02)' } }}
@@ -417,6 +430,10 @@ function QuoteRow({ quote, onSelect, tab, onDelete }) {
               </Typography>
               <Chip label={product?.label || quote.product_key} size="small"
                 sx={{ bgcolor: 'rgba(255,90,90,0.08)', color: '#FF5A5A', fontWeight: 600, fontSize: 10 }} />
+              {hasSelection && (
+                <Chip label={`🏆 ${quote.customer_selection.company_name}`} size="small"
+                  sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#059669', fontWeight: 700, fontSize: 10 }} />
+              )}
             </Stack>
             <Typography sx={{ fontSize: 11.5, color: '#9CA3AF' }}>
               {created} · By {quote.created_by_name}
