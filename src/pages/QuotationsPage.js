@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   collection, addDoc, getDocs, query, orderBy, onSnapshot,
   doc, updateDoc, deleteDoc, serverTimestamp
@@ -64,6 +64,8 @@ const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
 
 // Initialise once — must be after all imports
 if (EMAILJS_KEY) emailjs.init({ publicKey: EMAILJS_KEY });
+
+const DRAFT_KEY = 'ceilao_draft_quote';
 
 /* ── form validation ─────────────────────────────────────────────────────── */
 function validateForm(product, values) {
@@ -1461,6 +1463,38 @@ const QuotationsPage = () => {
   const [fieldErrors,    setFieldErrors]    = useState({});
   const [valIssues,      setValIssues]      = useState({ missing: [], invalid: [] });
   const [valOpen,        setValOpen]        = useState(false);
+  const [draftBanner,    setDraftBanner]    = useState(null); // { product, formValues, savedAt }
+  const [hasDraft,       setHasDraft]       = useState(() => {
+    try { const s = localStorage.getItem(DRAFT_KEY); return !!(s && Object.keys(JSON.parse(s).formValues || {}).length > 0); }
+    catch (_) { return false; }
+  });
+  const draftTimerRef  = useRef(null);
+  const formValuesRef  = useRef(formValues);
+  const productRef     = useRef(product);
+  useEffect(() => { formValuesRef.current = formValues; }, [formValues]);
+  useEffect(() => { productRef.current = product; }, [product]);
+
+  const flushDraftSave = useCallback(() => {
+    if (Object.keys(formValuesRef.current).length === 0) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ product: productRef.current, formValues: formValuesRef.current, savedAt: new Date().toISOString() }));
+      setHasDraft(true);
+    } catch (_) {}
+  }, []);
+
+  // Auto-save draft to localStorage while form is open
+  useEffect(() => {
+    if (!newQuoteOpen) return;
+    if (Object.keys(formValues).length === 0) return;
+    clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ product, formValues, savedAt: new Date().toISOString() }));
+        setHasDraft(true);
+      } catch (_) {}
+    }, 800);
+    return () => clearTimeout(draftTimerRef.current);
+  }, [formValues, product, newQuoteOpen]);
 
   // Load companies
   useEffect(() => {
@@ -1538,6 +1572,9 @@ const QuotationsPage = () => {
       setNewQuoteOpen(false);
       setSendOpen(true);
       setFormValues({});
+      setDraftBanner(null);
+      setHasDraft(false);
+      try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
     } catch (err) {
       setToast({ open: true, msg: err.message, severity: 'error' });
     }
@@ -1694,9 +1731,53 @@ const QuotationsPage = () => {
               Request, track and compare quotes from insurance companies
             </Typography>
           </Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setFormValues({}); setNewQuoteOpen(true); }} sx={{ mt: { xs: 1.5, sm: 0 } }}>
-            New Quote Request
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: { xs: 1.5, sm: 0 } }}>
+            {hasDraft && (
+              <Chip
+                label="Resume draft"
+                size="small"
+                onClick={() => {
+                  try {
+                    const saved = localStorage.getItem(DRAFT_KEY);
+                    if (saved) {
+                      const parsed = JSON.parse(saved);
+                      setDraftBanner(parsed);
+                      setProduct(parsed.product || 'fire');
+                      setFormValues({});
+                      setNewQuoteOpen(true);
+                    }
+                  } catch (_) {}
+                }}
+                sx={{
+                  fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  bgcolor: 'rgba(59,130,246,0.10)', color: '#2563eb',
+                  border: '1.5px solid rgba(59,130,246,0.30)',
+                  '&:hover': { bgcolor: 'rgba(59,130,246,0.18)' },
+                }}
+                icon={<span style={{ fontSize: 14, marginLeft: 6 }}>💾</span>}
+              />
+            )}
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
+              try {
+                const saved = localStorage.getItem(DRAFT_KEY);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (parsed && Object.keys(parsed.formValues || {}).length > 0) {
+                    setDraftBanner(parsed);
+                    setProduct(parsed.product || 'fire');
+                    setFormValues({});
+                    setNewQuoteOpen(true);
+                    return;
+                  }
+                }
+              } catch (_) {}
+              setDraftBanner(null);
+              setFormValues({});
+              setNewQuoteOpen(true);
+            }}>
+              New Quote Request
+            </Button>
+          </Stack>
         </Stack>
 
         {/* Stats row */}
@@ -1786,11 +1867,50 @@ const QuotationsPage = () => {
         )}
 
         {/* ── New Quote Dialog ── */}
-        <Dialog open={newQuoteOpen} onClose={() => setNewQuoteOpen(false)} maxWidth="md" fullWidth>
+        <Dialog open={newQuoteOpen} onClose={() => { flushDraftSave(); setNewQuoteOpen(false); }} maxWidth="md" fullWidth>
           <DialogTitle>
             New Quote Request
           </DialogTitle>
           <DialogContent sx={{ pt: 2.5 }}>
+            {/* Draft restore banner */}
+            {draftBanner && (
+              <Alert
+                severity="info"
+                sx={{ mb: 2.5, fontSize: 13, alignItems: 'center', '& .MuiAlert-message': { width: '100%' } }}
+                icon={<span style={{ fontSize: 18 }}>💾</span>}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Box>
+                    <Typography sx={{ fontWeight: 700, fontSize: 13, color: '#1e40af' }}>Unsaved draft found</Typography>
+                    <Typography sx={{ fontSize: 12, color: '#3b82f6' }}>
+                      {PRODUCTS[draftBanner.product]?.label || draftBanner.product} · saved {new Date(draftBanner.savedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1}>
+                    <Button size="small" variant="contained"
+                      sx={{ fontSize: 12, background: 'linear-gradient(135deg,#3b82f6,#2563eb)', boxShadow: 'none', py: 0.5 }}
+                      onClick={() => {
+                        setProduct(draftBanner.product || 'fire');
+                        setFormValues(draftBanner.formValues || {});
+                        setFieldErrors({});
+                        setDraftBanner(null);
+                      }}>
+                      Restore Draft
+                    </Button>
+                    <Button size="small" variant="outlined"
+                      sx={{ fontSize: 12, borderColor: '#93c5fd', color: '#2563eb', py: 0.5 }}
+                      onClick={() => {
+                        setDraftBanner(null);
+                        setFormValues({});
+                        setHasDraft(false);
+                        try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+                      }}>
+                      Start Fresh
+                    </Button>
+                  </Stack>
+                </Box>
+              </Alert>
+            )}
             {/* Product selector */}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
               {PRODUCT_LIST.map(p => (
@@ -1810,7 +1930,7 @@ const QuotationsPage = () => {
             <ProductForm product={product} values={formValues} onChange={setField} errors={fieldErrors} />
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(255,139,90,0.10)' }}>
-            <Button onClick={() => setNewQuoteOpen(false)} variant="outlined"
+            <Button onClick={() => { flushDraftSave(); setNewQuoteOpen(false); }} variant="outlined"
               sx={{ borderColor: '#e0e0e0', color: '#6B7280' }}>Cancel</Button>
             <Button variant="contained" onClick={handleCreateQuote} disabled={saving}>
               {saving ? 'Saving…' : 'Save & Select Insurers →'}
