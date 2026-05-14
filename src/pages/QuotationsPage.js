@@ -535,6 +535,69 @@ function ComparisonView({ quote, onBack, onConfirm }) {
   const responses = quote?.responses || [];
   const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno');
   const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
+
+  // ── Broker response-edit state ──────────────────────────────────────────────
+  const [editTarget,  setEditTarget]  = useState(null); // response object being edited
+  const [editForm,    setEditForm]    = useState({});
+  const [editSaving,  setEditSaving]  = useState(false);
+
+  const openEdit = (r) => {
+    setEditTarget(r);
+    setEditForm({
+      basic_premium:   r.basic_premium?.toString()  || '',
+      srcc_premium:    r.srcc_premium?.toString()   || '',
+      tc_premium:      r.tc_premium?.toString()     || '',
+      admin_fee:       r.admin_fee?.toString()      || '',
+      vat_amount:      r.vat_amount?.toString()     || '',
+      other_premium:   r.other_premium?.toString()  || '',
+      deductible:      r.deductible     || '',
+      excesses:        r.excesses       || '',
+      commission_type: r.commission_type || '',
+      validity_days:   r.validity_days?.toString()  || '',
+      notes:           r.notes          || '',
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    setEditSaving(true);
+    try {
+      const snap = await (await import('firebase/firestore')).getDoc(
+        (await import('firebase/firestore')).doc(db, 'quotes', quote.id)
+      );
+      if (snap.exists()) {
+        const updated = (snap.data().responses || []).map(r => {
+          if (r.company_id !== editTarget.company_id) return r;
+          const bp = Number(editForm.basic_premium) || 0;
+          const sp = Number(editForm.srcc_premium)  || 0;
+          const tc = Number(editForm.tc_premium)    || 0;
+          const af = Number(editForm.admin_fee)     || 0;
+          const vt = Number(editForm.vat_amount)    || 0;
+          const op = Number(editForm.other_premium) || 0;
+          return {
+            ...r,
+            basic_premium:   bp,
+            srcc_premium:    sp,
+            tc_premium:      tc,
+            admin_fee:       af,
+            vat_amount:      vt,
+            other_premium:   op,
+            premium:         bp + sp + tc + af + vt + op,
+            deductible:      editForm.deductible,
+            excesses:        editForm.excesses,
+            commission_type: editForm.commission_type,
+            validity_days:   editForm.validity_days,
+            notes:           editForm.notes,
+            edited_by_broker: true,
+            broker_edited_at: new Date().toISOString(),
+          };
+        });
+        await updateDoc(doc(db, 'quotes', quote.id), { responses: updated, updated_at: serverTimestamp() });
+      }
+      setEditTarget(null);
+    } catch (err) { console.error('Edit save failed:', err); }
+    setEditSaving(false);
+  };
   const [custEmail,  setCustEmail]  = useState('');
   const [sending,    setSending]    = useState(false);
   const [sendDone,   setSendDone]   = useState(false);
@@ -1013,6 +1076,22 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                   );
                 })}
               </TableRow>
+              {/* Broker edit row */}
+              <TableRow sx={{ bgcolor: 'rgba(99,102,241,0.04)' }}>
+                <TableCell sx={{ fontWeight: 700, color: '#6366f1' }}>Edit Response</TableCell>
+                {responses.map(r => (
+                  <TableCell key={r.id} align="center">
+                    <Button size="small" variant="outlined"
+                      onClick={() => openEdit(r)}
+                      sx={{ fontSize: 11, py: 0.4, borderColor: '#6366f1', color: '#6366f1' }}>
+                      ✏️ Edit
+                    </Button>
+                    {r.edited_by_broker && (
+                      <Typography sx={{ fontSize: 9.5, color: '#9CA3AF', mt: 0.3 }}>Broker edited</Typography>
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
               {/* Select winner */}
               <TableRow sx={{ bgcolor: 'rgba(16,185,129,0.04)' }}>
                 <TableCell sx={{ fontWeight: 700, color: '#059669' }}>Select this quote</TableCell>
@@ -1030,6 +1109,65 @@ function ComparisonView({ quote, onBack, onConfirm }) {
           </Table>
         </TableContainer>
       )}
+
+      {/* ── Broker edit dialog ─────────────────────────────────────────────── */}
+      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+          ✏️ Edit Response — {editTarget?.company_name}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, fontSize: 12 }}>
+            Changes saved here override the insurer's original submission. A "Broker edited" note will appear in the comparison.
+          </Alert>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1 }}>
+            {[
+              { key: 'basic_premium',  label: 'Basic Premium (LKR)',  num: true  },
+              { key: 'srcc_premium',   label: 'SRCC (LKR)',           num: true  },
+              { key: 'tc_premium',     label: 'TC (LKR)',             num: true  },
+              { key: 'admin_fee',      label: 'Admin Fee (LKR)',      num: true  },
+              { key: 'vat_amount',     label: 'VAT (LKR)',            num: true  },
+              { key: 'other_premium',  label: 'Other (LKR)',          num: true  },
+              { key: 'deductible',     label: 'Deductibles',          num: false },
+              { key: 'excesses',       label: 'Excesses',             num: false },
+              { key: 'validity_days',  label: 'Validity (days)',      num: true  },
+            ].map(({ key, label, num }) => (
+              <TextField key={key} size="small" fullWidth label={label}
+                type={num ? 'number' : 'text'}
+                value={editForm[key] || ''}
+                onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
+            ))}
+            <Box sx={{ gridColumn: '1 / -1' }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#6B7280', mb: 0.8, textTransform: 'uppercase' }}>
+                Commission Type (Broker Only)
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {['Standard', 'Special'].map(opt => (
+                  <Box key={opt} onClick={() => setEditForm(f => ({ ...f, commission_type: opt }))}
+                    sx={{ flex: 1, py: 1, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
+                      border: `1.5px solid ${editForm.commission_type === opt ? '#6366f1' : 'rgba(0,0,0,0.12)'}`,
+                      bgcolor: editForm.commission_type === opt ? 'rgba(99,102,241,0.08)' : 'transparent',
+                      color: editForm.commission_type === opt ? '#6366f1' : '#6B7280',
+                      fontWeight: editForm.commission_type === opt ? 700 : 400, fontSize: 13 }}>
+                    {opt}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+            <TextField size="small" fullWidth multiline rows={3} label="Notes / Terms & Conditions"
+              sx={{ gridColumn: '1 / -1' }}
+              value={editForm.notes || ''}
+              onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button variant="outlined" onClick={() => setEditTarget(null)}
+            sx={{ borderColor: '#e0e0e0', color: '#6B7280' }}>Cancel</Button>
+          <Button variant="contained" onClick={saveEdit} disabled={editSaving}
+            sx={{ background: 'linear-gradient(135deg,#6366f1,#818cf8)', minWidth: 120 }}>
+            {editSaving ? 'Saving…' : 'Save Changes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
