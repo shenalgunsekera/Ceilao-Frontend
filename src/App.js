@@ -30,6 +30,7 @@ const ComparisonPdfPage   = lazy(() => import('./pages/ComparisonPdfPage'));
 const RenewalsPage     = lazy(() => import('./pages/RenewalsPage'));
 const ClaimsPage       = lazy(() => import('./pages/ClaimsPage'));
 const MarketingPage    = lazy(() => import('./pages/MarketingPage'));
+const PortfolioPage    = lazy(() => import('./pages/PortfolioPage'));
 
 /* ── MUI theme ───────────────────────────────────────────────────────────── */
 const theme = createTheme({
@@ -452,6 +453,7 @@ function App() {
                               <Route path="/renewals"      element={<RenewalsPage />} />
                               <Route path="/claims"        element={<ClaimsPage />} />
                               <Route path="/marketing"     element={<MarketingPage />} />
+                              <Route path="/portfolio"     element={<PortfolioPage />} />
                             </Routes>
                           </Box>
                         </Box>

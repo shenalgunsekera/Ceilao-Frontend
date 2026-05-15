@@ -27,6 +27,7 @@ import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import RaiseTicketModal from './RaiseTicketModal';
 
 const DRAWER_W = 260;
@@ -35,6 +36,7 @@ const navItems = [
   { label: 'Home',          path: '/menu',          icon: <HomeOutlinedIcon /> },
   { label: 'Quotations',    path: '/quotations',    icon: <RequestQuoteOutlinedIcon /> },
   { label: 'Underwriting',  path: '/underwriting',  icon: <PeopleOutlineIcon /> },
+  { label: 'Portfolio',     path: '/portfolio',     icon: <AccountTreeOutlinedIcon /> },
   { label: 'Claims',        path: '/claims',        icon: <GavelOutlinedIcon /> },
   { label: 'Renewals',      path: '/renewals',      icon: <AutorenewIcon /> },
   { label: 'Reports',       path: '/reports',       icon: <BarChartIcon /> },
