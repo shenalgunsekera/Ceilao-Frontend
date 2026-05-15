@@ -1,5 +1,6 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Link } from '@mui/material';
+import { viewUrl } from '../cloudinary';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 
@@ -20,7 +21,7 @@ const ClientTable = ({ clients, onEdit, onDelete }) => (
             <TableCell>{client.name}</TableCell>
             <TableCell>
               <Link
-                href={client.document_url}
+                href={viewUrl(client.document_url)}
                 target="_blank"
                 rel="noopener"
                 underline="hover"
@@ -30,7 +31,7 @@ const ClientTable = ({ clients, onEdit, onDelete }) => (
             </TableCell>
             <TableCell>
               <Link
-                href={client.policy_url}
+                href={viewUrl(client.policy_url)}
                 target="_blank"
                 rel="noopener"
                 underline="hover"
