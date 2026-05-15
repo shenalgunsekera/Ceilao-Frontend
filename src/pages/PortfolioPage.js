@@ -69,9 +69,9 @@ import {
   computeRecommendations, RISK_SCORING_RULES, STRENGTH_COLORS,
 } from '../config/portfolioEngine';
 
-const EMAILJS_SERVICE  = process.env.REACT_APP_EMAILJS_SERVICE_ID  || '';
-const EMAILJS_TEMPLATE = process.env.REACT_APP_EMAILJS_CUSTOMER_TEMPLATE_ID || process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '';
-const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
+const EMAILJS_SERVICE           = process.env.REACT_APP_EMAILJS_SERVICE_ID           || '';
+const EMAILJS_PORTFOLIO_TEMPLATE = process.env.REACT_APP_EMAILJS_PORTFOLIO_TEMPLATE_ID  || process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '';
+const EMAILJS_KEY               = process.env.REACT_APP_EMAILJS_PUBLIC_KEY             || '';
 
 const STEPS = [
   { label: 'Customer & Industry', icon: <BusinessIcon />   },
@@ -335,18 +335,25 @@ function StepRisk({ confirmedAssets, riskAnswers, onAnswer }) {
                     <Stack direction="row" spacing={1} flexWrap="wrap">
                       {['Yes','No','More than 10 years','More than 10 km','More than 12 months ago',
                         'Poor','Combustible / timber / sandwich panel'].includes(rule.answerCondition)
-                        ? ['Yes','No'].map(opt => (
-                          <Button key={opt} size="small" variant={answer === opt ? 'contained' : 'outlined'}
-                            onClick={() => onAnswer(rule.id, opt)}
-                            sx={{
-                              fontSize:12, py:0.4, minWidth:70,
-                              ...(answer === opt
-                                ? { background: isAdverse ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#10B981,#059669)', boxShadow:'none' }
-                                : { borderColor:'rgba(255,139,90,0.25)', color:'#6B7280' }),
-                            }}>
-                            {opt}
-                          </Button>
-                        ))
+                        ? ['Yes','No'].map(opt => {
+                            // 'Yes' means the adverse condition is present → store the actual answerCondition text
+                            // 'No' means the adverse condition is absent → store 'No'
+                            const stored = opt === 'Yes' ? rule.answerCondition : 'No';
+                            const active  = answer === stored;
+                            const adverse = opt === 'Yes' && active;
+                            return (
+                              <Button key={opt} size="small" variant={active ? 'contained' : 'outlined'}
+                                onClick={() => onAnswer(rule.id, stored)}
+                                sx={{
+                                  fontSize:12, py:0.4, minWidth:70,
+                                  ...(active
+                                    ? { background: adverse ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#10B981,#059669)', boxShadow:'none' }
+                                    : { borderColor:'rgba(255,139,90,0.25)', color:'#6B7280' }),
+                                }}>
+                                {opt}
+                              </Button>
+                            );
+                          })
                         : (
                           <Select size="small" value={answer || ''} displayEmpty
                             onChange={e => onAnswer(rule.id, e.target.value)}
@@ -786,7 +793,7 @@ function SendDialog({ open, onClose, customer, industryCode, recs, riskGrade, ri
     setSending(true); setError('');
     try {
       const html = buildEmailHtml({ customer, industryName: industry?.name || industryCode, riskGrade, recs, riskScore, customMessage: message, brokerName: customer.broker });
-      await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+      await emailjs.send(EMAILJS_SERVICE, EMAILJS_PORTFOLIO_TEMPLATE, {
         to_email:      toEmail.trim(),
         to_name:       customer.name || 'Valued Client',
         reference:     `Portfolio Review — ${customer.name}`,
