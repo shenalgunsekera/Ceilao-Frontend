@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../firebase';
-import { uploadToCloudinary } from '../cloudinary';
+import { uploadToCloudinary, viewUrl } from '../cloudinary';
 import { PRODUCTS } from '../config/products';
 
 import Box from '@mui/material/Box';
@@ -635,7 +635,7 @@ const QuoteResponsePage = () => {
                           {field.label}
                         </Typography>
                         {field.type === 'file' ? (
-                          <Typography component="a" href={value} target="_blank" rel="noopener noreferrer"
+                          <Typography component="a" href={viewUrl(value)} target="_blank" rel="noopener noreferrer"
                             sx={{ fontSize: 13, color: '#6366f1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 0.5, fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}>
                             📄 {fileName}
                           </Typography>

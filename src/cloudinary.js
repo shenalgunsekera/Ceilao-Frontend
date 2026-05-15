@@ -46,11 +46,14 @@ export async function uploadToCloudinary(file, folder = 'ceilao/docs', onProgres
   });
 }
 
-// Returns a Cloudinary URL for inline browser viewing.
-// fl_inline prevents the download prompt. q_auto/f_auto only apply to images —
-// they break raw/PDF delivery so we skip them for non-image files.
+// Returns a URL for inline browser viewing.
+// PDFs on Cloudinary's /image/upload/ return 400 with fl_inline, so we
+// route them through Google Docs Viewer instead.
 export function viewUrl(url) {
-  if (!url || !url.includes('cloudinary.com')) return url;
+  if (!url) return url;
+  const isPdf = /\.pdf(\?|$)/i.test(url);
+  if (isPdf) return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`;
+  if (!url.includes('cloudinary.com')) return url;
   const isImage = /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url);
   const transforms = isImage ? 'fl_inline,q_auto,f_auto' : 'fl_inline';
   return url.replace('/upload/', `/upload/${transforms}/`);
