@@ -127,8 +127,8 @@ function TemplateCard({ tpl, onEdit, onDelete, isPreset }) {
 }
 
 const MarketingPage = () => {
-  const { user, userProfile } = useAuth();
-  const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin';
+  const { user, userProfile, hasAccess } = useAuth();
+  const isManager = hasAccess('marketing');
 
   const [tab, setTab] = useState(0);
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });

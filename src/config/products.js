@@ -1505,13 +1505,14 @@ export const PRODUCT_LIST = Object.entries(PRODUCTS).map(([key, val]) => ({
 }));
 
 export const MODULES = [
-  { key: 'quotations',   label: 'Quotations',       icon: '📋', description: 'Quote requests and comparisons' },
-  { key: 'underwriting', label: 'Underwriting',      icon: '📝', description: 'Policy issuance and client records' },
-  { key: 'claims',       label: 'Claims',            icon: '🛡️', description: 'Claims registration and tracking' },
-  { key: 'accounting',   label: 'Accounting',        icon: '💰', description: 'Premiums, commissions and payments' },
-  { key: 'reports',      label: 'Reports',           icon: '📊', description: 'Analytics and data exports' },
-  { key: 'renewals',     label: 'Renewals Tracker',  icon: '🔄', description: 'Upcoming renewals and alerts' },
-  { key: 'marketing',    label: 'Marketing',         icon: '📣', description: 'WhatsApp bulk campaigns and client messaging' },
+  { key: 'quotations',   label: 'Quotations',        icon: '📋', description: 'Quote requests and comparisons' },
+  { key: 'underwriting', label: 'Underwriting',       icon: '📝', description: 'Policy issuance and client records' },
+  { key: 'claims',       label: 'Claims',             icon: '🛡️', description: 'Claims registration and tracking' },
+  { key: 'accounting',   label: 'Accounting',         icon: '💰', description: 'Premiums, commissions and payments' },
+  { key: 'reports',      label: 'Reports',            icon: '📊', description: 'Analytics and data exports' },
+  { key: 'renewals',     label: 'Renewals Tracker',   icon: '🔄', description: 'Upcoming renewals and alerts' },
+  { key: 'marketing',    label: 'Marketing',          icon: '📣', description: 'WhatsApp bulk campaigns and client messaging' },
+  { key: 'portfolio',    label: 'Portfolio Review',   icon: '🗂️', description: 'Customer portfolio risk assessment and recommendations' },
 ];
 
 export const DEFAULT_MODULE_ACCESS = {
@@ -1522,4 +1523,5 @@ export const DEFAULT_MODULE_ACCESS = {
   reports:      ['admin', 'manager', 'employee'],
   renewals:     ['admin', 'manager', 'employee'],
   marketing:    ['admin', 'manager'],
+  portfolio:    ['admin', 'manager', 'employee'],
 };
