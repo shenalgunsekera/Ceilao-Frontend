@@ -11,9 +11,10 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, limit, query, serverTimestamp } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, getDocs, limit, query, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { getOrCreateDeviceId, collectDeviceInfo, fetchLocationInfo } from './utils/deviceFingerprint';
 import { lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -241,10 +242,72 @@ function SessionGuard({ children }) {
 }
 
 function RequireAuth({ children }) {
-  const { user, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const location = useLocation();
+  const [deviceState, setDeviceState] = useState('checking'); // checking | allowed | restricted
 
-  if (loading) return (
+  useEffect(() => {
+    if (loading) return;
+    if (!user) { setDeviceState('allowed'); return; }
+
+    const deviceId    = getOrCreateDeviceId();
+    const sessionId   = `${user.uid}_${deviceId}`;
+
+    // Register / update this device session (fire-and-forget)
+    const register = async () => {
+      try {
+        const deviceInfo = collectDeviceInfo();
+        const ref        = doc(db, 'device_sessions', sessionId);
+        const snap       = await getDoc(ref);
+        const location2  = snap.exists() && snap.data().ip ? null : await fetchLocationInfo();
+        await setDoc(ref, {
+          device_id:   deviceId,
+          user_id:     user.uid,
+          user_email:  user.email || '',
+          user_name:   userProfile?.full_name || user.displayName || user.email?.split('@')[0] || '',
+          ...deviceInfo,
+          ...(location2 || {}),
+          last_seen:   serverTimestamp(),
+          first_seen:  snap.exists() ? snap.data().first_seen : serverTimestamp(),
+          approved:    snap.exists() ? snap.data().approved : false,
+          blocked:     snap.exists() ? snap.data().blocked  : false,
+        }, { merge: true });
+      } catch (e) { console.error('Device register failed:', e); }
+    };
+    register();
+
+    // Listen to device session + lockdown settings simultaneously
+    let sessionData  = null;
+    let settingsData = null;
+
+    const evaluate = () => {
+      if (sessionData === null || settingsData === null) return;
+      if (sessionData.blocked) {
+        signOut(auth);
+        setDeviceState('restricted');
+        return;
+      }
+      const lockdown = settingsData.lockdown_mode;
+      if (lockdown && !sessionData.approved) {
+        setDeviceState('restricted');
+        return;
+      }
+      setDeviceState('allowed');
+    };
+
+    const unsubSession  = onSnapshot(doc(db, 'device_sessions', sessionId), snap => {
+      sessionData = snap.exists() ? snap.data() : { approved: false, blocked: false };
+      evaluate();
+    });
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'device_control'), snap => {
+      settingsData = snap.exists() ? snap.data() : { lockdown_mode: false };
+      evaluate();
+    });
+
+    return () => { unsubSession(); unsubSettings(); };
+  }, [user, userProfile, loading]);
+
+  if (loading || deviceState === 'checking') return (
     <Box sx={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       minHeight: '100vh',
@@ -255,6 +318,36 @@ function RequireAuth({ children }) {
   );
 
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+
+  if (deviceState === 'restricted') return (
+    <Box sx={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #1A1A2E 0%, #2d2d44 100%)', p: 3,
+    }}>
+      <Box sx={{ maxWidth: 420, textAlign: 'center' }}>
+        <Box sx={{ width: 72, height: 72, borderRadius: '20px', bgcolor: 'rgba(239,68,68,0.15)',
+                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                   mx: 'auto', mb: 3, fontSize: 36 }}>
+          🔒
+        </Box>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: '#fff', mb: 1 }}>
+          Access Restricted
+        </Typography>
+        <Typography sx={{ color: '#9CA3AF', fontSize: 14, lineHeight: 1.7, mb: 3 }}>
+          This device has not been approved to access the Ceilao Insurance Brokers system.
+          Please contact your administrator to get this device approved.
+        </Typography>
+        <Typography sx={{ fontSize: 12, color: '#6B7280', bgcolor: 'rgba(255,255,255,0.05)',
+                         borderRadius: '10px', p: 1.5, fontFamily: 'monospace' }}>
+          Device ID: {getOrCreateDeviceId().slice(0, 16)}…
+        </Typography>
+        <Button variant="outlined" onClick={() => signOut(auth)} sx={{ mt: 3, borderColor: 'rgba(255,139,90,0.4)', color: '#FF8B5A', fontSize: 13 }}>
+          Sign Out
+        </Button>
+      </Box>
+    </Box>
+  );
+
   return children;
 }
 
