@@ -8,7 +8,7 @@ import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
 import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
-import { uploadToCloudinary, viewUrl, openFile } from '../cloudinary';
+import { uploadToCloudinary, openFile } from '../cloudinary';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import Box from '@mui/material/Box';
