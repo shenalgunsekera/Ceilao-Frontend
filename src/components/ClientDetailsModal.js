@@ -310,7 +310,10 @@ const ClientDetailsModal = ({ client, onClose }) => {
 
           const imgY  = docY + labelH;
           const url   = client[df.doc];
-          const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url) || url.includes('/image/upload/');
+          // Only treat as embeddable image if extension is explicitly an image type
+          // PDFs uploaded to /image/upload/ must NOT be treated as images
+          const isPdf = /\.pdf(\?|$)/i.test(url);
+          const isImg = !isPdf && /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
 
           pdf.setFillColor(245,247,250); pdf.rect(cx, imgY, colW, imgMaxH, 'F');
           pdf.setDrawColor(210,215,225); pdf.setLineWidth(0.3); pdf.rect(cx, imgY, colW, imgMaxH, 'S');
@@ -340,14 +343,34 @@ const ClientDetailsModal = ({ client, onClose }) => {
               const fmt = /\.png(\?|$)/i.test(url) ? 'PNG' : 'JPEG';
               pdf.addImage(b64, fmt, cx+(colW-dw)/2, imgY+(imgMaxH-dh)/2, dw, dh, undefined, 'FAST');
             } catch {
-              pdf.setFontSize(7.5); pdf.setTextColor(180,180,190);
-              pdf.text('Image unavailable', cx+colW/2, imgY+imgMaxH/2, {align:'center'});
+              // Fallback: show as link card
+              pdf.setFontSize(8); pdf.setFont('helvetica','bold'); pdf.setTextColor(107,114,128);
+              pdf.text('Image unavailable', cx+colW/2, imgY+imgMaxH/2-4, {align:'center'});
+              pdf.setFontSize(7); pdf.setFont('helvetica','normal');
+              pdf.text('Click below to view online', cx+colW/2, imgY+imgMaxH/2+4, {align:'center'});
+              pdf.setTextColor(99,102,241);
+              pdf.textWithLink('Open document ↗', cx+colW/2, imgY+imgMaxH/2+12, {align:'center', url});
             }
           } else {
-            pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(99,102,241);
-            pdf.text('PDF DOCUMENT', cx+colW/2, imgY+imgMaxH/2-4, {align:'center'});
-            pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(120,124,180);
-            pdf.text('Available via system link', cx+colW/2, imgY+imgMaxH/2+4, {align:'center'});
+            // PDF or unknown file — show a clean reference card with clickable link
+            const midY = imgY + imgMaxH/2;
+
+            // PDF badge box
+            pdf.setFillColor(238,242,255);
+            pdf.roundedRect(cx + colW/2 - 18, midY - 24, 36, 16, 3, 3, 'F');
+            pdf.setFontSize(10); pdf.setFont('helvetica','bold'); pdf.setTextColor(99,102,241);
+            pdf.text('PDF', cx + colW/2, midY - 13, {align:'center'});
+
+            pdf.setFontSize(8); pdf.setFont('helvetica','bold'); pdf.setTextColor(55,65,81);
+            pdf.text(df.label, cx + colW/2, midY - 2, {align:'center'});
+
+            pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(107,114,128);
+            pdf.text('Click to open document', cx + colW/2, midY + 8, {align:'center'});
+
+            // Clickable "Open ↗" link
+            pdf.setFontSize(8); pdf.setFont('helvetica','bold'); pdf.setTextColor(99,102,241);
+            pdf.textWithLink('Open ↗', cx + colW/2, midY + 18, {align:'center', url});
+            pdf.link(cx + colW/2 - 15, midY + 13, 30, 7, {url});
           }
 
           docCol++;
