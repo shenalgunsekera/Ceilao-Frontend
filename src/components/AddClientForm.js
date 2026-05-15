@@ -36,12 +36,40 @@ const docFields = [
 ];
 
 const dropdowns = {
-  main_class:         ['Motor','Fire','Marine','Miscellaneous'],
-  product:            ['Comprehensive','Third Party','Other'],
+  main_class: ['Motor','Fire','Marine','Miscellaneous'],
+  product: [
+    // Motor
+    'Comprehensive','Third Party Fire and Theft','Third Party',
+    // Fire / Property
+    'Fire & Allied Perils','Industrial All Risks',
+    // Marine
+    'Import Marine','Export Marine','Inland Transit','Open Cover',
+    // Engineering
+    'Machinery Breakdown','Boiler Explosion','Electronic Equipment',
+    'Contractors All Risks','Engineering All Risks',
+    // Liability
+    'Public Liability','Employers Liability','Product Liability',
+    'Professional Indemnity','Directors & Officers',
+    // People
+    'Workmen Compensation','Group Personal Accident',
+    'Group Medical & Surgical','Surgical & Hospitalisation',
+    // Misc
+    'Fidelity Guarantee','Cyber Insurance','Travel Insurance',
+    'Life / Endowment','Title Insurance','Other',
+  ],
   customer_type:      ['Individual','Company'],
-  insurance_provider: ['Ceylinco','Janashakthi','Union','Other'],
-  branch:             ['Colombo','Kandy','Galle','Other'],
-  commission_type:    ['Flat','Percentage','Other'],
+  insurance_provider: [
+    'AIA Insurance','Allianz Insurance Lanka','Ceylinco General Insurance',
+    'Ceylinco Life Insurance','Fairfirst Insurance','HNB General Insurance',
+    'Janashakthi General Insurance','Janashakthi Life Insurance',
+    'LOLC General Insurance','LOLC Life Assurance',
+    'National Insurance Trust Fund','Orient Insurance',
+    'Sanasa Life Assurance','Softlogic Life Insurance',
+    'Sri Lanka Insurance Corporation','Sunshine Insurance',
+    'Union Assurance','Other',
+  ],
+  branch:          ['Colombo','Kandy','Galle','Kurunegala','Jaffna','Negombo','Matara','Other'],
+  commission_type: ['Flat','Percentage','Other'],
 };
 
 export const textFields = [
