@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button, TextField, Box, Typography, InputLabel, Link } from '@mui/material';
-import { viewUrl } from '../cloudinary';
+import { openFile } from '../cloudinary';
 
 const ClientForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
   const [name, setName] = useState(initialData.name || '');
@@ -33,7 +33,7 @@ const ClientForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
         sx={{ mb: 2 }}
       />
       <InputLabel sx={{ mb: 1 }}>NIC Document {isEdit && initialData.document_url && (
-        <Link href={viewUrl(initialData.document_url)} target="_blank" rel="noopener noreferrer">(Current)</Link>
+        <Link onClick={() => openFile(initialData.document_url)} sx={{ cursor: 'pointer' }}>(Current)</Link>
       )}</InputLabel>
       <input
         type="file"
@@ -43,7 +43,7 @@ const ClientForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
         style={{ marginBottom: 16 }}
       />
       <InputLabel sx={{ mb: 1 }}>Policy Document {isEdit && initialData.policy_url && (
-        <Link href={viewUrl(initialData.policy_url)} target="_blank" rel="noopener noreferrer">(Current)</Link>
+        <Link onClick={() => openFile(initialData.policy_url)} sx={{ cursor: 'pointer' }}>(Current)</Link>
       )}</InputLabel>
       <input
         type="file"

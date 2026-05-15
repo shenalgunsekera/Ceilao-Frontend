@@ -8,7 +8,7 @@ import { useAuth } from '../App';
 import { PRODUCTS, PRODUCT_LIST } from '../config/products';
 import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
-import { uploadToCloudinary, viewUrl } from '../cloudinary';
+import { uploadToCloudinary, viewUrl, openFile } from '../cloudinary';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import Box from '@mui/material/Box';
@@ -522,7 +522,7 @@ function QuoteRow({ quote, onSelect, tab, onDelete }) {
                         </Typography>
                       </Stack>
                       {r.quote_file_url && (
-                        <Button size="small" href={viewUrl(r.quote_file_url)} target="_blank"
+                        <Button size="small" onClick={() => openFile(r.quote_file_url)}
                           sx={{ fontSize: 11, mt: 0.5, color: '#6366f1', p: 0 }}>
                           View uploaded quote →
                         </Button>
@@ -1197,7 +1197,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                       {isSelected && <Box component="span" sx={{ fontSize: 10, color: '#059669', fontWeight: 700, bgcolor: 'rgba(16,185,129,0.12)', px: 1, py: 0.2, borderRadius: '10px', display: 'inline-block', mt: 0.3 }}>🏆 Customer's Choice</Box>}
 
                       {r.quote_file_url && (
-                        <Button size="small" href={viewUrl(r.quote_file_url)} target="_blank"
+                        <Button size="small" onClick={() => openFile(r.quote_file_url)}
                           sx={{ fontSize: 10, p: 0, color: '#6366f1', minWidth: 'auto' }}>
                           View Quote ↗
                         </Button>
@@ -1357,7 +1357,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                       {r.quote_file_url ? (
                         <Box>
                           {isImage ? (
-                            <Box component="a" href={viewUrl(r.quote_file_url)} target="_blank" rel="noopener noreferrer">
+                            <Box component="a" href={r.quote_file_url} onClick={e => { e.preventDefault(); openFile(r.quote_file_url); }} rel="noopener noreferrer">
                               <Box component="img"
                                 src={r.quote_file_url.replace('/upload/', '/upload/q_auto,f_auto/')}
                                 alt={`${r.company_name} quote`}
@@ -1374,7 +1374,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                           <Chip
                             label={isImage ? 'Open full size ↗' : 'View PDF ↗'}
                             size="small" clickable
-                            component="a" href={viewUrl(r.quote_file_url)}
+                            component="a" href={r.quote_file_url} onClick={e => { e.preventDefault(); openFile(r.quote_file_url); }}
                             target="_blank"
                             sx={{ bgcolor: 'rgba(99,102,241,0.10)', color: '#6366f1', fontWeight: 600, fontSize: 11 }} />
                         </Box>
