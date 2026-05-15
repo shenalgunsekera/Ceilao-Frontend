@@ -8,23 +8,16 @@ export async function uploadToCloudinary(file, folder = 'ceilao/docs', onProgres
     throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 20 MB.`);
   }
 
-  // PDFs must go to /raw/upload/ so fl_inline works for viewing.
-  // Images and other files use /auto/upload/ as before.
-  const isPdf       = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const resourceType = isPdf ? 'raw' : 'auto';
-
   const formData = new FormData();
   formData.append('file',          file);
   formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('folder',        folder);
-  if (!isPdf) {
-    formData.append('quality',      'auto:good');
-    formData.append('fetch_format', 'auto');
-  }
+  formData.append('quality',       'auto:good');
+  formData.append('fetch_format',  'auto');
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`);
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`);
 
     if (onProgress) {
       xhr.upload.addEventListener('progress', (e) => {
