@@ -47,7 +47,7 @@ export function collectDeviceInfo() {
     browser:     getBrowser(),
     os:          getOS(),
     device_type: getDeviceType(),
-    screen:      `${screen.width}×${screen.height}`,
+    screen:      `${window.screen.width}×${window.screen.height}`,
     timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone,
     language:    navigator.language,
     user_agent:  ua.substring(0, 400),
