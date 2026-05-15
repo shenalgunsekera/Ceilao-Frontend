@@ -302,9 +302,16 @@ function StepRisk({ confirmedAssets, riskAnswers, onAnswer }) {
     return map;
   }, [relevantRules]);
 
+  const expLabels = {
+    'EXP-FIRE':'Fire & Lightning', 'EXP-MB':'Machinery Breakdown', 'EXP-BOILER':'Boiler Explosion',
+    'EXP-WCI':'Employee Injury', 'EXP-PL':'Public Liability', 'EXP-MAR':'Marine Cargo',
+    'EXP-CYBER':'Cyber / Data Breach', 'EXP-BI':'Business Interruption', 'EXP-NATCAT':'Natural Perils',
+  };
+
   if (relevantRules.length === 0) return (
     <Box sx={{ textAlign:'center', py:6 }}>
-      <Typography sx={{ color:'#9CA3AF' }}>No risk questions applicable — please confirm assets in the previous step.</Typography>
+      <Typography sx={{ color:'#9CA3AF', fontWeight:600 }}>No risk questions applicable.</Typography>
+      <Typography sx={{ fontSize:12.5, color:'#C4B5B0', mt:0.5 }}>Please confirm assets in the previous step first.</Typography>
     </Box>
   );
 
@@ -312,64 +319,94 @@ function StepRisk({ confirmedAssets, riskAnswers, onAnswer }) {
     <Box>
       {sectionHdr('Risk Assessment Questions', <AssessmentIcon />)}
       <Typography sx={{ fontSize:13, color:'#6B7280', mb:2.5 }}>
-        Answer the following questions to generate an accurate risk score and targeted recommendations.
+        Answer every question accurately. Adverse answers raise your risk score and generate targeted recommendations.
       </Typography>
       <Stack spacing={3}>
         {Object.entries(grouped).map(([expCode, rules]) => (
           <Box key={expCode}>
-            <Typography sx={{ fontWeight:700, fontSize:12, color:'#FF5A5A', textTransform:'uppercase',
-                              letterSpacing:1, mb:1.5 }}>
-              {expCode.replace('EXP-','')} Exposure
-            </Typography>
+            {/* Exposure group header */}
+            <Box sx={{ display:'flex', alignItems:'center', gap:1, mb:1.5 }}>
+              <Box sx={{ width:3, height:18, borderRadius:2, bgcolor:'#FF5A5A' }} />
+              <Typography sx={{ fontWeight:800, fontSize:12.5, color:'#FF5A5A', textTransform:'uppercase', letterSpacing:0.8 }}>
+                {expLabels[expCode] || expCode.replace('EXP-','')} Risk
+              </Typography>
+            </Box>
             <Stack spacing={1.5}>
               {rules.map(rule => {
-                const answer = riskAnswers[rule.id];
-                const isAdverse = answer === rule.answerCondition;
+                const answer    = riskAnswers[rule.id];
+                // Answered and the answer matches the adverse condition
+                const isAdverse = answer !== undefined && answer !== '' && answer === rule.answerCondition;
+                // Answered but NOT adverse (safe answer)
+                const isSafe    = answer !== undefined && answer !== '' && answer !== rule.answerCondition;
+
                 return (
                   <Box key={rule.id} sx={{
-                    p:2, borderRadius:'12px',
-                    bgcolor: isAdverse ? 'rgba(239,68,68,0.04)' : '#fff',
-                    border: isAdverse ? '1px solid rgba(239,68,68,0.20)' : '1px solid rgba(255,139,90,0.12)',
+                    p:2, borderRadius:'12px', transition:'all 0.15s',
+                    bgcolor:  isAdverse ? 'rgba(239,68,68,0.04)' : isSafe ? 'rgba(16,185,129,0.03)' : '#fff',
+                    border:   isAdverse ? '1.5px solid rgba(239,68,68,0.25)'
+                            : isSafe    ? '1.5px solid rgba(16,185,129,0.20)'
+                            :             '1px solid rgba(255,139,90,0.12)',
                   }}>
-                    <Typography sx={{ fontWeight:600, fontSize:13, mb:1 }}>{rule.question}</Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
-                      {['Yes','No','More than 10 years','More than 10 km','More than 12 months ago',
-                        'Poor','Combustible / timber / sandwich panel'].includes(rule.answerCondition)
-                        ? ['Yes','No'].map(opt => {
-                            // 'Yes' means the adverse condition is present → store the actual answerCondition text
-                            // 'No' means the adverse condition is absent → store 'No'
-                            const stored = opt === 'Yes' ? rule.answerCondition : 'No';
-                            const active  = answer === stored;
-                            const adverse = opt === 'Yes' && active;
-                            return (
-                              <Button key={opt} size="small" variant={active ? 'contained' : 'outlined'}
-                                onClick={() => onAnswer(rule.id, stored)}
-                                sx={{
-                                  fontSize:12, py:0.4, minWidth:70,
-                                  ...(active
-                                    ? { background: adverse ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#10B981,#059669)', boxShadow:'none' }
-                                    : { borderColor:'rgba(255,139,90,0.25)', color:'#6B7280' }),
-                                }}>
-                                {opt}
-                              </Button>
-                            );
-                          })
-                        : (
-                          <Select size="small" value={answer || ''} displayEmpty
-                            onChange={e => onAnswer(rule.id, e.target.value)}
-                            sx={{ fontSize:12, borderRadius:'8px', minWidth:220 }}>
-                            <MenuItem value="">— Select —</MenuItem>
-                            {[rule.answerCondition, 'Not applicable'].map(o => (
-                              <MenuItem key={o} value={o} sx={{ fontSize:12 }}>{o}</MenuItem>
-                            ))}
-                          </Select>
-                        )
-                      }
+                    <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mb:1.2 }}>
+                      <Typography sx={{ fontWeight:600, fontSize:13.5, color:'#1A1A2E', flex:1, lineHeight:1.5 }}>
+                        {rule.question}
+                      </Typography>
+                      {isAdverse && <Chip label="⚠ Risk factor" size="small" sx={{ fontSize:10, fontWeight:700, bgcolor:'rgba(239,68,68,0.10)', color:'#dc2626', height:20, flexShrink:0 }} />}
+                      {isSafe    && <Chip label="✓ Good"        size="small" sx={{ fontSize:10, fontWeight:700, bgcolor:'rgba(16,185,129,0.10)', color:'#059669',  height:20, flexShrink:0 }} />}
                     </Stack>
+
+                    {rule.options ? (
+                      // Multi-option questions (construction type, housekeeping, etc.)
+                      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap:1 }}>
+                        {rule.options.map(opt => {
+                          const sel     = answer === opt;
+                          const selAdv  = sel && opt === rule.answerCondition;
+                          const selSafe = sel && opt !== rule.answerCondition;
+                          return (
+                            <Button key={opt} size="small"
+                              variant={sel ? 'contained' : 'outlined'}
+                              onClick={() => onAnswer(rule.id, opt)}
+                              sx={{
+                                fontSize:12, py:0.5, px:1.5, textAlign:'left', justifyContent:'flex-start',
+                                ...(selAdv  ? { background:'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow:'none', color:'#fff' }
+                                  : selSafe ? { background:'linear-gradient(135deg,#10B981,#059669)', boxShadow:'none', color:'#fff' }
+                                  :           { borderColor:'rgba(107,114,128,0.3)', color:'#374151', bgcolor:'#fff',
+                                                '&:hover':{ borderColor:'#FF5A5A', bgcolor:'rgba(255,90,90,0.03)' } }),
+                              }}>
+                              {opt}
+                            </Button>
+                          );
+                        })}
+                      </Stack>
+                    ) : (
+                      // Yes / No questions — store the literal answer
+                      <Stack direction="row" spacing={1}>
+                        {['Yes', 'No'].map(opt => {
+                          const sel    = answer === opt;
+                          const selAdv = sel && opt === rule.answerCondition;
+                          const selSafe= sel && opt !== rule.answerCondition;
+                          return (
+                            <Button key={opt} size="small"
+                              variant={sel ? 'contained' : 'outlined'}
+                              onClick={() => onAnswer(rule.id, opt)}
+                              sx={{
+                                fontSize:12.5, py:0.5, minWidth:80, fontWeight:600,
+                                ...(selAdv  ? { background:'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow:'none', color:'#fff' }
+                                  : selSafe ? { background:'linear-gradient(135deg,#10B981,#059669)', boxShadow:'none', color:'#fff' }
+                                  :           { borderColor:'rgba(107,114,128,0.3)', color:'#374151',
+                                                '&:hover':{ borderColor:'#FF5A5A', bgcolor:'rgba(255,90,90,0.03)' } }),
+                              }}>
+                              {opt}
+                            </Button>
+                          );
+                        })}
+                      </Stack>
+                    )}
+
                     {isAdverse && (
                       <Alert severity="warning" icon={<WarningAmberIcon sx={{ fontSize:16 }} />}
-                        sx={{ mt:1.5, fontSize:12, py:0.5 }}>
-                        <strong>Risk Control:</strong> {rule.rmAdvice}
+                        sx={{ mt:1.5, fontSize:12.5, py:0.5, '& .MuiAlert-icon':{ py:0.5 } }}>
+                        <strong>Risk control required:</strong> {rule.rmAdvice}
                       </Alert>
                     )}
                   </Box>
@@ -555,8 +592,11 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
       {/* Exposures */}
       <Box sx={{ mb:3 }}>
         {sectionHdr('Risk Exposures Identified', <WarningAmberIcon />)}
+        {(!recs?.exposures?.length) && (
+          <Typography sx={{ color:'#9CA3AF', fontSize:13 }}>No exposures identified for the confirmed assets.</Typography>
+        )}
         <Box sx={{ display:'grid', gridTemplateColumns:{ xs:'1fr', sm:'1fr 1fr 1fr' }, gap:1.5 }}>
-          {recs.exposures.map(exp => (
+          {(recs?.exposures || []).map(exp => (
             <Box key={exp.code} sx={{ p:1.5, borderRadius:'10px', bgcolor: exp.relevance==='High' ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)', border: `1px solid ${exp.relevance==='High' ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)'}` }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Typography sx={{ fontWeight:700, fontSize:12.5 }}>{exp.name}</Typography>
@@ -574,7 +614,7 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
       <Box sx={{ mb:3 }}>
         {sectionHdr('Recommended Insurance Programme', <ShieldIcon />)}
         <Stack spacing={1.5}>
-          {recs.products.map((p, idx) => {
+          {(recs?.products || []).map((p, idx) => {
             const st   = STRENGTH_COLORS[p.strength] || STRENGTH_COLORS['Recommended'];
             const open = openProduct === p.product.code;
             return (
@@ -636,11 +676,11 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
       </Box>
 
       {/* Risk Management Advice */}
-      {recs.ruleAdvice.length > 0 && (
+      {(recs?.ruleAdvice?.length > 0) && (
         <Box>
           {sectionHdr('Risk Management Advice', <BuildIcon />)}
           <Stack spacing={1}>
-            {recs.ruleAdvice.map(r => (
+            {(recs?.ruleAdvice || []).map(r => (
               <Box key={r.rule.ruleId} sx={{ p:1.5, borderRadius:'10px', bgcolor:'rgba(99,102,241,0.04)',
                                              border:'1px solid rgba(99,102,241,0.12)', display:'flex', gap:1.5 }}>
                 <Box sx={{ width:28, height:28, borderRadius:'8px', bgcolor:'rgba(99,102,241,0.12)',
