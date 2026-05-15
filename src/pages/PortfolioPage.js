@@ -1,7 +1,18 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  collection, addDoc, onSnapshot, query, orderBy,
+  doc, updateDoc, deleteDoc, serverTimestamp,
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../App';
+import emailjs from '@emailjs/browser';
+
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import Stepper from '@mui/material/Stepper';
 import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
@@ -19,6 +30,13 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Collapse from '@mui/material/Collapse';
 import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import CircularProgress from '@mui/material/CircularProgress';
+import Snackbar from '@mui/material/Snackbar';
+import Tooltip from '@mui/material/Tooltip';
 
 import BusinessIcon from '@mui/icons-material/Business';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -35,12 +53,25 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ShieldIcon from '@mui/icons-material/Shield';
 import BuildIcon from '@mui/icons-material/Build';
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import SendIcon from '@mui/icons-material/Send';
+import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import HistoryIcon from '@mui/icons-material/History';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 
 import {
   INDUSTRIES, ASSET_EXPOSURE_MAP,
   getPortfoliosForIndustry, getAssetsForPortfolio,
   computeRecommendations, RISK_SCORING_RULES, STRENGTH_COLORS,
 } from '../config/portfolioEngine';
+
+const EMAILJS_SERVICE  = process.env.REACT_APP_EMAILJS_SERVICE_ID  || '';
+const EMAILJS_TEMPLATE = process.env.REACT_APP_EMAILJS_CUSTOMER_TEMPLATE_ID || process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '';
+const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
 
 const STEPS = [
   { label: 'Customer & Industry', icon: <BusinessIcon />   },
@@ -65,10 +96,14 @@ function StepCustomer({ data, onChange }) {
     <Box>
       {sectionHdr('Customer & Business Details', <BusinessIcon />)}
       <Box sx={{ display:'grid', gridTemplateColumns:{ xs:'1fr', sm:'1fr 1fr' }, gap:2, mb:3 }}>
-        <TextField label="Customer / Company Name" value={data.name} fullWidth
+        <TextField label="Customer / Company Name *" value={data.name} fullWidth
           onChange={e => onChange('name', e.target.value)} size="small" />
         <TextField label="Contact Person" value={data.contact || ''} fullWidth
           onChange={e => onChange('contact', e.target.value)} size="small" />
+        <TextField label="Email Address" type="email" value={data.email || ''} fullWidth
+          onChange={e => onChange('email', e.target.value)} size="small" />
+        <TextField label="Phone / WhatsApp" value={data.phone || ''} fullWidth
+          onChange={e => onChange('phone', e.target.value)} size="small" />
         <TextField label="Assessment Date" type="date" value={data.date || new Date().toISOString().split('T')[0]}
           onChange={e => onChange('date', e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
         <TextField label="Broker / Prepared By" value={data.broker || ''} fullWidth
@@ -342,7 +377,7 @@ function StepRisk({ confirmedAssets, riskAnswers, onAnswer }) {
 }
 
 // ─── Step 5: Recommendations Report ──────────────────────────────────────────
-function StepReport({ customer, industryCode, selectedPortfolios, confirmedAssets, assetData, riskAnswers }) {
+function StepReport({ customer, industryCode, selectedPortfolios, confirmedAssets, assetData, riskAnswers, onSave, onSend, savedId, saving }) {
   const recs = useMemo(() =>
     computeRecommendations(industryCode, selectedPortfolios, confirmedAssets),
   [industryCode, selectedPortfolios, confirmedAssets]);
@@ -484,16 +519,28 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
               {industry?.name || industryCode} · {confirmedAssets.length} assets · {recs.exposures.length} exposures · {recs.products.length} recommended products
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
             <Box sx={{ px:2, py:1, borderRadius:'10px', bgcolor: riskGrade.bg, textAlign:'center' }}>
               <Typography sx={{ fontSize:11, color: riskGrade.color, fontWeight:700, textTransform:'uppercase' }}>Risk Grade</Typography>
               <Typography sx={{ fontSize:22, fontWeight:900, color: riskGrade.color, lineHeight:1.1 }}>{riskGrade.label}</Typography>
               <Typography sx={{ fontSize:10, color: riskGrade.color }}>Score: {riskScore}</Typography>
             </Box>
-            <Button variant="contained" startIcon={<FileDownloadOutlinedIcon />} onClick={exportPdf}
-              sx={{ background:'linear-gradient(135deg,#E8472A,#E8712A)', flexShrink:0 }}>
-              Export PDF
-            </Button>
+            <Stack spacing={0.8}>
+              <Button variant="contained" startIcon={<FileDownloadOutlinedIcon />} onClick={exportPdf}
+                sx={{ background:'linear-gradient(135deg,#E8472A,#E8712A)', fontSize:12 }}>
+                Export PDF
+              </Button>
+              <Button variant="contained"
+                startIcon={saving ? <CircularProgress size={14} color="inherit" /> : savedId ? <CheckCircleIcon /> : <SaveOutlinedIcon />}
+                onClick={onSave} disabled={saving || !!savedId}
+                sx={{ background: savedId ? 'linear-gradient(135deg,#10B981,#059669)' : 'linear-gradient(135deg,#6366f1,#818cf8)', fontSize:12, boxShadow:'none' }}>
+                {saving ? 'Saving…' : savedId ? 'Saved ✓' : 'Save Review'}
+              </Button>
+              <Button variant="outlined" startIcon={<SendIcon />} onClick={onSend}
+                sx={{ fontSize:12, borderColor:'rgba(255,139,90,0.4)', color:'#FF8B5A' }}>
+                Send to Client
+              </Button>
+            </Stack>
           </Stack>
         </Stack>
       </Box>
@@ -608,38 +655,430 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
   );
 }
 
+// ─── Email HTML builder ───────────────────────────────────────────────────────
+function buildEmailHtml({ customer, industryName, riskGrade, recs, riskScore, customMessage, brokerName }) {
+  const products = recs.products.slice(0, 6);
+  const advice   = recs.ruleAdvice.slice(0, 4);
+  const gradeColor = { Low:'#059669', Medium:'#d97706', High:'#dc2626', Critical:'#7c2d12' }[riskGrade.label] || '#374151';
+  const gradeBg    = { Low:'#D1FAE5', Medium:'#FEF3C7', High:'#FEE2E2', Critical:'#FEE2E2' }[riskGrade.label] || '#F3F4F6';
+
+  const productRows = products.map((p, i) => `
+    <tr style="background:${i%2===0?'#fff':'#FFF8F5'};">
+      <td style="padding:9px 12px;font-weight:600;font-size:13px;color:#1A1A2E;">${i+1}. ${p.product.name}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#6B7280;">${p.product.family}</td>
+      <td style="padding:9px 12px;">
+        <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;
+          background:${p.strength.includes('Mandatory')?'#FEE2E2':p.strength==='Strong'?'#FEF3C7':'#D1FAE5'};
+          color:${p.strength.includes('Mandatory')?'#DC2626':p.strength==='Strong'?'#D97706':'#059669'};">
+          ${p.strength.includes('Mandatory')?'Mandatory':p.strength}
+        </span>
+      </td>
+    </tr>`).join('');
+
+  const adviceRows = advice.map(r => `
+    <li style="margin:6px 0;font-size:13px;color:#374151;line-height:1.6;">${r.advice}</li>`).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6;padding:20px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+  <!-- HEADER -->
+  <tr><td style="background:#1A1A2E;padding:28px 32px;text-align:center;">
+    <div style="color:#FF8B5A;font-size:20px;font-weight:bold;letter-spacing:0.5px;">CEILAO INSURANCE BROKERS</div>
+    <div style="color:#9CA3AF;font-size:11px;margin-top:5px;letter-spacing:1px;">INSURANCE BROKING &amp; RISK MANAGEMENT &nbsp;·&nbsp; SRI LANKA</div>
+  </td></tr>
+  <tr><td style="background:linear-gradient(90deg,#E8472A,#E8712A);height:4px;"></td></tr>
+
+  <!-- BODY -->
+  <tr><td style="padding:32px;">
+    <p style="font-size:15px;color:#374151;margin:0 0 8px;">Dear <strong>${customer.name || 'Valued Client'}</strong>,</p>
+    <p style="font-size:13.5px;color:#6B7280;line-height:1.7;margin:0 0 24px;">
+      Please find below your personalised <strong>Portfolio Insurance Review</strong> prepared by Ceilao Insurance Brokers.
+      This report outlines the key risks identified for your business and our professional insurance recommendations.
+    </p>
+    ${customMessage ? `<p style="font-size:13.5px;color:#374151;background:#FFF8F5;border-left:3px solid #E8472A;padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 24px;">${customMessage}</p>` : ''}
+
+    <!-- RISK GRADE -->
+    <div style="background:#F9FAFB;border-radius:10px;padding:20px;margin-bottom:24px;text-align:center;">
+      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Overall Risk Grade</div>
+      <div style="display:inline-block;background:${gradeBg};color:${gradeColor};font-size:28px;font-weight:900;padding:8px 28px;border-radius:10px;">${riskGrade.label}</div>
+      <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Risk Score: ${riskScore} &nbsp;·&nbsp; ${industryName}</div>
+    </div>
+
+    <!-- RECOMMENDED PROGRAMME -->
+    <div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:800;color:#1A1A2E;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #FEE2E2;">
+        🛡️ Recommended Insurance Programme
+      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-radius:8px;overflow:hidden;">
+        <tr style="background:#1A1A2E;">
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#FF8B5A;font-weight:700;text-transform:uppercase;">Product</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#FF8B5A;font-weight:700;text-transform:uppercase;">Category</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#FF8B5A;font-weight:700;text-transform:uppercase;">Priority</th>
+        </tr>
+        ${productRows}
+      </table>
+    </div>
+
+    ${advice.length > 0 ? `
+    <!-- RISK CONTROLS -->
+    <div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:800;color:#1A1A2E;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #EDE9FE;">
+        🔧 Key Risk Management Recommendations
+      </div>
+      <ul style="margin:0;padding-left:18px;">${adviceRows}</ul>
+    </div>` : ''}
+
+    <div style="background:#F9FAFB;border-radius:8px;padding:16px;font-size:12.5px;color:#6B7280;line-height:1.7;margin-bottom:24px;">
+      <strong style="color:#374151;">Next Steps:</strong> Please contact us to discuss your insurance programme in detail.
+      We can arrange quotations from multiple leading insurers and provide a full comparison for your review.
+    </div>
+  </td></tr>
+
+  <!-- FOOTER -->
+  <tr><td style="background:#1A1A2E;padding:20px 32px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td>
+          <div style="color:#FF8B5A;font-size:13px;font-weight:700;">${brokerName || 'Ceilao Insurance Brokers'}</div>
+          <div style="color:#9CA3AF;font-size:11px;margin-top:3px;">Ceilao Insurance Brokers (Pvt) Ltd</div>
+          <div style="color:#9CA3AF;font-size:11px;">Insurance Broking &amp; Risk Management &nbsp;·&nbsp; Sri Lanka</div>
+        </td>
+        <td align="right">
+          <div style="color:#6B7280;font-size:10px;text-align:right;">
+            This report is confidential.<br>Recommendations subject to underwriting confirmation.
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+// ─── Send to Customer Dialog ──────────────────────────────────────────────────
+function SendDialog({ open, onClose, customer, industryCode, recs, riskGrade, riskScore }) {
+  const [toEmail,   setToEmail]   = useState(customer.email  || '');
+  const [toPhone,   setToPhone]   = useState(customer.phone  || '');
+  const [message,   setMessage]   = useState('');
+  const [sending,   setSending]   = useState(false);
+  const [sent,      setSent]      = useState(false);
+  const [tab,       setTab]       = useState(0); // 0=Email 1=WhatsApp
+  const [copied,    setCopied]    = useState(false);
+  const [error,     setError]     = useState('');
+
+  const industry = INDUSTRIES.find(i => i.code === industryCode);
+
+  useEffect(() => { setToEmail(customer.email || ''); setToPhone(customer.phone || ''); }, [customer]);
+
+  const whatsappText = useMemo(() => {
+    const top5 = recs.products.slice(0, 5).map((p, i) => `${i+1}. ${p.product.name} — ${p.strength.includes('Mandatory') ? 'Mandatory' : p.strength}`).join('\n');
+    return `Dear ${customer.name || 'Valued Client'},\n\nPlease find your *Portfolio Insurance Review* from Ceilao Insurance Brokers below.\n\n*Industry:* ${industry?.name || industryCode}\n*Risk Grade:* ${riskGrade.label} (Score: ${riskScore})\n\n*Recommended Insurance Programme:*\n${top5}\n\n${message ? `${message}\n\n` : ''}Please contact us to discuss your insurance programme.\n\n${customer.broker || 'Your Broker'}\nCeilao Insurance Brokers (Pvt) Ltd\nInsurance Broking & Risk Management · Sri Lanka`;
+  }, [customer, industry, industryCode, recs, riskGrade, riskScore, message]);
+
+  const sendEmail = async () => {
+    if (!toEmail.trim()) { setError('Please enter an email address.'); return; }
+    setSending(true); setError('');
+    try {
+      const html = buildEmailHtml({ customer, industryName: industry?.name || industryCode, riskGrade, recs, riskScore, customMessage: message, brokerName: customer.broker });
+      await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+        to_email:      toEmail.trim(),
+        to_name:       customer.name || 'Valued Client',
+        reference:     `Portfolio Review — ${customer.name}`,
+        product:       industry?.name || 'Portfolio Review',
+        table_html:    html,
+        company_count: recs.products.length,
+      }, { publicKey: EMAILJS_KEY });
+      setSent(true);
+      setTimeout(() => { setSent(false); onClose(); }, 2500);
+    } catch (err) {
+      setError(err?.text || err?.message || 'Email failed. Please try again.');
+    }
+    setSending(false);
+  };
+
+  const copyWhatsApp = () => {
+    navigator.clipboard.writeText(whatsappText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  const openWhatsApp = () => {
+    const num = toPhone.replace(/\D/g,'');
+    if (num) window.open(`https://wa.me/${num.startsWith('0') ? '94'+num.slice(1) : num}?text=${encodeURIComponent(whatsappText)}`, '_blank');
+    else copyWhatsApp();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ pb:0 }}>Send Portfolio Review to Client</DialogTitle>
+      <DialogContent sx={{ pt:2 }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb:2.5, borderBottom:'1px solid rgba(255,139,90,0.12)',
+          '& .MuiTab-root': { fontSize:13, fontWeight:600, textTransform:'none' },
+          '& .Mui-selected': { color:'#E8472A' }, '& .MuiTabs-indicator': { background:'#E8472A' } }}>
+          <Tab icon={<EmailOutlinedIcon sx={{ fontSize:16 }} />} iconPosition="start" label="Email" />
+          <Tab icon={<span style={{ fontSize:15 }}>💬</span>} iconPosition="start" label="WhatsApp" />
+        </Tabs>
+
+        {tab === 0 && (
+          <Box>
+            <TextField fullWidth size="small" label="To (Email Address)" type="email"
+              value={toEmail} onChange={e => setToEmail(e.target.value)} sx={{ mb:2 }} />
+            <TextField fullWidth size="small" multiline rows={3}
+              label="Personal message (optional)" placeholder="E.g. Hi John, following our meeting…"
+              value={message} onChange={e => setMessage(e.target.value)} sx={{ mb:2 }} />
+            <Alert severity="info" sx={{ fontSize:12, mb:1.5 }}>
+              The email will include your branding, risk grade, full product recommendations, and risk management advice.
+            </Alert>
+            {error && <Alert severity="error" sx={{ fontSize:12, mb:1 }}>{error}</Alert>}
+            {sent  && <Alert severity="success" sx={{ fontSize:12, mb:1 }}>✓ Email sent successfully!</Alert>}
+          </Box>
+        )}
+
+        {tab === 1 && (
+          <Box>
+            <TextField fullWidth size="small" label="WhatsApp Number (e.g. 0771234567)"
+              value={toPhone} onChange={e => setToPhone(e.target.value)} sx={{ mb:2 }} />
+            <TextField fullWidth size="small" multiline rows={3}
+              label="Personal message (optional)" value={message}
+              onChange={e => setMessage(e.target.value)} sx={{ mb:2 }} />
+            <Box sx={{ p:2, borderRadius:'10px', bgcolor:'#F0FDF4', border:'1px solid rgba(16,185,129,0.2)', mb:2 }}>
+              <Typography sx={{ fontSize:11, fontWeight:700, color:'#059669', mb:1 }}>Message Preview</Typography>
+              <Typography sx={{ fontSize:11.5, color:'#374151', whiteSpace:'pre-line', lineHeight:1.6, fontFamily:'monospace', maxHeight:160, overflow:'auto' }}>
+                {whatsappText}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px:3, py:2, gap:1 }}>
+        <Button onClick={onClose} variant="outlined" sx={{ borderColor:'#e0e0e0', color:'#6B7280', fontSize:13 }}>Cancel</Button>
+        {tab === 0 ? (
+          <Button variant="contained" startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <SendIcon />}
+            onClick={sendEmail} disabled={sending || sent} sx={{ fontSize:13 }}>
+            {sending ? 'Sending…' : sent ? 'Sent ✓' : 'Send Email'}
+          </Button>
+        ) : (
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={copyWhatsApp}
+              sx={{ fontSize:12, borderColor:'rgba(16,185,129,0.4)', color:'#059669' }}>
+              {copied ? 'Copied!' : 'Copy Message'}
+            </Button>
+            <Button variant="contained" startIcon={<span>💬</span>} onClick={openWhatsApp}
+              sx={{ fontSize:12, background:'linear-gradient(135deg,#25D366,#128C7E)' }}>
+              Open WhatsApp
+            </Button>
+          </Stack>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ─── Saved Reviews Dashboard ─────────────────────────────────────────────────
+function SavedReviews({ onEdit }) {
+  const { user } = useAuth();
+  const [reviews,  setReviews]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState('');
+  const [viewItem, setViewItem] = useState(null);
+  const [sendItem, setSendItem] = useState(null);
+  const [deleting, setDeleting] = useState('');
+  const [toast,    setToast]    = useState({ open:false, msg:'', sev:'success' });
+
+  useEffect(() => {
+    const q = query(collection(db, 'portfolio_assessments'), orderBy('created_at', 'desc'));
+    return onSnapshot(q, snap => {
+      setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, () => setLoading(false));
+  }, []);
+
+  const gradeStyle = { Low:{ color:'#059669', bg:'rgba(16,185,129,0.10)' }, Medium:{ color:'#d97706', bg:'rgba(245,158,11,0.10)' }, High:{ color:'#dc2626', bg:'rgba(239,68,68,0.10)' }, Critical:{ color:'#7c2d12', bg:'rgba(185,28,28,0.12)' } };
+
+  const timeAgo = ts => {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const diff = Date.now() - d.getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+  };
+
+  const filtered = reviews.filter(r => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return [r.customer_name, r.industry_name, r.risk_grade].some(v => (v||'').toLowerCase().includes(q));
+  });
+
+  const handleDelete = async (id) => {
+    setDeleting(id);
+    try { await deleteDoc(doc(db, 'portfolio_assessments', id)); }
+    catch { setToast({ open:true, msg:'Delete failed', sev:'error' }); }
+    setDeleting('');
+  };
+
+  const counts = { total: reviews.length, High: reviews.filter(r=>r.risk_grade==='High'||r.risk_grade==='Critical').length, sent: reviews.filter(r=>r.status==='sent').length };
+
+  return (
+    <Box>
+      {/* Stats */}
+      <Stack direction="row" spacing={1.5} sx={{ mb:3 }}>
+        {[
+          { label:'Total Reviews',   val: counts.total,     color:'#6366f1', bg:'rgba(99,102,241,0.08)'  },
+          { label:'High / Critical', val: counts.High,      color:'#dc2626', bg:'rgba(239,68,68,0.08)'   },
+          { label:'Sent to Clients', val: counts.sent,      color:'#059669', bg:'rgba(16,185,129,0.08)'  },
+        ].map(s => (
+          <Box key={s.label} sx={{ flex:1, p:2, borderRadius:'12px', bgcolor:s.bg, border:`1px solid ${s.bg}` }}>
+            <Typography sx={{ fontSize:24, fontWeight:800, color:s.color }}>{s.val}</Typography>
+            <Typography sx={{ fontSize:11.5, color:s.color, opacity:0.8 }}>{s.label}</Typography>
+          </Box>
+        ))}
+      </Stack>
+
+      <TextField size="small" placeholder="Search by customer, industry or risk grade…"
+        value={search} onChange={e => setSearch(e.target.value)} fullWidth
+        sx={{ mb:2.5, '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+
+      {loading ? (
+        <Box sx={{ textAlign:'center', py:6 }}><CircularProgress sx={{ color:'#FF5A5A' }} /></Box>
+      ) : filtered.length === 0 ? (
+        <Box sx={{ textAlign:'center', py:6 }}>
+          <Typography sx={{ color:'#9CA3AF', fontWeight:600 }}>No saved reviews yet.</Typography>
+          <Typography sx={{ fontSize:12.5, color:'#C4B5B0', mt:0.5 }}>Complete an assessment and click "Save Review" to store it here.</Typography>
+        </Box>
+      ) : (
+        <Stack spacing={1.5}>
+          {filtered.map(r => {
+            const gs = gradeStyle[r.risk_grade] || gradeStyle.Medium;
+            return (
+              <Card key={r.id} elevation={0} sx={{ border:'1.5px solid rgba(255,139,90,0.12)', borderRadius:'12px', '&:hover': { boxShadow:'0 4px 16px rgba(255,90,90,0.08)' } }}>
+                <CardContent sx={{ p:2, '&:last-child': { pb:2 } }}>
+                  <Stack direction={{ xs:'column', sm:'row' }} justifyContent="space-between" alignItems={{ sm:'center' }} spacing={1.5}>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <Box sx={{ width:44, height:44, borderRadius:'10px', bgcolor:gs.bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        <Typography sx={{ fontWeight:900, fontSize:11, color:gs.color }}>{r.risk_grade || '—'}</Typography>
+                      </Box>
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                          <Typography sx={{ fontWeight:700, fontSize:14, color:'#1A1A2E' }}>{r.customer_name}</Typography>
+                          {r.status === 'sent' && <Chip label="Sent" size="small" sx={{ fontSize:9.5, height:16, bgcolor:'rgba(16,185,129,0.10)', color:'#059669', fontWeight:700 }} />}
+                        </Stack>
+                        <Typography sx={{ fontSize:12, color:'#6B7280' }}>
+                          {r.industry_name} · {r.recommendations_count || 0} products · {timeAgo(r.created_at)}
+                        </Typography>
+                        {(r.customer_email || r.customer_phone) && (
+                          <Typography sx={{ fontSize:11, color:'#9CA3AF' }}>
+                            {r.customer_email}{r.customer_email && r.customer_phone ? ' · ' : ''}{r.customer_phone}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} flexShrink={0}>
+                      <Tooltip title="View Report"><IconButton size="small" onClick={() => setViewItem(r)}
+                        sx={{ borderRadius:'8px', bgcolor:'rgba(99,102,241,0.08)', color:'#6366f1', '&:hover': { bgcolor:'rgba(99,102,241,0.15)' } }}>
+                        <VisibilityOutlinedIcon sx={{ fontSize:17 }} /></IconButton></Tooltip>
+                      <Tooltip title="Edit Assessment"><IconButton size="small" onClick={() => onEdit(r)}
+                        sx={{ borderRadius:'8px', bgcolor:'rgba(245,158,11,0.08)', color:'#d97706', '&:hover': { bgcolor:'rgba(245,158,11,0.15)' } }}>
+                        <EditOutlinedIcon sx={{ fontSize:17 }} /></IconButton></Tooltip>
+                      <Tooltip title="Send to Client"><IconButton size="small" onClick={() => setSendItem(r)}
+                        sx={{ borderRadius:'8px', bgcolor:'rgba(16,185,129,0.08)', color:'#059669', '&:hover': { bgcolor:'rgba(16,185,129,0.15)' } }}>
+                        <SendIcon sx={{ fontSize:17 }} /></IconButton></Tooltip>
+                      <Tooltip title="Delete"><IconButton size="small" onClick={() => handleDelete(r.id)} disabled={deleting===r.id}
+                        sx={{ borderRadius:'8px', bgcolor:'rgba(239,68,68,0.06)', color:'#dc2626', '&:hover': { bgcolor:'rgba(239,68,68,0.15)' } }}>
+                        {deleting===r.id ? <CircularProgress size={14} color="inherit" /> : <DeleteOutlineIcon sx={{ fontSize:17 }} />}
+                      </IconButton></Tooltip>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Stack>
+      )}
+
+      {/* View Report Dialog */}
+      {viewItem && (
+        <Dialog open onClose={() => setViewItem(null)} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight:'90vh' } }}>
+          <DialogTitle>Portfolio Review — {viewItem.customer_name}</DialogTitle>
+          <DialogContent dividers>
+            <StepReport
+              customer={{ name:viewItem.customer_name, email:viewItem.customer_email, phone:viewItem.customer_phone, broker:viewItem.customer_broker, date:viewItem.assessment_date }}
+              industryCode={viewItem.industry_code}
+              selectedPortfolios={viewItem.selected_portfolios || []}
+              confirmedAssets={Object.entries(viewItem.asset_data||{}).filter(([,d])=>d.present).map(([c])=>c)}
+              assetData={viewItem.asset_data || {}}
+              riskAnswers={viewItem.risk_answers || {}}
+              savedId={viewItem.id}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px:3, py:2 }}>
+            <Button onClick={() => setViewItem(null)} variant="outlined" sx={{ borderColor:'#e0e0e0', color:'#6B7280' }}>Close</Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {/* Send Dialog from saved review */}
+      {sendItem && (() => {
+        const recs = computeRecommendations(sendItem.industry_code, sendItem.selected_portfolios || [],
+          Object.entries(sendItem.asset_data||{}).filter(([,d])=>d.present).map(([c])=>c));
+        const rs = sendItem.risk_score || 0;
+        const rg = rs<=4?{label:'Low'}:rs<=8?{label:'Medium'}:rs<=14?{label:'High'}:{label:'Critical'};
+        return (
+          <SendDialog open onClose={() => setSendItem(null)}
+            customer={{ name:sendItem.customer_name, email:sendItem.customer_email, phone:sendItem.customer_phone, broker:sendItem.customer_broker }}
+            industryCode={sendItem.industry_code} recs={recs} riskGrade={rg} riskScore={rs} />
+        );
+      })()}
+
+      <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(t=>({...t,open:false}))}>
+        <Alert severity={toast.sev} variant="filled">{toast.msg}</Alert>
+      </Snackbar>
+    </Box>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PortfolioPage() {
-  const [step, setStep] = useState(0);
-  const [customer, setCustomer] = useState({ name:'', industry:'', date: new Date().toISOString().split('T')[0], contact:'', broker:'' });
+  const { user, userProfile } = useAuth();
+  const [activeTab,  setActiveTab]  = useState(0); // 0=New 1=Saved
+  const [step,       setStep]       = useState(0);
+  const [customer,   setCustomer]   = useState({ name:'', industry:'', date:new Date().toISOString().split('T')[0], contact:'', broker:'', email:'', phone:'' });
   const [selectedPortfolios, setSelectedPortfolios] = useState([]);
-  const [assetData, setAssetData] = useState({}); // { assetCode: { present, value, notes } }
-  const [riskAnswers, setRiskAnswers] = useState({}); // { ruleId: answer }
+  const [assetData,   setAssetData]   = useState({});
+  const [riskAnswers, setRiskAnswers] = useState({});
+  const [savedId,     setSavedId]     = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [sendOpen,    setSendOpen]    = useState(false);
+  const [toast,       setToast]       = useState({ open:false, msg:'', sev:'success' });
 
   const confirmedAssets = useMemo(() =>
     Object.entries(assetData).filter(([, d]) => d.present).map(([code]) => code),
   [assetData]);
 
-  const setCustomerField = useCallback((key, val) => setCustomer(c => ({ ...c, [key]: val })), []);
+  const recs = useMemo(() =>
+    computeRecommendations(customer.industry, selectedPortfolios, confirmedAssets),
+  [customer.industry, selectedPortfolios, confirmedAssets]);
 
-  const togglePortfolio = useCallback((code) => {
-    setSelectedPortfolios(prev =>
-      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
-    );
+  const riskScore = useMemo(() => {
+    let score = 0;
+    RISK_SCORING_RULES.forEach(r => { if (riskAnswers[r.id] === r.answerCondition) score += r.scoreImpact; });
+    return score;
+  }, [riskAnswers]);
+  const riskGrade = riskScore<=4?{label:'Low'}:riskScore<=8?{label:'Medium'}:riskScore<=14?{label:'High'}:{label:'Critical'};
+
+  const setCustomerField = useCallback((key, val) => setCustomer(c => ({ ...c, [key]: val })), []);
+  const togglePortfolio  = useCallback((code) => {
+    setSelectedPortfolios(prev => prev.includes(code) ? prev.filter(c=>c!==code) : [...prev,code]);
     setAssetData({});
   }, []);
-
-  const toggleAsset = useCallback((code, present) => {
-    setAssetData(prev => ({ ...prev, [code]: { ...(prev[code] || {}), present } }));
-  }, []);
-
-  const setAssetValue = useCallback((code, key, val) => {
-    setAssetData(prev => ({ ...prev, [code]: { ...(prev[code] || {}), [key]: val } }));
-  }, []);
-
-  const setRiskAnswer = useCallback((ruleId, answer) => {
-    setRiskAnswers(prev => ({ ...prev, [ruleId]: answer }));
-  }, []);
+  const toggleAsset    = useCallback((code, present) => setAssetData(prev => ({ ...prev, [code]: { ...(prev[code]||{}), present } })), []);
+  const setAssetValue  = useCallback((code, key, val) => setAssetData(prev => ({ ...prev, [code]: { ...(prev[code]||{}), [key]: val } })), []);
+  const setRiskAnswer  = useCallback((id, ans) => setRiskAnswers(prev => ({ ...prev, [id]: ans })), []);
 
   const canNext = () => {
     if (step === 0) return customer.name.trim() && customer.industry;
@@ -648,16 +1087,66 @@ export default function PortfolioPage() {
     return true;
   };
 
-  const reset = () => {
+  const reset = (keepTab = false) => {
     setStep(0);
-    setCustomer({ name:'', industry:'', date:new Date().toISOString().split('T')[0], contact:'', broker:'' });
+    setCustomer({ name:'', industry:'', date:new Date().toISOString().split('T')[0], contact:'', broker:'', email:'', phone:'' });
     setSelectedPortfolios([]);
     setAssetData({});
     setRiskAnswers({});
+    setSavedId('');
+    if (!keepTab) setActiveTab(0);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const industry = INDUSTRIES.find(i => i.code === customer.industry);
+      const docRef = await addDoc(collection(db, 'portfolio_assessments'), {
+        customer_name:          customer.name,
+        customer_email:         customer.email || '',
+        customer_phone:         customer.phone || '',
+        customer_contact:       customer.contact || '',
+        customer_broker:        customer.broker || userProfile?.full_name || '',
+        assessment_date:        customer.date,
+        industry_code:          customer.industry,
+        industry_name:          industry?.name || customer.industry,
+        selected_portfolios:    selectedPortfolios,
+        asset_data:             assetData,
+        risk_answers:           riskAnswers,
+        risk_score:             riskScore,
+        risk_grade:             riskGrade.label,
+        recommendations_count:  recs.products.length,
+        status:                 'draft',
+        created_by:             user?.uid || '',
+        created_by_name:        userProfile?.full_name || '',
+        created_at:             serverTimestamp(),
+        updated_at:             serverTimestamp(),
+      });
+      setSavedId(docRef.id);
+      setToast({ open:true, msg:'Portfolio review saved successfully!', sev:'success' });
+    } catch (err) {
+      setToast({ open:true, msg:'Save failed: ' + err.message, sev:'error' });
+    }
+    setSaving(false);
+  };
+
+  const loadSavedReview = (r) => {
+    setCustomer({
+      name: r.customer_name || '', industry: r.industry_code || '',
+      date: r.assessment_date || new Date().toISOString().split('T')[0],
+      contact: r.customer_contact || '', broker: r.customer_broker || '',
+      email: r.customer_email || '', phone: r.customer_phone || '',
+    });
+    setSelectedPortfolios(r.selected_portfolios || []);
+    setAssetData(r.asset_data || {});
+    setRiskAnswers(r.risk_answers || {});
+    setSavedId(r.id);
+    setStep(4); // go straight to recommendations
+    setActiveTab(0);
   };
 
   return (
-    <Box sx={{ maxWidth:900, mx:'auto' }}>
+    <Box sx={{ maxWidth:960, mx:'auto' }}>
       {/* Page header */}
       <Stack direction={{ xs:'column', sm:'row' }} justifyContent="space-between" alignItems={{ sm:'center' }} sx={{ mb:3 }}>
         <Box>
@@ -666,56 +1155,86 @@ export default function PortfolioPage() {
             Industry → Portfolio → Asset → Exposure → Insurance Recommendation
           </Typography>
         </Box>
-        {step > 0 && (
-          <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={reset}
+        {activeTab === 0 && step > 0 && (
+          <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={() => reset()}
             sx={{ mt:{ xs:1.5, sm:0 }, borderColor:'rgba(255,139,90,0.3)', color:'#FF8B5A', fontSize:12 }}>
             New Assessment
           </Button>
         )}
       </Stack>
 
-      {/* Stepper */}
-      <Stepper activeStep={step} alternativeLabel sx={{ mb:4,
-        '& .MuiStepLabel-label': { fontSize:12, fontWeight:600 },
-        '& .MuiStepIcon-root.Mui-active': { color:'#E8472A' },
-        '& .MuiStepIcon-root.Mui-completed': { color:'#10B981' },
-      }}>
-        {STEPS.map(s => (
-          <Step key={s.label}><StepLabel>{s.label}</StepLabel></Step>
-        ))}
-      </Stepper>
+      {/* Tabs */}
+      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb:3, borderBottom:'1px solid rgba(255,139,90,0.12)',
+        '& .MuiTab-root': { fontSize:13, fontWeight:600, textTransform:'none', color:'#9CA3AF' },
+        '& .Mui-selected': { color:'#E8472A' },
+        '& .MuiTabs-indicator': { background:'linear-gradient(90deg,#E8472A,#E8712A)', height:2.5 } }}>
+        <Tab icon={<AddCircleOutlineIcon sx={{ fontSize:17 }} />} iconPosition="start" label="New Assessment" />
+        <Tab icon={<HistoryIcon sx={{ fontSize:17 }} />} iconPosition="start" label="Saved Reviews" />
+      </Tabs>
 
-      {/* Step content */}
-      <Card elevation={0} sx={{ border:'1.5px solid rgba(255,139,90,0.12)', borderRadius:'16px', mb:3 }}>
-        <CardContent sx={{ p:3 }}>
-          {step === 0 && <StepCustomer data={customer} onChange={setCustomerField} />}
-          {step === 1 && <StepPortfolios industryCode={customer.industry} selected={selectedPortfolios} onToggle={togglePortfolio} />}
-          {step === 2 && <StepAssets industryCode={customer.industry} selectedPortfolios={selectedPortfolios} assetData={assetData} onAssetToggle={toggleAsset} onAssetValue={setAssetValue} />}
-          {step === 3 && <StepRisk confirmedAssets={confirmedAssets} riskAnswers={riskAnswers} onAnswer={setRiskAnswer} />}
-          {step === 4 && <StepReport customer={customer} industryCode={customer.industry} selectedPortfolios={selectedPortfolios} confirmedAssets={confirmedAssets} assetData={assetData} riskAnswers={riskAnswers} />}
-        </CardContent>
-      </Card>
+      {/* ── Tab 0: New Assessment wizard ── */}
+      {activeTab === 0 && (
+        <>
+          <Stepper activeStep={step} alternativeLabel sx={{ mb:4,
+            '& .MuiStepLabel-label': { fontSize:12, fontWeight:600 },
+            '& .MuiStepIcon-root.Mui-active': { color:'#E8472A' },
+            '& .MuiStepIcon-root.Mui-completed': { color:'#10B981' },
+          }}>
+            {STEPS.map(s => <Step key={s.label}><StepLabel>{s.label}</StepLabel></Step>)}
+          </Stepper>
 
-      {/* Navigation */}
-      <Stack direction="row" justifyContent="space-between">
-        <Button variant="outlined" startIcon={<ArrowBackIcon />}
-          onClick={() => setStep(s => s - 1)} disabled={step === 0}
-          sx={{ borderColor:'rgba(255,139,90,0.3)', color:'#FF8B5A', fontSize:13 }}>
-          Back
-        </Button>
-        {step < STEPS.length - 1 ? (
-          <Button variant="contained" endIcon={<ArrowForwardIcon />}
-            onClick={() => setStep(s => s + 1)} disabled={!canNext()}
-            sx={{ fontSize:13 }}>
-            {step === 3 ? 'View Recommendations' : 'Continue'}
-          </Button>
-        ) : (
-          <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={reset}
-            sx={{ borderColor:'rgba(16,185,129,0.3)', color:'#059669', fontSize:13 }}>
-            Start New Assessment
-          </Button>
-        )}
-      </Stack>
+          <Card elevation={0} sx={{ border:'1.5px solid rgba(255,139,90,0.12)', borderRadius:'16px', mb:3 }}>
+            <CardContent sx={{ p:3 }}>
+              {step === 0 && <StepCustomer data={customer} onChange={setCustomerField} />}
+              {step === 1 && <StepPortfolios industryCode={customer.industry} selected={selectedPortfolios} onToggle={togglePortfolio} />}
+              {step === 2 && <StepAssets industryCode={customer.industry} selectedPortfolios={selectedPortfolios} assetData={assetData} onAssetToggle={toggleAsset} onAssetValue={setAssetValue} />}
+              {step === 3 && <StepRisk confirmedAssets={confirmedAssets} riskAnswers={riskAnswers} onAnswer={setRiskAnswer} />}
+              {step === 4 && (
+                <StepReport
+                  customer={customer} industryCode={customer.industry}
+                  selectedPortfolios={selectedPortfolios} confirmedAssets={confirmedAssets}
+                  assetData={assetData} riskAnswers={riskAnswers}
+                  onSave={handleSave} savedId={savedId} saving={saving}
+                  onSend={() => setSendOpen(true)}
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          <Stack direction="row" justifyContent="space-between">
+            <Button variant="outlined" startIcon={<ArrowBackIcon />}
+              onClick={() => setStep(s => s - 1)} disabled={step === 0}
+              sx={{ borderColor:'rgba(255,139,90,0.3)', color:'#FF8B5A', fontSize:13 }}>
+              Back
+            </Button>
+            {step < STEPS.length - 1 ? (
+              <Button variant="contained" endIcon={<ArrowForwardIcon />}
+                onClick={() => setStep(s => s + 1)} disabled={!canNext()} sx={{ fontSize:13 }}>
+                {step === 3 ? 'View Recommendations' : 'Continue'}
+              </Button>
+            ) : (
+              <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={() => reset()}
+                sx={{ borderColor:'rgba(16,185,129,0.3)', color:'#059669', fontSize:13 }}>
+                Start New Assessment
+              </Button>
+            )}
+          </Stack>
+        </>
+      )}
+
+      {/* ── Tab 1: Saved Reviews ── */}
+      {activeTab === 1 && <SavedReviews onEdit={loadSavedReview} />}
+
+      {/* Send Dialog */}
+      {sendOpen && (
+        <SendDialog open onClose={() => setSendOpen(false)}
+          customer={customer} industryCode={customer.industry}
+          recs={recs} riskGrade={riskGrade} riskScore={riskScore} />
+      )}
+
+      <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(t=>({...t,open:false}))}>
+        <Alert severity={toast.sev} variant="filled">{toast.msg}</Alert>
+      </Snackbar>
     </Box>
   );
 }
