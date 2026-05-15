@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, deleteDoc, serverTimestamp,
+  doc, updateDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
@@ -421,7 +421,7 @@ function StepRisk({ confirmedAssets, riskAnswers, onAnswer }) {
 }
 
 // ─── Step 5: Recommendations Report ──────────────────────────────────────────
-function StepReport({ customer, industryCode, selectedPortfolios, confirmedAssets, assetData, riskAnswers, onSave, onSend, savedId, saving }) {
+function StepReport({ customer, industryCode, selectedPortfolios, confirmedAssets, assetData, riskAnswers, onSave, onSend, savedId, isSaved, saving }) {
   const recs = useMemo(() =>
     computeRecommendations(industryCode, selectedPortfolios, confirmedAssets),
   [industryCode, selectedPortfolios, confirmedAssets]);
@@ -575,10 +575,10 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
                 Export PDF
               </Button>
               <Button variant="contained"
-                startIcon={saving ? <CircularProgress size={14} color="inherit" /> : savedId ? <CheckCircleIcon /> : <SaveOutlinedIcon />}
-                onClick={onSave} disabled={saving || !!savedId}
-                sx={{ background: savedId ? 'linear-gradient(135deg,#10B981,#059669)' : 'linear-gradient(135deg,#6366f1,#818cf8)', fontSize:12, boxShadow:'none' }}>
-                {saving ? 'Saving…' : savedId ? 'Saved ✓' : 'Save Review'}
+                startIcon={saving ? <CircularProgress size={14} color="inherit" /> : isSaved ? <CheckCircleIcon /> : <SaveOutlinedIcon />}
+                onClick={onSave} disabled={saving || isSaved}
+                sx={{ background: isSaved ? 'linear-gradient(135deg,#10B981,#059669)' : savedId ? 'linear-gradient(135deg,#d97706,#f59e0b)' : 'linear-gradient(135deg,#6366f1,#818cf8)', fontSize:12, boxShadow:'none' }}>
+                {saving ? 'Saving…' : isSaved ? 'Saved ✓' : savedId ? 'Save Changes' : 'Save Review'}
               </Button>
               <Button variant="outlined" startIcon={<SendIcon />} onClick={onSend}
                 sx={{ fontSize:12, borderColor:'rgba(255,139,90,0.4)', color:'#FF8B5A' }}>
@@ -929,7 +929,8 @@ function SendDialog({ open, onClose, customer, industryCode, recs, riskGrade, ri
 function SavedReviews({ onEdit }) {
   const [reviews,  setReviews]  = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState('');
+  const [search,      setSearch]      = useState('');
+  const [filterGrade, setFilterGrade] = useState('all'); // all | Low | Medium | High | Critical
   const [viewItem, setViewItem] = useState(null);
   const [sendItem, setSendItem] = useState(null);
   const [deleting, setDeleting] = useState('');
@@ -956,9 +957,11 @@ function SavedReviews({ onEdit }) {
   };
 
   const filtered = reviews.filter(r => {
+    if (filterGrade !== 'all' && r.risk_grade !== filterGrade) return false;
     if (!search) return true;
     const q = search.toLowerCase();
-    return [r.customer_name, r.industry_name, r.risk_grade].some(v => (v||'').toLowerCase().includes(q));
+    return [r.customer_name, r.industry_name, r.risk_grade, r.customer_email, r.customer_broker]
+      .some(v => (v||'').toLowerCase().includes(q));
   });
 
   const handleDelete = async (id) => {
@@ -986,9 +989,27 @@ function SavedReviews({ onEdit }) {
         ))}
       </Stack>
 
-      <TextField size="small" placeholder="Search by customer, industry or risk grade…"
-        value={search} onChange={e => setSearch(e.target.value)} fullWidth
-        sx={{ mb:2.5, '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+      {/* Search + grade filter */}
+      <Stack direction={{ xs:'column', sm:'row' }} spacing={1.5} alignItems="center" sx={{ mb:2.5 }}>
+        <TextField size="small" placeholder="Search by customer, industry, broker…"
+          value={search} onChange={e => setSearch(e.target.value)}
+          sx={{ flex:1, '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+        <Stack direction="row" spacing={0.8} flexShrink={0}>
+          {['all','Low','Medium','High','Critical'].map(g => {
+            const gc = { all:{bg:'rgba(99,102,241,0.10)',c:'#6366f1'}, Low:{bg:'rgba(16,185,129,0.10)',c:'#059669'}, Medium:{bg:'rgba(245,158,11,0.10)',c:'#d97706'}, High:{bg:'rgba(239,68,68,0.10)',c:'#dc2626'}, Critical:{bg:'rgba(124,45,18,0.10)',c:'#7c2d12'} };
+            const active = filterGrade === g;
+            return (
+              <Chip key={g} label={g === 'all' ? 'All' : g} size="small" clickable
+                onClick={() => setFilterGrade(g)}
+                sx={{ fontSize:11.5, fontWeight:700, height:26,
+                  bgcolor: active ? gc[g].bg : 'transparent',
+                  color:   active ? gc[g].c  : '#9CA3AF',
+                  border:  active ? `1.5px solid ${gc[g].c}` : '1.5px solid rgba(107,114,128,0.20)',
+                }} />
+            );
+          })}
+        </Stack>
+      </Stack>
 
       {loading ? (
         <Box sx={{ textAlign:'center', py:6 }}><CircularProgress sx={{ color:'#FF5A5A' }} /></Box>
@@ -1097,7 +1118,8 @@ export default function PortfolioPage() {
   const [selectedPortfolios, setSelectedPortfolios] = useState([]);
   const [assetData,   setAssetData]   = useState({});
   const [riskAnswers, setRiskAnswers] = useState({});
-  const [savedId,     setSavedId]     = useState('');
+  const [savedId,     setSavedId]     = useState('');  // Firestore doc ID of existing review
+  const [isSaved,     setIsSaved]     = useState(false); // true = current state matches saved state
   const [saving,      setSaving]      = useState(false);
   const [sendOpen,    setSendOpen]    = useState(false);
   const [toast,       setToast]       = useState({ open:false, msg:'', sev:'success' });
@@ -1117,14 +1139,17 @@ export default function PortfolioPage() {
   }, [riskAnswers]);
   const riskGrade = riskScore<=4?{label:'Low'}:riskScore<=8?{label:'Medium'}:riskScore<=14?{label:'High'}:{label:'Critical'};
 
-  const setCustomerField = useCallback((key, val) => setCustomer(c => ({ ...c, [key]: val })), []);
+  const markUnsaved = () => setIsSaved(false);
+
+  const setCustomerField = useCallback((key, val) => { setCustomer(c => ({ ...c, [key]: val })); markUnsaved(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const togglePortfolio  = useCallback((code) => {
     setSelectedPortfolios(prev => prev.includes(code) ? prev.filter(c=>c!==code) : [...prev,code]);
     setAssetData({});
-  }, []);
-  const toggleAsset    = useCallback((code, present) => setAssetData(prev => ({ ...prev, [code]: { ...(prev[code]||{}), present } })), []);
-  const setAssetValue  = useCallback((code, key, val) => setAssetData(prev => ({ ...prev, [code]: { ...(prev[code]||{}), [key]: val } })), []);
-  const setRiskAnswer  = useCallback((id, ans) => setRiskAnswers(prev => ({ ...prev, [id]: ans })), []);
+    markUnsaved();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleAsset    = useCallback((code, present) => { setAssetData(prev => ({ ...prev, [code]: { ...(prev[code]||{}), present } })); markUnsaved(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setAssetValue  = useCallback((code, key, val) => { setAssetData(prev => ({ ...prev, [code]: { ...(prev[code]||{}), [key]: val } })); markUnsaved(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setRiskAnswer  = useCallback((id, ans) => { setRiskAnswers(prev => ({ ...prev, [id]: ans })); markUnsaved(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canNext = () => {
     if (step === 0) return customer.name.trim() && customer.industry;
@@ -1140,6 +1165,7 @@ export default function PortfolioPage() {
     setAssetData({});
     setRiskAnswers({});
     setSavedId('');
+    setIsSaved(false);
     if (!keepTab) setActiveTab(0);
   };
 
@@ -1147,7 +1173,7 @@ export default function PortfolioPage() {
     setSaving(true);
     try {
       const industry = INDUSTRIES.find(i => i.code === customer.industry);
-      const docRef = await addDoc(collection(db, 'portfolio_assessments'), {
+      const payload = {
         customer_name:          customer.name,
         customer_email:         customer.email || '',
         customer_phone:         customer.phone || '',
@@ -1161,15 +1187,27 @@ export default function PortfolioPage() {
         risk_answers:           riskAnswers,
         risk_score:             riskScore,
         risk_grade:             riskGrade.label,
-        recommendations_count:  recs.products.length,
+        recommendations_count:  (recs?.products || []).length,
         status:                 'draft',
-        created_by:             user?.uid || '',
-        created_by_name:        userProfile?.full_name || '',
-        created_at:             serverTimestamp(),
         updated_at:             serverTimestamp(),
-      });
-      setSavedId(docRef.id);
-      setToast({ open:true, msg:'Portfolio review saved successfully!', sev:'success' });
+      };
+
+      if (savedId) {
+        // Update existing review
+        await updateDoc(doc(db, 'portfolio_assessments', savedId), payload);
+        setToast({ open:true, msg:'Portfolio review updated successfully!', sev:'success' });
+      } else {
+        // Create new review
+        const docRef = await addDoc(collection(db, 'portfolio_assessments'), {
+          ...payload,
+          created_by:      user?.uid || '',
+          created_by_name: userProfile?.full_name || '',
+          created_at:      serverTimestamp(),
+        });
+        setSavedId(docRef.id);
+        setToast({ open:true, msg:'Portfolio review saved successfully!', sev:'success' });
+      }
+      setIsSaved(true);
     } catch (err) {
       setToast({ open:true, msg:'Save failed: ' + err.message, sev:'error' });
     }
@@ -1187,7 +1225,8 @@ export default function PortfolioPage() {
     setAssetData(r.asset_data || {});
     setRiskAnswers(r.risk_answers || {});
     setSavedId(r.id);
-    setStep(4); // go straight to recommendations
+    setIsSaved(true);  // just loaded — no unsaved changes yet
+    setStep(4);
     setActiveTab(0);
   };
 
@@ -1240,7 +1279,7 @@ export default function PortfolioPage() {
                   customer={customer} industryCode={customer.industry}
                   selectedPortfolios={selectedPortfolios} confirmedAssets={confirmedAssets}
                   assetData={assetData} riskAnswers={riskAnswers}
-                  onSave={handleSave} savedId={savedId} saving={saving}
+                  onSave={handleSave} savedId={savedId} isSaved={isSaved} saving={saving}
                   onSend={() => setSendOpen(true)}
                 />
               )}
