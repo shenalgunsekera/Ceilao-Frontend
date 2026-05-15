@@ -452,14 +452,21 @@ function StepReport({ customer, industryCode, selectedPortfolios, confirmedAsset
       });
     }
 
-    // Footer
+    // Footer — 18mm tall, two lines
     const ph = pdf.internal.pageSize.getHeight();
-    pdf.setFillColor(26,26,46); pdf.rect(0, ph-12, pw, 12,'F');
-    pdf.setFontSize(7.5); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,139,90);
-    pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', 12, ph-6.5);
-    pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(148,163,184);
-    pdf.text('This report is confidential and prepared for the named client only. Recommendations subject to underwriting confirmation.', pw/2, ph-6.5, {align:'center'});
-    pdf.text(`Generated: ${today}`, pw-12, ph-6.5, {align:'right'});
+    pdf.setFillColor(26,26,46);  pdf.rect(0, ph-18, pw, 18, 'F');
+    pdf.setFillColor(232,71,42); pdf.rect(0, ph-18, pw, 1.5, 'F');
+    // Line 1: company name (left) + date (right)
+    pdf.setFontSize(8); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,139,90);
+    pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', 12, ph-11);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(107,114,128);
+    pdf.text(`Generated: ${today}`, pw-12, ph-11, {align:'right'});
+    // Line 2: confidential note centred
+    pdf.setFont('helvetica','italic'); pdf.setFontSize(6.5); pdf.setTextColor(148,163,184);
+    pdf.text(
+      'This report is confidential and prepared for the named client only.  Recommendations subject to underwriting confirmation.',
+      pw/2, ph-4.5, {align:'center'}
+    );
 
     pdf.save(`CeilaoIB_PortfolioReview_${(customer.name||'Client').replace(/\s+/g,'_')}.pdf`);
   };
