@@ -115,6 +115,29 @@ const ClientDetailsModal = ({ client, onClose }) => {
       const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
       const fmtLKR = v => v ? `LKR ${Number(v).toLocaleString()}` : '—';
 
+      // ── Tab navigation ────────────────────────────────────────────────────
+      const PDF_TABS = [
+        { key:'general',    label:'General'    },
+        { key:'policy',     label:'Policy'     },
+        { key:'address',    label:'Address'    },
+        { key:'contact',    label:'Contact'    },
+        { key:'proofs',     label:'Proofs'     },
+        { key:'financials', label:'Financials' },
+        { key:'commission', label:'Commission' },
+        { key:'documents',  label:'Documents'  },
+      ];
+      const TAB_H = 8;               // height of tab bar in mm
+      const sectionPages = {};       // { key: firstPageNumber }
+      const pageToSection = {};      // { pageNumber: key }
+      let   currentSection = 'general';
+
+      const startSec = (key) => {
+        currentSection = key;
+        const p = pdf.internal.getCurrentPageInfo().pageNumber;
+        if (!sectionPages[key]) sectionPages[key] = p;
+        if (!pageToSection[p])  pageToSection[p]  = key;
+      };
+
       const drawHeader = () => {
         pdf.setFillColor(26,26,46);  pdf.rect(0,0,pw,20,'F');
         pdf.setFillColor(232,71,42); pdf.rect(0,20,pw,2.5,'F');
@@ -140,44 +163,50 @@ const ClientDetailsModal = ({ client, onClose }) => {
       // ── Page 1 ──────────────────────────────────────────────────────────────
       drawHeader();
 
-      // Title band
-      pdf.setFillColor(249,250,251); pdf.rect(0,22.5,pw,13,'F');
+      // Title band (shifted down by TAB_H)
+      pdf.setFillColor(249,250,251); pdf.rect(0, 22.5+TAB_H, pw, 13, 'F');
       pdf.setFontSize(10); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
-      pdf.text('UNDERWRITING RECORD', 14, 30.5);
+      pdf.text('UNDERWRITING RECORD', 14, 30.5+TAB_H);
       pdf.setFontSize(7.5); pdf.setFont('helvetica','normal'); pdf.setTextColor(107,114,128);
       const fileRef = [client.ceilao_ib_file_no && `File: ${client.ceilao_ib_file_no}`, client.policy_no && `Policy: ${client.policy_no}`].filter(Boolean).join('   ·   ');
-      if (fileRef) pdf.text(fileRef, pw-14, 30.5, {align:'right'});
+      if (fileRef) pdf.text(fileRef, pw-14, 30.5+TAB_H, {align:'right'});
 
-      // Client banner
-      pdf.setFillColor(232,71,42); pdf.rect(0,35.5,pw,15,'F');
+      // Client banner (shifted down by TAB_H)
+      pdf.setFillColor(232,71,42); pdf.rect(0, 35.5+TAB_H, pw, 15, 'F');
       pdf.setFontSize(13); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,255,255);
-      pdf.text(client.client_name || '—', 14, 44.5);
+      pdf.text(client.client_name || '—', 14, 44.5+TAB_H);
       const tags = [client.main_class, client.product, client.customer_type].filter(Boolean);
       let tx = pw - 14;
       [...tags].reverse().forEach(t => {
         const tw = pdf.getTextWidth(t) + 10;
         tx -= tw;
         pdf.setFillColor(200,50,30);
-        pdf.roundedRect(tx, 38.5, tw, 8, 2, 2, 'F');
+        pdf.roundedRect(tx, 38.5+TAB_H, tw, 8, 2, 2, 'F');
         pdf.setFontSize(7); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,255,255);
-        pdf.text(t, tx + tw/2, 43.5, {align:'center'});
+        pdf.text(t, tx + tw/2, 43.5+TAB_H, {align:'center'});
         tx -= 3;
       });
 
-      let y = 55;
+      let y = 55 + TAB_H;
       const tableOpts = (startY) => ({
         startY,
         columnStyles: { 0:{ cellWidth:58, fontStyle:'bold', fillColor:[255,248,245], textColor:[55,65,81] }, 1:{ textColor:[26,26,46] } },
         styles: { fontSize:9, cellPadding:{top:3,bottom:3,left:6,right:6}, lineColor:[255,220,200], lineWidth:0.1 },
         bodyStyles: { fillColor:[255,255,255] },
         alternateRowStyles: { fillColor:[255,252,250] },
-        margin: { left:10, right:10, top:26, bottom:16 },
-        didDrawPage: (d) => { if (d.pageNumber > 1) drawHeader(); },
+        margin: { left:10, right:10, top: 26+TAB_H, bottom:16 },
+        didDrawPage: (d) => {
+          if (d.pageNumber > 1) {
+            drawHeader();
+            if (!pageToSection[d.pageNumber]) pageToSection[d.pageNumber] = currentSection;
+          }
+        },
       });
 
-      const addSection = (title, rows) => {
+      const addSection = (sectionKey, title, rows) => {
         const filtered = rows.filter(r => r[1]);
         if (!filtered.length) return;
+        startSec(sectionKey);
         autoTable(pdf, {
           ...tableOpts(y),
           head: [[{ content:title, colSpan:2, styles:{fillColor:[26,26,46],textColor:[255,139,90],fontStyle:'bold',fontSize:8.5,cellPadding:{top:3.5,bottom:3.5,left:6,right:6}} }]],
@@ -186,7 +215,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         y = pdf.lastAutoTable.finalY + 5;
       };
 
-      addSection('GENERAL INFORMATION', [
+      addSection('general', 'GENERAL INFORMATION', [
         ['Client Name',          client.client_name],
         ['Customer Type',        client.customer_type],
         ['Insurance Provider',   client.insurance_provider],
@@ -200,7 +229,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Sales Rep ID',         client.sales_rep_id],
       ]);
 
-      addSection('POLICY DETAILS', [
+      addSection('policy', 'POLICY DETAILS', [
         ['Policy No',            client.policy_no],
         ['Policy Type',          client.policy_type],
         ['Coverage',             client.coverage],
@@ -208,7 +237,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Policy Period To',     client.policy_period_to],
       ]);
 
-      addSection('ADDRESS', [
+      addSection('address', 'ADDRESS', [
         ['Street 1',  client.street1],
         ['Street 2',  client.street2],
         ['City',      client.city],
@@ -216,7 +245,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Province',  client.province],
       ]);
 
-      addSection('CONTACT', [
+      addSection('contact', 'CONTACT', [
         ['Mobile No',       client.mobile_no],
         ['Telephone',       client.telephone],
         ['Email',           client.email],
@@ -224,7 +253,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Social Media',    client.social_media],
       ]);
 
-      addSection('IDENTIFICATION & PROOFS', [
+      addSection('proofs', 'IDENTIFICATION & PROOFS', [
         ['NIC Proof',              client.nic_proof],
         ['DOB Proof',              client.dob_proof],
         ['Business Registration',  client.business_registration],
@@ -233,6 +262,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
       ]);
 
       // Financial Summary
+      startSec('financials');
       const finRows = [
         ['Sum Insured',     fmtLKR(client.sum_insured)],
         ['Basic Premium',   fmtLKR(client.basic_premium)],
@@ -265,7 +295,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
       });
       y = pdf.lastAutoTable.finalY + 5;
 
-      addSection('COMMISSION', [
+      addSection('commission', 'COMMISSION', [
         ['Commission Type',  client.commission_type],
         ['Commission Basic', client.commission_basic ? fmtLKR(client.commission_basic) : null],
         ['Commission SRCC',  client.commission_srcc  ? fmtLKR(client.commission_srcc)  : null],
@@ -277,11 +307,12 @@ const ClientDetailsModal = ({ client, onClose }) => {
       if (uploadedDocs.length > 0) {
         pdf.addPage();
         drawHeader();
+        startSec('documents');
 
         const margL = 10, gap = 8, cols = 2;
         const colW = (pw - margL * 2 - gap * (cols - 1)) / cols;
         const imgMaxH = 110, labelH = 14, cellH = labelH + imgMaxH + 8;
-        let docY = 28, docCol = 0;
+        let docY = 22.5 + TAB_H + 6, docCol = 0;
 
         const addDocPageHdr = (title) => {
           pdf.setFillColor(26,26,46); pdf.rect(margL, docY, pw - margL*2, 9, 'F');
@@ -378,9 +409,33 @@ const ClientDetailsModal = ({ client, onClose }) => {
         }
       }
 
-      // Draw footers on every page in one pass (avoids didDrawPage timing issues)
-      const total = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= total; i++) { pdf.setPage(i); drawFooter(); }
+      // Second pass: draw tab bar + footer on every page
+      const total  = pdf.internal.getNumberOfPages();
+      const tabW   = pw / PDF_TABS.length;
+      for (let i = 1; i <= total; i++) {
+        pdf.setPage(i);
+        const active = pageToSection[i] || 'general';
+
+        // Tab bar strip
+        pdf.setFillColor(22,26,48); pdf.rect(0, 22.5, pw, TAB_H, 'F');
+        PDF_TABS.forEach((t, idx) => {
+          const tx    = idx * tabW;
+          const isAct = t.key === active;
+          // Active indicator underline
+          if (isAct) { pdf.setFillColor(232,71,42); pdf.rect(tx, 22.5+TAB_H-1.5, tabW, 1.5, 'F'); }
+          // Label
+          pdf.setFontSize(6); pdf.setFont('helvetica', isAct ? 'bold' : 'normal');
+          const [r,g,b] = isAct ? [255,255,255] : [148,163,184];
+          pdf.setTextColor(r,g,b);
+          pdf.text(t.label, tx + tabW/2, 22.5 + TAB_H/2 + 1.5, {align:'center'});
+          // Clickable link to the section's first page
+          if (sectionPages[t.key] && sectionPages[t.key] !== i) {
+            pdf.link(tx, 22.5, tabW, TAB_H, {pageNumber: sectionPages[t.key]});
+          }
+        });
+
+        drawFooter();
+      }
 
       const safeName = (client.client_name || 'Client').replace(/\s+/g, '_').replace(/[^\w-]/g,'');
       const safeRef  = (client.policy_no || client.ceilao_ib_file_no || 'Record').replace(/[^\w-]/g,'');
