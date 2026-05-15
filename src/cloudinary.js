@@ -52,36 +52,22 @@ export async function uploadToCloudinary(file, folder = 'ceilao/docs', onProgres
   });
 }
 
-// Returns a viewable URL for a Cloudinary file.
-// Raw-type PDFs (/raw/upload/) get fl_inline — browser shows them inline.
-// Image-type PDFs (/image/upload/) are legacy; openFile() handles those via blob.
-// Images get fl_inline + quality transforms.
+// Returns a viewable URL for Cloudinary images.
+// Never call this for PDFs — use openFile() instead.
 export function viewUrl(url) {
-  if (!url) return url;
-  const isPdf = /\.pdf(\?|$)/i.test(url);
-  if (isPdf && url.includes('/raw/upload/'))
-    return url.replace('/raw/upload/', '/raw/upload/fl_inline/');
-  if (!url.includes('cloudinary.com')) return url;
+  if (!url || !url.includes('cloudinary.com')) return url;
   const isImage = /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url);
   if (!isImage) return url;
   return url.replace('/upload/', '/upload/fl_inline,q_auto,f_auto/');
 }
 
 // Opens any file in a new tab with inline display.
-// New raw-type PDFs: direct fl_inline link works.
-// Legacy image-type PDFs: fetch + Blob URL so browser shows inline.
-// Images: Cloudinary fl_inline URL.
+// All PDFs use a client-side fetch + Blob URL so the browser's native PDF
+// viewer always shows inline regardless of Cloudinary plan or Content-Disposition.
 export async function openFile(url) {
   if (!url) return;
   const isPdf = /\.pdf(\?|$)/i.test(url);
   if (isPdf) {
-    const direct = viewUrl(url);
-    if (direct !== url) {
-      // raw/upload — fl_inline works, open directly
-      window.open(direct, '_blank');
-      return;
-    }
-    // Legacy image/upload PDF — use client-side blob so browser shows inline
     try {
       const res     = await fetch(url);
       if (!res.ok) throw new Error('fetch failed');
