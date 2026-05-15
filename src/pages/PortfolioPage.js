@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, updateDoc, deleteDoc, serverTimestamp,
+  doc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
@@ -880,7 +880,6 @@ function SendDialog({ open, onClose, customer, industryCode, recs, riskGrade, ri
 
 // ─── Saved Reviews Dashboard ─────────────────────────────────────────────────
 function SavedReviews({ onEdit }) {
-  const { user } = useAuth();
   const [reviews,  setReviews]  = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [search,   setSearch]   = useState('');
