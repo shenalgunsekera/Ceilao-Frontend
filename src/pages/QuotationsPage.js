@@ -1779,16 +1779,50 @@ const QuotationsPage = () => {
     setToast({ open: true, msg: `${response.company_name} selected. Forwarding to Underwriting…`, severity: 'success' });
     setCompareQuote(null);
     setTimeout(() => {
-      const fd = quote.form_data || {};
-      // Full mapping: quote form data + insurer response → underwriting form
+      const fd  = quote.form_data || {};
+      const key = quote.product_key || '';
+
+      // Map product_key → Main Class dropdown value
+      const mainClassMap = { motor:'Motor', fire:'Fire', marine:'Marine' };
+      const mainClass = mainClassMap[key] || 'Miscellaneous';
+
+      // Map product_key + form fields → Product dropdown value
+      const productValue = (() => {
+        if (key === 'motor') {
+          const tc = fd.type_of_cover || '';
+          if (tc === 'Comprehensive')                     return 'Comprehensive';
+          if (tc === 'Third Party')                       return 'Third Party';
+          if (tc.includes('Third Party Fire'))            return 'Third Party Fire and Theft';
+          return tc || 'Comprehensive';
+        }
+        if (key === 'fire')              return 'Fire & Allied Perils';
+        if (key === 'marine')            return fd.marine_type || 'Import Marine';
+        if (key === 'surgical')          return fd.plan_type || fd.policy_type || 'Surgical & Hospitalisation';
+        if (key === 'personal_accidents')return 'Group Personal Accident';
+        if (key === 'wci')               return fd.type_of_cover || 'Workmen Compensation';
+        if (key === 'public_liability')  return 'Public Liability';
+        if (key === 'fgt')               return 'Fidelity Guarantee';
+        if (key === 'travel')            return 'Travel Insurance';
+        if (key === 'cyber')             return 'Cyber Insurance';
+        if (key === 'life_endowment')    return 'Life / Endowment';
+        if (key === 'dtap')              return 'Group Personal Accident';
+        if (key === 'ear')               return 'Engineering All Risks';
+        if (key === 'car')               return 'Contractors All Risks';
+        if (key === 'product_liability') return 'Product Liability';
+        if (key === 'title_insurance')   return 'Title Insurance';
+        return quote.product_label || 'Other';
+      })();
+
       const prefill = {
         _quote_id:          quote.id,
-        // Insurer & policy
+        // Class & product — auto-mapped from product_key
+        main_class:         mainClass,
+        product:            productValue,
+        // Insurer from selected response
         insurance_provider: response.company_name,
         insurer:            response.company_name,
         policy_type:        quote.product_label || '',
-        main_class:         quote.product_label || '',
-        coverage:           fd.cover_type || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
+        coverage:           fd.type_of_cover || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
         // Premium breakdown from insurer response
         basic_premium:      String(response.basic_premium || response.premium || ''),
         srcc_premium:       String(response.srcc_premium  || ''),
@@ -1799,9 +1833,9 @@ const QuotationsPage = () => {
         total_invoice:      String(response.premium       || ''),
         // Commission from insurer
         commission_type:    response.commission_type || '',
-        // Risk / sum insured from quote form
-        sum_insured:        String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || ''),
-        // Client details — standardised field names across all 14 products
+        // Sum insured — tries all common field names across 16 products
+        sum_insured:        String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || fd.cover_limit || fd.hospitalization_cover || ''),
+        // Client details
         client_name:        fd.proposer_name || fd.company_name || fd.full_name || '',
         customer_type:      fd.customer_type === 'Corporate' ? 'Company' : (fd.customer_type || ''),
         introducer_code:    fd.introducer    || '',
@@ -1809,15 +1843,17 @@ const QuotationsPage = () => {
         mobile_no:          fd.mobile        || '',
         telephone:          fd.telephone     || '',
         contact_person:     fd.contact_person || '',
-        // NIC or Business Registration
-        nic_br:             fd.nic_no || fd.business_reg || '',
+        // Proofs — map to correct UW form field names
+        nic_proof:            fd.nic_no    || '',
+        business_registration: fd.business_reg || '',
+        svat_proof:            fd.vat_no   || '',
         // Address
         street1:            fd.address || fd.property_address || fd.address_of_risk || '',
-        city:               fd.city || fd.district || '',
+        city:               fd.city    || fd.district || '',
         // Policy period
-        policy_period_from: fd.period_from || fd.departure_date || fd.loan_start || '',
-        policy_period_to:   fd.period_to   || fd.return_date    || fd.loan_end   || '',
-        // Vehicle (motor)
+        policy_period_from: fd.period_from  || fd.departure_date || fd.loan_start || '',
+        policy_period_to:   fd.period_to    || fd.return_date    || fd.loan_end   || '',
+        // Vehicle (motor only)
         vehicle_number:     fd.vehicle_no || '',
       };
       window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
