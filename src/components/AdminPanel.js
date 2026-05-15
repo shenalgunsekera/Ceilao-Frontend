@@ -14,6 +14,7 @@ import PendingApprovals from './PendingApprovals';
 import CreateAccountModal from './CreateAccountModal';
 import InsuranceCompaniesManager from './InsuranceCompaniesManager';
 import ModuleAccessManager from './ModuleAccessManager';
+import DevicesManager from './DevicesManager';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -53,6 +54,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import DevicesOtherIcon from '@mui/icons-material/DevicesOther';
 
 /* ── colour maps ─────────────────────────────────────────────────────────── */
 const PRIORITY_COLORS = {
@@ -578,6 +580,7 @@ const AdminPanel = () => {
         <Tab icon={<BackupOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Data Backup" />
         <Tab icon={<EditOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start"
           label={`Re-edit Requests${reditRequests.filter(r => r.status === 'pending').length ? ` (${reditRequests.filter(r => r.status === 'pending').length})` : ''}`} />
+        <Tab icon={<DevicesOtherIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Devices" />
       </Tabs>
 
       {/* ── TICKETS TAB ── */}
@@ -834,6 +837,19 @@ const AdminPanel = () => {
               </Card>
             );
           })}
+        </Box>
+      )}
+
+      {/* ── DEVICES TAB ── */}
+      {tab === 7 && (
+        <Box>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Device Management</Typography>
+            <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>
+              Track every device that logs into the system and control access with Lockdown Mode
+            </Typography>
+          </Box>
+          <DevicesManager />
         </Box>
       )}
 
