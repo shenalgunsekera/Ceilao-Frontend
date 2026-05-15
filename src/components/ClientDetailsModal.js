@@ -13,6 +13,7 @@ import Tab from '@mui/material/Tab';
 import Link from '@mui/material/Link';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
+import CircularProgress from '@mui/material/CircularProgress';
 
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
@@ -21,6 +22,7 @@ import PolicyOutlinedIcon from '@mui/icons-material/PolicyOutlined';
 import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 
 const docFields = [
   { label:'Policyholder',     doc:'policyholder_doc_url',     text:'policyholder_text' },
@@ -98,8 +100,274 @@ function DocCard({ label, url, description }) {
 }
 
 const ClientDetailsModal = ({ client, onClose }) => {
-  const [tab, setTab] = useState(0);
+  const [tab,       setTab]       = useState(0);
+  const [exporting, setExporting] = useState(false);
   if (!client) return null;
+
+  const generatePdf = async () => {
+    setExporting(true);
+    try {
+      const { default: jsPDF }     = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+      const pdf   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pw    = pdf.internal.pageSize.getWidth();
+      const ph    = pdf.internal.pageSize.getHeight();
+      const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const fmtLKR = v => v ? `LKR ${Number(v).toLocaleString()}` : '—';
+
+      const drawHeader = () => {
+        pdf.setFillColor(26,26,46);  pdf.rect(0,0,pw,20,'F');
+        pdf.setFillColor(232,71,42); pdf.rect(0,20,pw,2.5,'F');
+        pdf.setFontSize(11); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,139,90);
+        pdf.text('CEILAO INSURANCE BROKERS (PVT) LTD', pw/2, 9, {align:'center'});
+        pdf.setFontSize(7.5); pdf.setFont('helvetica','normal'); pdf.setTextColor(148,163,184);
+        pdf.text('INSURANCE BROKING & RISK MANAGEMENT  ·  SRI LANKA', pw/2, 15.5, {align:'center'});
+      };
+
+      const drawFooter = () => {
+        const pn = pdf.internal.getCurrentPageInfo().pageNumber;
+        const tp = pdf.internal.getNumberOfPages();
+        pdf.setFillColor(26,26,46);  pdf.rect(0, ph-14, pw, 14, 'F');
+        pdf.setFillColor(232,71,42); pdf.rect(0, ph-14, pw, 1, 'F');
+        pdf.setFont('helvetica','bold'); pdf.setFontSize(7.5); pdf.setTextColor(255,139,90);
+        pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', 12, ph-8);
+        pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(107,114,128);
+        pdf.text(`Page ${pn} / ${tp}`, pw-12, ph-8, {align:'right'});
+        pdf.setFont('helvetica','italic'); pdf.setFontSize(6.5); pdf.setTextColor(100,116,139);
+        pdf.text(`Generated: ${today}  ·  CONFIDENTIAL`, pw/2, ph-3.5, {align:'center'});
+      };
+
+      // ── Page 1 ──────────────────────────────────────────────────────────────
+      drawHeader();
+
+      // Title band
+      pdf.setFillColor(249,250,251); pdf.rect(0,22.5,pw,13,'F');
+      pdf.setFontSize(10); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
+      pdf.text('UNDERWRITING RECORD', 14, 30.5);
+      pdf.setFontSize(7.5); pdf.setFont('helvetica','normal'); pdf.setTextColor(107,114,128);
+      const fileRef = [client.ceilao_ib_file_no && `File: ${client.ceilao_ib_file_no}`, client.policy_no && `Policy: ${client.policy_no}`].filter(Boolean).join('   ·   ');
+      if (fileRef) pdf.text(fileRef, pw-14, 30.5, {align:'right'});
+
+      // Client banner
+      pdf.setFillColor(232,71,42); pdf.rect(0,35.5,pw,15,'F');
+      pdf.setFontSize(13); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,255,255);
+      pdf.text(client.client_name || '—', 14, 44.5);
+      const tags = [client.main_class, client.product, client.customer_type].filter(Boolean);
+      let tx = pw - 14;
+      [...tags].reverse().forEach(t => {
+        const tw = pdf.getTextWidth(t) + 10;
+        tx -= tw;
+        pdf.setFillColor(200,50,30);
+        pdf.roundedRect(tx, 38.5, tw, 8, 2, 2, 'F');
+        pdf.setFontSize(7); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,255,255);
+        pdf.text(t, tx + tw/2, 43.5, {align:'center'});
+        tx -= 3;
+      });
+
+      let y = 55;
+      const tableOpts = (startY) => ({
+        startY,
+        columnStyles: { 0:{ cellWidth:58, fontStyle:'bold', fillColor:[255,248,245], textColor:[55,65,81] }, 1:{ textColor:[26,26,46] } },
+        styles: { fontSize:9, cellPadding:{top:3,bottom:3,left:6,right:6}, lineColor:[255,220,200], lineWidth:0.1 },
+        bodyStyles: { fillColor:[255,255,255] },
+        alternateRowStyles: { fillColor:[255,252,250] },
+        margin: { left:10, right:10, top:26, bottom:16 },
+        didDrawPage: (d) => { if (d.pageNumber > 1) drawHeader(); },
+      });
+
+      const addSection = (title, rows) => {
+        const filtered = rows.filter(r => r[1]);
+        if (!filtered.length) return;
+        autoTable(pdf, {
+          ...tableOpts(y),
+          head: [[{ content:title, colSpan:2, styles:{fillColor:[26,26,46],textColor:[255,139,90],fontStyle:'bold',fontSize:8.5,cellPadding:{top:3.5,bottom:3.5,left:6,right:6}} }]],
+          body: filtered,
+        });
+        y = pdf.lastAutoTable.finalY + 5;
+      };
+
+      addSection('GENERAL INFORMATION', [
+        ['Client Name',          client.client_name],
+        ['Customer Type',        client.customer_type],
+        ['Insurance Provider',   client.insurance_provider],
+        ['Insurer',              client.insurer],
+        ['Main Class',           client.main_class],
+        ['Product',              client.product],
+        ['Branch',               client.branch],
+        ['Ceilao IB File No.',   client.ceilao_ib_file_no],
+        ['Vehicle Number',       client.vehicle_number],
+        ['Introducer Code',      client.introducer_code],
+        ['Sales Rep ID',         client.sales_rep_id],
+      ]);
+
+      addSection('POLICY DETAILS', [
+        ['Policy No',            client.policy_no],
+        ['Policy Type',          client.policy_type],
+        ['Coverage',             client.coverage],
+        ['Policy Period From',   client.policy_period_from],
+        ['Policy Period To',     client.policy_period_to],
+      ]);
+
+      addSection('ADDRESS', [
+        ['Street 1',  client.street1],
+        ['Street 2',  client.street2],
+        ['City',      client.city],
+        ['District',  client.district],
+        ['Province',  client.province],
+      ]);
+
+      addSection('CONTACT', [
+        ['Mobile No',       client.mobile_no],
+        ['Telephone',       client.telephone],
+        ['Email',           client.email],
+        ['Contact Person',  client.contact_person],
+        ['Social Media',    client.social_media],
+      ]);
+
+      addSection('IDENTIFICATION & PROOFS', [
+        ['NIC Proof',              client.nic_proof],
+        ['DOB Proof',              client.dob_proof],
+        ['Business Registration',  client.business_registration],
+        ['SVAT Proof',             client.svat_proof],
+        ['VAT Proof',              client.vat_proof],
+      ]);
+
+      // Financial Summary
+      const finRows = [
+        ['Sum Insured',     fmtLKR(client.sum_insured)],
+        ['Basic Premium',   fmtLKR(client.basic_premium)],
+        ['SRCC Premium',    fmtLKR(client.srcc_premium)],
+        ['TC Premium',      fmtLKR(client.tc_premium)],
+        ['Net Premium',     fmtLKR(client.net_premium)],
+        ['Stamp Duty',      fmtLKR(client.stamp_duty)],
+        ['Admin Fees',      fmtLKR(client.admin_fees)],
+        ['Road Safety Fee', fmtLKR(client.road_safety_fee)],
+        ['Policy Fee',      fmtLKR(client.policy_fee)],
+        ['VAT Fee',         fmtLKR(client.vat_fee)],
+      ].filter(r => r[1] !== '—');
+
+      autoTable(pdf, {
+        ...tableOpts(y),
+        head: [[{ content:'FINANCIAL SUMMARY', colSpan:2, styles:{fillColor:[26,26,46],textColor:[255,139,90],fontStyle:'bold',fontSize:8.5,cellPadding:{top:3.5,bottom:3.5,left:6,right:6}} }]],
+        body: [
+          ...finRows,
+          [
+            { content:'TOTAL INVOICE', styles:{fontStyle:'bold',fontSize:10.5,fillColor:[232,71,42],textColor:[255,255,255],cellPadding:{top:5,bottom:5,left:6,right:6}} },
+            { content: fmtLKR(client.total_invoice), styles:{fontStyle:'bold',fontSize:10.5,fillColor:[232,71,42],textColor:[255,255,255],halign:'right',cellPadding:{top:5,bottom:5,left:6,right:6}} },
+          ],
+        ],
+        columnStyles: { 0:{cellWidth:65,fontStyle:'bold',fillColor:[255,248,245],textColor:[55,65,81]}, 1:{halign:'right',textColor:[26,26,46]} },
+        styles: { fontSize:9, cellPadding:{top:3,bottom:3,left:6,right:6}, lineColor:[255,220,200], lineWidth:0.1 },
+        bodyStyles: { fillColor:[255,255,255] },
+        alternateRowStyles: { fillColor:[255,252,250] },
+        margin: { left:10, right:10, top:26, bottom:16 },
+        didDrawPage: (d) => { if (d.pageNumber > 1) drawHeader(); },
+      });
+      y = pdf.lastAutoTable.finalY + 5;
+
+      addSection('COMMISSION', [
+        ['Commission Type',  client.commission_type],
+        ['Commission Basic', client.commission_basic ? fmtLKR(client.commission_basic) : null],
+        ['Commission SRCC',  client.commission_srcc  ? fmtLKR(client.commission_srcc)  : null],
+        ['Commission TC',    client.commission_tc    ? fmtLKR(client.commission_tc)    : null],
+      ]);
+
+      // ── Documents page ───────────────────────────────────────────────────────
+      const uploadedDocs = docFields.filter(df => client[df.doc]);
+      if (uploadedDocs.length > 0) {
+        pdf.addPage();
+        drawHeader();
+
+        const margL = 10, gap = 8, cols = 2;
+        const colW = (pw - margL * 2 - gap * (cols - 1)) / cols;
+        const imgMaxH = 110, labelH = 14, cellH = labelH + imgMaxH + 8;
+        let docY = 28, docCol = 0;
+
+        const addDocPageHdr = (title) => {
+          pdf.setFillColor(26,26,46); pdf.rect(margL, docY, pw - margL*2, 9, 'F');
+          pdf.setFontSize(8.5); pdf.setFont('helvetica','bold'); pdf.setTextColor(255,139,90);
+          pdf.text(title, pw/2, docY+6, {align:'center'});
+          docY += 13;
+        };
+        addDocPageHdr('UPLOADED DOCUMENTS');
+
+        for (const df of uploadedDocs) {
+          if (docY + cellH > ph - 18) {
+            pdf.addPage(); drawHeader();
+            docY = 28; docCol = 0;
+            addDocPageHdr('UPLOADED DOCUMENTS (cont.)');
+          }
+          const cx = margL + docCol * (colW + gap);
+
+          // Label + notes
+          pdf.setFontSize(8.5); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
+          pdf.text(df.label, cx, docY+5);
+          const note = client[df.text];
+          if (note) {
+            pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(107,114,128);
+            pdf.text(note, cx, docY+10, {maxWidth: colW});
+          }
+
+          const imgY  = docY + labelH;
+          const url   = client[df.doc];
+          const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url) || url.includes('/image/upload/');
+
+          pdf.setFillColor(245,247,250); pdf.rect(cx, imgY, colW, imgMaxH, 'F');
+          pdf.setDrawColor(210,215,225); pdf.setLineWidth(0.3); pdf.rect(cx, imgY, colW, imgMaxH, 'S');
+
+          if (isImg) {
+            try {
+              const res  = await fetch(url);
+              if (!res.ok) throw new Error('fetch');
+              const blob = await res.blob();
+              const b64  = await new Promise((res2, rej) => {
+                const r = new FileReader();
+                r.onload  = () => res2(r.result);
+                r.onerror = rej;
+                r.readAsDataURL(blob);
+              });
+              if (!b64.startsWith('data:image/')) throw new Error('not image');
+              const dims = await new Promise(res2 => {
+                const img = new window.Image();
+                img.onload  = () => res2({ w: img.naturalWidth, h: img.naturalHeight });
+                img.onerror = () => res2({ w: 4, h: 3 });
+                img.src = b64;
+              });
+              const aspect = dims.w / dims.h;
+              const bW = colW - 6, bH = imgMaxH - 6;
+              let dw = bW, dh = dw / aspect;
+              if (dh > bH) { dh = bH; dw = dh * aspect; }
+              const fmt = /\.png(\?|$)/i.test(url) ? 'PNG' : 'JPEG';
+              pdf.addImage(b64, fmt, cx+(colW-dw)/2, imgY+(imgMaxH-dh)/2, dw, dh, undefined, 'FAST');
+            } catch {
+              pdf.setFontSize(7.5); pdf.setTextColor(180,180,190);
+              pdf.text('Image unavailable', cx+colW/2, imgY+imgMaxH/2, {align:'center'});
+            }
+          } else {
+            pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(99,102,241);
+            pdf.text('PDF DOCUMENT', cx+colW/2, imgY+imgMaxH/2-4, {align:'center'});
+            pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(120,124,180);
+            pdf.text('Available via system link', cx+colW/2, imgY+imgMaxH/2+4, {align:'center'});
+          }
+
+          docCol++;
+          if (docCol >= cols) { docCol = 0; docY += cellH; }
+        }
+      }
+
+      // Draw footers on every page in one pass (avoids didDrawPage timing issues)
+      const total = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= total; i++) { pdf.setPage(i); drawFooter(); }
+
+      const safeName = (client.client_name || 'Client').replace(/\s+/g, '_').replace(/[^\w-]/g,'');
+      const safeRef  = (client.policy_no || client.ceilao_ib_file_no || 'Record').replace(/[^\w-]/g,'');
+      pdf.save(`CeilaoIB_${safeName}_${safeRef}.pdf`);
+
+    } catch (err) {
+      console.error('PDF export error:', err);
+    }
+    setExporting(false);
+  };
 
   const renderTab = () => {
     switch (tab) {
@@ -262,6 +530,14 @@ const ClientDetailsModal = ({ client, onClose }) => {
         <Button onClick={onClose} variant="outlined"
           sx={{ borderColor: '#e0e0e0', color: '#6B7280', '&:hover': { borderColor: '#aaa' } }}>
           Close
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={exporting ? <CircularProgress size={14} color="inherit" /> : <FileDownloadOutlinedIcon />}
+          onClick={generatePdf}
+          disabled={exporting}
+          sx={{ background: 'linear-gradient(135deg,#1A1A2E,#2d2d44)', fontSize: 13 }}>
+          {exporting ? 'Generating PDF…' : 'Download PDF'}
         </Button>
       </DialogActions>
     </Dialog>
