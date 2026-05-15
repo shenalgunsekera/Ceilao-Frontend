@@ -1,4 +1,4 @@
-import React, { useState, useMemo, createContext, useContext, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
@@ -15,6 +15,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, limit, query, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getOrCreateDeviceId, collectDeviceInfo, fetchLocationInfo } from './utils/deviceFingerprint';
+import { DEFAULT_MODULE_ACCESS } from './config/products';
 import { lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -368,6 +369,29 @@ function RequireAuth({ children }) {
   return children;
 }
 
+/* ── Module Guard ────────────────────────────────────────────────────────── */
+function ModuleGuard({ mod, children }) {
+  const { hasAccess } = useAuth();
+  if (!hasAccess(mod)) {
+    return (
+      <Box sx={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                 minHeight:'60vh', textAlign:'center', p:4 }}>
+        <Box sx={{ width:72, height:72, borderRadius:'20px', bgcolor:'rgba(239,68,68,0.08)',
+                   display:'flex', alignItems:'center', justifyContent:'center',
+                   mb:3, fontSize:36 }}>🔒</Box>
+        <Typography variant="h5" sx={{ fontWeight:800, mb:1, color:'#1A1A2E' }}>
+          Module Restricted
+        </Typography>
+        <Typography sx={{ color:'#6B7280', fontSize:14, maxWidth:380, lineHeight:1.7 }}>
+          You don't have permission to access this module.<br/>
+          Contact your administrator to request access.
+        </Typography>
+      </Box>
+    );
+  }
+  return <>{children}</>;
+}
+
 /* ── App ─────────────────────────────────────────────────────────────────── */
 function App() {
   const [user,        setUser]        = useState(null);
@@ -406,9 +430,25 @@ function App() {
     return unsub;
   }, []);
 
+  // ── Module access — one subscription for the whole app ──────────────────────
+  const [moduleAccess, setModuleAccess] = useState(DEFAULT_MODULE_ACCESS);
+  useEffect(() => {
+    return onSnapshot(
+      doc(db, 'settings', 'module_access'),
+      snap => setModuleAccess(snap.exists() ? { ...DEFAULT_MODULE_ACCESS, ...snap.data() } : DEFAULT_MODULE_ACCESS),
+      ()   => setModuleAccess(DEFAULT_MODULE_ACCESS),
+    );
+  }, []);
+
+  const hasAccess = useCallback((key) => {
+    const role = userProfile?.role || 'employee';
+    if (role === 'admin') return true;
+    return (moduleAccess[key] || []).includes(role);
+  }, [moduleAccess, userProfile]);
+
   const authValue = useMemo(
-    () => ({ user, userProfile, loading, setUser, setUserProfile, searchQuery, setSearchQuery }),
-    [user, userProfile, loading, searchQuery]
+    () => ({ user, userProfile, loading, setUser, setUserProfile, searchQuery, setSearchQuery, moduleAccess, hasAccess }),
+    [user, userProfile, loading, searchQuery, moduleAccess, hasAccess]
   );
 
   return (
@@ -445,15 +485,15 @@ function App() {
                           <Header />
                           <Box className="page-enter" sx={{ flex: 1, p: { xs: 2, sm: 3, md: 3 }, pt: { xs: 2, sm: 3 } }}>
                             <Routes>
-                              <Route path="/"              element={<TableSection />} />
-                              <Route path="/underwriting"  element={<TableSection />} />
-                              <Route path="/reports"       element={<ReportsPage />} />
+                              <Route path="/"              element={<ModuleGuard mod="underwriting"><TableSection /></ModuleGuard>} />
+                              <Route path="/underwriting"  element={<ModuleGuard mod="underwriting"><TableSection /></ModuleGuard>} />
+                              <Route path="/reports"       element={<ModuleGuard mod="reports"><ReportsPage /></ModuleGuard>} />
                               <Route path="/admin"         element={<AdminPanel />} />
-                              <Route path="/quotations"    element={<QuotationsPage />} />
-                              <Route path="/renewals"      element={<RenewalsPage />} />
-                              <Route path="/claims"        element={<ClaimsPage />} />
-                              <Route path="/marketing"     element={<MarketingPage />} />
-                              <Route path="/portfolio"     element={<PortfolioPage />} />
+                              <Route path="/quotations"    element={<ModuleGuard mod="quotations"><QuotationsPage /></ModuleGuard>} />
+                              <Route path="/renewals"      element={<ModuleGuard mod="renewals"><RenewalsPage /></ModuleGuard>} />
+                              <Route path="/claims"        element={<ModuleGuard mod="claims"><ClaimsPage /></ModuleGuard>} />
+                              <Route path="/marketing"     element={<ModuleGuard mod="marketing"><MarketingPage /></ModuleGuard>} />
+                              <Route path="/portfolio"     element={<ModuleGuard mod="portfolio"><PortfolioPage /></ModuleGuard>} />
                             </Routes>
                           </Box>
                         </Box>

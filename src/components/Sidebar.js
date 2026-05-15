@@ -34,12 +34,12 @@ const DRAWER_W = 260;
 
 const navItems = [
   { label: 'Home',          path: '/menu',          icon: <HomeOutlinedIcon /> },
-  { label: 'Quotations',    path: '/quotations',    icon: <RequestQuoteOutlinedIcon /> },
-  { label: 'Underwriting',  path: '/underwriting',  icon: <PeopleOutlineIcon /> },
-  { label: 'Portfolio',     path: '/portfolio',     icon: <AccountTreeOutlinedIcon /> },
-  { label: 'Claims',        path: '/claims',        icon: <GavelOutlinedIcon /> },
-  { label: 'Renewals',      path: '/renewals',      icon: <AutorenewIcon /> },
-  { label: 'Reports',       path: '/reports',       icon: <BarChartIcon /> },
+  { label: 'Quotations',    path: '/quotations',    icon: <RequestQuoteOutlinedIcon />, mod: 'quotations'   },
+  { label: 'Underwriting',  path: '/underwriting',  icon: <PeopleOutlineIcon />,        mod: 'underwriting' },
+  { label: 'Portfolio',     path: '/portfolio',     icon: <AccountTreeOutlinedIcon />,  mod: 'portfolio'    },
+  { label: 'Claims',        path: '/claims',        icon: <GavelOutlinedIcon />,        mod: 'claims'       },
+  { label: 'Renewals',      path: '/renewals',      icon: <AutorenewIcon />,            mod: 'renewals'     },
+  { label: 'Reports',       path: '/reports',       icon: <BarChartIcon />,             mod: 'reports'      },
 ];
 
 function NavItem({ item, active, onClick }) {
@@ -92,7 +92,7 @@ function NavItem({ item, active, onClick }) {
 function DrawerContent({ onClose }) {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, hasAccess } = useAuth();
   const [ticketOpen, setTicketOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -168,7 +168,7 @@ function DrawerContent({ onClose }) {
           Navigation
         </Typography>
         <List disablePadding>
-          {navItems.map(item => (
+          {navItems.filter(item => !item.mod || hasAccess(item.mod)).map(item => (
             <NavItem
               key={item.path}
               item={item}
@@ -178,7 +178,7 @@ function DrawerContent({ onClose }) {
               onClick={() => { navigate(item.path); onClose?.(); }}
             />
           ))}
-          {(role === 'admin' || role === 'manager') && (
+          {hasAccess('marketing') && (
             <NavItem
               item={{ label: 'Marketing', path: '/marketing', icon: <CampaignOutlinedIcon /> }}
               active={location.pathname.startsWith('/marketing')}
