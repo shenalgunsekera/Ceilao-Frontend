@@ -250,8 +250,11 @@ function RequireAuth({ children }) {
     if (loading) return;
     if (!user) { setDeviceState('allowed'); return; }
 
-    const deviceId    = getOrCreateDeviceId();
-    const sessionId   = `${user.uid}_${deviceId}`;
+    // Reset every time a (different) user object arrives
+    setDeviceState('checking');
+
+    const deviceId  = getOrCreateDeviceId();
+    const sessionId = `${user.uid}_${deviceId}`;
 
     // Register / update this device session (fire-and-forget)
     const register = async () => {
@@ -287,22 +290,35 @@ function RequireAuth({ children }) {
         setDeviceState('restricted');
         return;
       }
-      const lockdown = settingsData.lockdown_mode;
-      if (lockdown && !sessionData.approved) {
+      if (settingsData.lockdown_mode && !sessionData.approved) {
         setDeviceState('restricted');
         return;
       }
       setDeviceState('allowed');
     };
 
-    const unsubSession  = onSnapshot(doc(db, 'device_sessions', sessionId), snap => {
-      sessionData = snap.exists() ? snap.data() : { approved: false, blocked: false };
+    // Error handler: if Firestore read is denied (e.g. doc doesn't exist yet and
+    // rule references resource.data), fall back to open access so users aren't
+    // stuck on a loading screen.
+    const onSessionError = () => {
+      sessionData = { approved: false, blocked: false };
       evaluate();
-    });
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'device_control'), snap => {
-      settingsData = snap.exists() ? snap.data() : { lockdown_mode: false };
+    };
+    const onSettingsError = () => {
+      settingsData = { lockdown_mode: false };
       evaluate();
-    });
+    };
+
+    const unsubSession  = onSnapshot(
+      doc(db, 'device_sessions', sessionId),
+      snap  => { sessionData  = snap.exists() ? snap.data() : { approved: false, blocked: false }; evaluate(); },
+      onSessionError,
+    );
+    const unsubSettings = onSnapshot(
+      doc(db, 'settings', 'device_control'),
+      snap  => { settingsData = snap.exists() ? snap.data() : { lockdown_mode: false }; evaluate(); },
+      onSettingsError,
+    );
 
     return () => { unsubSession(); unsubSettings(); };
   }, [user, userProfile, loading]);
