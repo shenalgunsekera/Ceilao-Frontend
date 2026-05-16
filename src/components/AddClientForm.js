@@ -212,6 +212,29 @@ function SectionHeader({ title }) {
   );
 }
 
+/* ── NumericField — formats numbers with commas while typing ─────────── */
+function NumericField({ value, onChange, ...props }) {
+  const fmt = (v) => {
+    if (v === '' || v === null || v === undefined) return '';
+    const clean = String(v).replace(/,/g, '');
+    const n = Number(clean);
+    return isNaN(n) ? clean : n.toLocaleString('en-US');
+  };
+  const handleChange = (e) => {
+    const raw = e.target.value.replace(/,/g, '');
+    if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+      onChange({ ...e, target: { ...e.target, value: raw } });
+    }
+  };
+  return (
+    <TextField {...props}
+      value={fmt(value)}
+      onChange={handleChange}
+      inputProps={{ inputMode: 'numeric', ...(props.inputProps || {}) }}
+    />
+  );
+}
+
 /* ── main form ────────────────────────────────────────────────────────── */
 const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }) => {
   const { user, userProfile } = useAuth();
@@ -367,12 +390,20 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
                           },
                         }}
                       />
+                    ) : f.type === 'number' ? (
+                      <NumericField
+                        label={f.label}
+                        value={fields[f.name]}
+                        onChange={e => set(f.name, e.target.value)}
+                        fullWidth size="small"
+                        required={!!f.required}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }}
+                      />
                     ) : (
                       <TextField
                         label={f.label}
                         value={fields[f.name]}
                         onChange={e => set(f.name, e.target.value)}
-                        type={f.type || 'text'}
                         fullWidth size="small"
                         required={!!f.required}
                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }}

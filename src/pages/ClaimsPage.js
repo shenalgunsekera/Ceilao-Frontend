@@ -26,6 +26,7 @@ import Collapse from '@mui/material/Collapse';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
+import Pagination from '@mui/material/Pagination';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddIcon from '@mui/icons-material/Add';
@@ -123,6 +124,8 @@ const ClaimsPage = () => {
   const [open,     setOpen]     = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [toast,    setToast]    = useState({ open:false, msg:'', severity:'success' });
+  const [cPage,    setCPage]    = useState(1);
+  const C_PER_PAGE = 15;
   const [form,     setForm]     = useState({
     client_name:'', policy_no:'', product:'', incident_date:'',
     cause:'', description:'', loss_amount:'',
@@ -194,7 +197,21 @@ const ClaimsPage = () => {
         ? <Stack spacing={1.5}>{[1,2,3].map(i=><Skeleton key={i} height={64} sx={{borderRadius:'12px'}} />)}</Stack>
         : claims.length===0
           ? <Box sx={{textAlign:'center',py:6}}><Typography sx={{color:'#9CA3AF'}}>No claims registered yet.</Typography></Box>
-          : claims.map(c=><ClaimCard key={c.id} claim={c} onUpdate={(id,updates)=>setClaims(p=>p.map(x=>x.id===id?{...x,...updates}:x))} />)
+          : <>
+              {claims.slice((cPage-1)*C_PER_PAGE, cPage*C_PER_PAGE).map(c=>(
+                <ClaimCard key={c.id} claim={c} onUpdate={(id,updates)=>setClaims(p=>p.map(x=>x.id===id?{...x,...updates}:x))} />
+              ))}
+              {claims.length > C_PER_PAGE && (
+                <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', pt:2, flexWrap:'wrap', gap:1 }}>
+                  <Typography sx={{ fontSize:12.5, color:'#9CA3AF' }}>
+                    Showing {(cPage-1)*C_PER_PAGE+1}–{Math.min(cPage*C_PER_PAGE, claims.length)} of {claims.length} claims
+                  </Typography>
+                  <Pagination count={Math.ceil(claims.length/C_PER_PAGE)} page={cPage}
+                    onChange={(_,v)=>{ setCPage(v); window.scrollTo({top:0,behavior:'smooth'}); }}
+                    shape="rounded" size="small" />
+                </Box>
+              )}
+            </>
       }
 
       <Dialog open={open} onClose={()=>setOpen(false)} maxWidth="sm" fullWidth>

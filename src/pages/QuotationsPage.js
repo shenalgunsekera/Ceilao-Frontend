@@ -45,6 +45,7 @@ import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Pagination from '@mui/material/Pagination';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
@@ -1563,6 +1564,8 @@ function ComparisonView({ quote, onBack, onConfirm }) {
 const QuotationsPage = () => {
   const { user, userProfile } = useAuth();
   const [tab,           setTab]           = useState(0);
+  const [qPage,         setQPage]         = useState(1);
+  const Q_PER_PAGE = 15;
   const [product,       setProduct]       = useState('fire');
   const [quotes,        setQuotes]        = useState([]);
   const [companies,     setCompanies]     = useState([]);
@@ -1992,7 +1995,7 @@ const QuotationsPage = () => {
           <ComparisonView quote={compareQuote} onBack={() => setCompareQuote(null)} onConfirm={handleConfirmQuote} />
         ) : (
           <>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{
+            <Tabs value={tab} onChange={(_, v) => { setTab(v); setQPage(1); }} sx={{
               mb: 2.5, borderBottom: '1px solid rgba(255,139,90,0.12)',
               '& .MuiTab-root': { fontSize: 13, fontWeight: 600, textTransform: 'none', color: '#9CA3AF' },
               '& .Mui-selected': { color: '#FF5A5A' },
@@ -2013,12 +2016,24 @@ const QuotationsPage = () => {
                 </Typography>
               </Box>
             ) : (
-              tabQuotes[tab].map(q => (
-                <QuoteRow key={q.id} quote={q}
-                  tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
-                  onSelect={setCompareQuote}
-                  onDelete={q => setDeleteTarget(q)} />
-              ))
+              <>
+                {tabQuotes[tab].slice((qPage-1)*Q_PER_PAGE, qPage*Q_PER_PAGE).map(q => (
+                  <QuoteRow key={q.id} quote={q}
+                    tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
+                    onSelect={setCompareQuote}
+                    onDelete={q => setDeleteTarget(q)} />
+                ))}
+                {tabQuotes[tab].length > Q_PER_PAGE && (
+                  <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', pt:2.5, flexWrap:'wrap', gap:1 }}>
+                    <Typography sx={{ fontSize:12.5, color:'#9CA3AF' }}>
+                      Showing {(qPage-1)*Q_PER_PAGE+1}–{Math.min(qPage*Q_PER_PAGE, tabQuotes[tab].length)} of {tabQuotes[tab].length}
+                    </Typography>
+                    <Pagination count={Math.ceil(tabQuotes[tab].length/Q_PER_PAGE)} page={qPage}
+                      onChange={(_, v) => { setQPage(v); window.scrollTo({top:0,behavior:'smooth'}); }}
+                      shape="rounded" size="small" />
+                  </Box>
+                )}
+              </>
             )}
           </>
         )}
