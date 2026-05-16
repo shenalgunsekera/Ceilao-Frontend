@@ -1,47 +1,88 @@
-const CACHE_KEY = 'ceilao_device_fp';
+// ── Device ID — IndexedDB-first, permanent storage ────────────────────────────
+//
+// Why IndexedDB?
+//   • Survives browser cache clears and cookie deletion
+//   • Only wiped when user explicitly chooses "Clear Site Data" in settings
+//   • Once a device is approved, it stays approved permanently
+//   • UUID never drifts (unlike fingerprints that shift with OS/driver updates)
+//
+// Storage chain:  localStorage (fast cache) → IndexedDB (permanent) → generate new
 
-// ── Stable fingerprint ────────────────────────────────────────────────────────
-// Built from device/browser characteristics that don't change between sessions.
-// Clearing cache/cookies does NOT change this — it's recomputed from the same
-// hardware and browser each time, so an approved device stays approved.
-function computeFingerprint() {
-  const parts = [
-    // Strip version numbers from UA so a browser update doesn't create a new device
-    navigator.userAgent
-      .replace(/Chrome\/[\d.]+/, 'Chrome')
-      .replace(/Firefox\/[\d.]+/, 'Firefox')
-      .replace(/Safari\/[\d.]+/, 'Safari')
-      .replace(/Edg\/[\d.]+/, 'Edge')
-      .replace(/Version\/[\d.]+/, ''),
-    `${window.screen.width}x${window.screen.height}`,
-    window.screen.colorDepth,
-    navigator.language,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    navigator.hardwareConcurrency || 0,
-    navigator.platform,
-    // deviceMemory is not available in Firefox but that's fine
-    (navigator.deviceMemory || 0),
-  ].join('||');
+const LS_KEY  = 'ceilao_dev_id';
+const DB_NAME = 'ceilao_device_db';
+const STORE   = 'device';
+const ID_KEY  = 'id';
 
-  // djb2 hash → base36 string
-  let h = 5381;
-  for (let i = 0; i < parts.length; i++) {
-    h = ((h << 5) + h) ^ parts.charCodeAt(i);
-    h = h & h; // keep 32-bit
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => { e.target.result.createObjectStore(STORE); };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = () => reject(new Error('IndexedDB unavailable'));
+  });
+}
+
+function dbGet(db) {
+  return new Promise(resolve => {
+    try {
+      const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(ID_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror   = () => resolve(null);
+    } catch { resolve(null); }
+  });
+}
+
+function dbPut(db, id) {
+  return new Promise(resolve => {
+    try {
+      const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(id, ID_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror   = () => resolve();
+    } catch { resolve(); }
+  });
+}
+
+/** Returns the permanent device ID.
+ *  Creates one on first call and stores it in IndexedDB so it survives
+ *  cache clears. Falls back to localStorage if IndexedDB isn't available. */
+export async function getOrCreateDeviceId() {
+  // 1 — Fast cache hit
+  const cached = localStorage.getItem(LS_KEY);
+  if (cached && cached.length > 8) return cached;
+
+  try {
+    const db = await openDB();
+
+    // 2 — Already stored in IndexedDB (survives cache clears)
+    const stored = await dbGet(db);
+    if (stored && stored.length > 8) {
+      try { localStorage.setItem(LS_KEY, stored); } catch (_) {}
+      return stored;
+    }
+
+    // 3 — First time on this device — generate and persist
+    const id = generateUUID();
+    await dbPut(db, id);
+    try { localStorage.setItem(LS_KEY, id); } catch (_) {}
+    return id;
+
+  } catch {
+    // IndexedDB unavailable (very rare — old browsers / strict private mode)
+    const fallback = localStorage.getItem(LS_KEY) || generateUUID();
+    try { localStorage.setItem(LS_KEY, fallback); } catch (_) {}
+    return fallback;
   }
-  return 'fp_' + Math.abs(h).toString(36).padStart(7, '0');
 }
 
-export function getOrCreateDeviceId() {
-  // Try cache first (fast path)
-  const cached = localStorage.getItem(CACHE_KEY);
-  if (cached && cached.startsWith('fp_')) return cached;
-
-  // Compute from browser attributes and cache for speed
-  const fp = computeFingerprint();
-  try { localStorage.setItem(CACHE_KEY, fp); } catch (_) {}
-  return fp;
-}
+// ── Device info collectors ────────────────────────────────────────────────────
 
 export function collectDeviceInfo() {
   const ua = navigator.userAgent;

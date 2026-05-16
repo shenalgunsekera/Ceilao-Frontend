@@ -183,8 +183,9 @@ export default function DevicesManager() {
   const [search,          setSearch]          = useState('');
   const [confirmLockdown, setConfirmLockdown] = useState(false);
 
-  const myDeviceId   = getOrCreateDeviceId();
-  const mySessionId  = user ? `${user.uid}_${myDeviceId}` : '';
+  const [myDeviceId, setMyDeviceId] = useState('');
+  useEffect(() => { getOrCreateDeviceId().then(setMyDeviceId); }, []);
+  const mySessionId = user && myDeviceId ? `${user.uid}_${myDeviceId}` : '';
 
   useEffect(() => {
     const q = query(collection(db, 'device_sessions'), orderBy('last_seen', 'desc'));
