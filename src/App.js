@@ -247,6 +247,7 @@ function RequireAuth({ children }) {
   const { user, userProfile, loading } = useAuth();
   const location = useLocation();
   const [deviceState, setDeviceState] = useState('checking'); // checking | allowed | restricted
+  const [deviceId,    setDeviceId]    = useState('');
 
   useEffect(() => {
     if (loading) return;
@@ -255,7 +256,8 @@ function RequireAuth({ children }) {
     // Reset every time a (different) user object arrives
     setDeviceState('checking');
 
-    const deviceId  = getOrCreateDeviceId();
+    const deviceId  = await getOrCreateDeviceId();
+    setDeviceId(deviceId);
     const sessionId = `${user.uid}_${deviceId}`;
 
     // Register / update this device session (fire-and-forget)
@@ -357,7 +359,7 @@ function RequireAuth({ children }) {
         </Typography>
         <Typography sx={{ fontSize: 12, color: '#6B7280', bgcolor: 'rgba(255,255,255,0.05)',
                          borderRadius: '10px', p: 1.5, fontFamily: 'monospace' }}>
-          Device ID: {getOrCreateDeviceId().slice(0, 16)}…
+          Device ID: {deviceId ? deviceId.slice(0, 18) + '…' : '…'}
         </Typography>
         <Button variant="outlined" onClick={() => signOut(auth)} sx={{ mt: 3, borderColor: 'rgba(255,139,90,0.4)', color: '#FF8B5A', fontSize: 13 }}>
           Sign Out
