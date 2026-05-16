@@ -106,7 +106,7 @@ const TableSection = () => {
   const [csvImporting, setCsvImporting] = useState(false);
   const [snackbar,     setSnackbar]     = useState({ open: false, msg: '', sev: 'success' });
   const [page,         setPage]         = useState(1);
-  const [rowsPerPage,  setRowsPerPage]  = useState(25);
+  const [rowsPerPage,  setRowsPerPage]  = useState(15);
   const [filterType,   setFilterType]   = useState('all');
 
   const toast = (msg, sev = 'success') => setSnackbar({ open: true, msg, sev });
@@ -502,7 +502,7 @@ const TableSection = () => {
                 onChange={e => { setRowsPerPage(Number(e.target.value)); setPage(1); }}
                 sx={{ fontSize: 12, '& .MuiOutlinedInput-root': { borderRadius: '8px' }, minWidth: 65 }}
               >
-                {[10, 25, 50, 100].map(n => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                {[10, 15, 25, 50, 100].map(n => <MenuItem key={n} value={n}>{n}</MenuItem>)}
               </Select>
             </Box>
             <Pagination

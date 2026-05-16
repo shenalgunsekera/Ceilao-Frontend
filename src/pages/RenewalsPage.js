@@ -18,6 +18,9 @@ import Paper from '@mui/material/Paper';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Skeleton from '@mui/material/Skeleton';
+import Pagination from '@mui/material/Pagination';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -34,6 +37,8 @@ const RenewalsPage = () => {
   const [loading,  setLoading]  = useState(true);
   const [search,   setSearch]   = useState('');
   const [tab,      setTab]      = useState(0); // 0=expiring soon, 1=expired, 2=all
+  const [rPage,    setRPage]    = useState(1);
+  const [rPer,     setRPer]     = useState(15);
 
   useEffect(() => {
     const q = query(collection(db, 'clients'), orderBy('policy_period_to', 'asc'));
@@ -92,7 +97,7 @@ const RenewalsPage = () => {
       <Card>
         <CardContent sx={{ p:0, '&:last-child':{pb:0} }}>
           <Box sx={{ px:2.5, pt:2, pb:1, display:'flex', gap:2, alignItems:'center', flexWrap:'wrap' }}>
-            <Tabs value={tab} onChange={(_,v)=>setTab(v)}
+            <Tabs value={tab} onChange={(_,v)=>{ setTab(v); setRPage(1); }}
               sx={{ '& .MuiTab-root':{fontSize:12.5, fontWeight:600, textTransform:'none', color:'#9CA3AF'}, '& .Mui-selected':{color:'#FF5A5A'}, '& .MuiTabs-indicator':{background:'linear-gradient(90deg,#FF5A5A,#FF8B5A)', height:2.5} }}>
               <Tab label={`Expiring Soon (${categorised.expiring.length})`} />
               <Tab label={`Expired (${categorised.expired.length})`} />
@@ -117,7 +122,7 @@ const RenewalsPage = () => {
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={7} sx={{ textAlign:'center', color:'#9CA3AF', py:4 }}>No records found</TableCell></TableRow>
-                  ) : filtered.map((c,i) => {
+                  ) : filtered.slice((rPage-1)*rPer, rPage*rPer).map((c,i) => {
                     const s = statusChip(c.daysLeft);
                     return (
                       <TableRow key={c.id} sx={{ bgcolor: i%2===0?'#fff':'rgba(255,248,245,0.6)' }}>
@@ -139,6 +144,23 @@ const RenewalsPage = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
+          {filtered.length > rPer && (
+            <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', px:2.5, py:1.5, borderTop:'1px solid rgba(255,139,90,0.08)', flexWrap:'wrap', gap:1 }}>
+              <Typography sx={{ fontSize:12.5, color:'#9CA3AF' }}>
+                Showing {(rPage-1)*rPer+1}–{Math.min(rPage*rPer, filtered.length)} of {filtered.length}
+              </Typography>
+              <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+                <Typography sx={{ fontSize:12.5, color:'#9CA3AF' }}>Rows:</Typography>
+                <Select size="small" value={rPer} onChange={e=>{ setRPer(Number(e.target.value)); setRPage(1); }}
+                  sx={{ fontSize:12, minWidth:65 }}>
+                  {[10,15,25,50].map(n=><MenuItem key={n} value={n}>{n}</MenuItem>)}
+                </Select>
+              </Box>
+              <Pagination count={Math.ceil(filtered.length/rPer)} page={rPage}
+                onChange={(_,v)=>{ setRPage(v); window.scrollTo({top:0,behavior:'smooth'}); }}
+                shape="rounded" size="small" />
+            </Box>
           )}
         </CardContent>
       </Card>

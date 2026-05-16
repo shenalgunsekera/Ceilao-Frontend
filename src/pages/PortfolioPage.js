@@ -36,6 +36,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import CircularProgress from '@mui/material/CircularProgress';
 import Snackbar from '@mui/material/Snackbar';
+import Pagination from '@mui/material/Pagination';
 import Tooltip from '@mui/material/Tooltip';
 
 import BusinessIcon from '@mui/icons-material/Business';
@@ -931,6 +932,8 @@ function SavedReviews({ onEdit }) {
   const [loading,  setLoading]  = useState(true);
   const [search,      setSearch]      = useState('');
   const [filterGrade, setFilterGrade] = useState('all'); // all | Low | Medium | High | Critical
+  const [pPage,    setPPage]    = useState(1);
+  const P_PER_PAGE = 15;
   const [viewItem, setViewItem] = useState(null);
   const [sendItem, setSendItem] = useState(null);
   const [deleting, setDeleting] = useState('');
@@ -1020,7 +1023,7 @@ function SavedReviews({ onEdit }) {
         </Box>
       ) : (
         <Stack spacing={1.5}>
-          {filtered.map(r => {
+          {filtered.slice((pPage-1)*P_PER_PAGE, pPage*P_PER_PAGE).map(r => {
             const gs = gradeStyle[r.risk_grade] || gradeStyle.Medium;
             return (
               <Card key={r.id} elevation={0} sx={{ border:'1.5px solid rgba(255,139,90,0.12)', borderRadius:'12px', '&:hover': { boxShadow:'0 4px 16px rgba(255,90,90,0.08)' } }}>
@@ -1065,6 +1068,16 @@ function SavedReviews({ onEdit }) {
               </Card>
             );
           })}
+          {filtered.length > P_PER_PAGE && (
+            <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', pt:1.5, flexWrap:'wrap', gap:1 }}>
+              <Typography sx={{ fontSize:12.5, color:'#9CA3AF' }}>
+                Showing {(pPage-1)*P_PER_PAGE+1}–{Math.min(pPage*P_PER_PAGE, filtered.length)} of {filtered.length}
+              </Typography>
+              <Pagination count={Math.ceil(filtered.length/P_PER_PAGE)} page={pPage}
+                onChange={(_,v)=>{ setPPage(v); window.scrollTo({top:0,behavior:'smooth'}); }}
+                shape="rounded" size="small" />
+            </Box>
+          )}
         </Stack>
       )}
 
