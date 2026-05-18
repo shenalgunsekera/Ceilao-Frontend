@@ -2111,52 +2111,132 @@ const QuotationsPage = () => {
         </Dialog>
 
         {/* ── Send to Insurers Dialog ── */}
-        <Dialog open={sendOpen} onClose={() => setSendOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <SendIcon sx={{ color: '#FF8B5A', fontSize: 20 }} />
+        <Dialog open={sendOpen} onClose={() => setSendOpen(false)} maxWidth="sm" fullWidth
+          PaperProps={{ sx: { maxHeight:'88vh' } }}>
+          <DialogTitle sx={{ display:'flex', alignItems:'center', gap:1.5 }}>
+            <SendIcon sx={{ color:'#FF8B5A', fontSize:20 }} />
             Select Insurance Companies
           </DialogTitle>
-          <DialogContent sx={{ pt: 2 }}>
-            <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 2 }}>
-              Select the insurers to send this quote request to. Each will receive an email with a link to submit their quotation.
-            </Typography>
+          <DialogContent sx={{ pt:2, display:'flex', flexDirection:'column', gap:0 }}>
             {companies.length === 0 ? (
-              <Alert severity="info" sx={{ fontSize: 12 }}>
+              <Alert severity="info" sx={{ fontSize:12 }}>
                 No insurance companies configured. Add them in the Admin Panel → Insurance Companies tab.
               </Alert>
-            ) : (
-              <Autocomplete
-                multiple disableCloseOnSelect
-                options={companies}
-                getOptionLabel={o => `${o.name} (${o.email})`}
-                value={selectedCos}
-                onChange={(_, v) => setSelectedCos(v)}
-                renderInput={params => (
-                  <TextField {...params} label="Search and select insurers" size="small"
-                    placeholder="Type to search…" />
-                )}
-                renderOption={(props, option, { selected }) => (
-                  <li {...props}>
-                    <FormControlLabel
-                      control={<Checkbox size="small" checked={selected} sx={{ mr: 0.5 }} />}
-                      label={<Box><Typography sx={{ fontSize: 13, fontWeight: 600 }}>{option.name}</Typography>
-                        <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>{option.email}</Typography></Box>}
-                      sx={{ m: 0 }}
-                    />
-                  </li>
-                )}
-              />
-            )}
+            ) : (() => {
+              // Local state via IIFE — keep it self-contained inside the dialog render
+              const [catTab,    setCatTab]    = React.useState('all');
+              const [coSearch,  setCoSearch]  = React.useState('');
+
+              const CATS = ['all','Motor','Non Motor','Life'];
+              const CAT_COLORS = {
+                'Motor':     { bg:'rgba(59,130,246,0.10)',  color:'#2563eb'  },
+                'Non Motor': { bg:'rgba(16,185,129,0.10)', color:'#059669'  },
+                'Life':      { bg:'rgba(139,92,246,0.10)', color:'#7c3aed'  },
+              };
+
+              const visible = companies.filter(c => {
+                if (catTab !== 'all' && (c.category || '') !== catTab) return false;
+                if (!coSearch) return true;
+                const q = coSearch.toLowerCase();
+                return [c.name, c.email].some(v => (v||'').toLowerCase().includes(q));
+              });
+
+              const isSelected = (c) => selectedCos.some(s => s.id === c.id);
+              const toggle = (c) => setSelectedCos(prev =>
+                isSelected(c) ? prev.filter(s => s.id !== c.id) : [...prev, c]
+              );
+              const selectAll = () => setSelectedCos(prev => {
+                const newIds = visible.filter(c => !isSelected(c));
+                return [...prev, ...newIds];
+              });
+              const clearAll = () => setSelectedCos(prev => prev.filter(s => !visible.some(v => v.id === s.id)));
+
+              return (
+                <Box>
+                  {/* Category tabs */}
+                  <Stack direction="row" spacing={0.8} sx={{ mb:1.5, flexWrap:'wrap', gap:0.8 }}>
+                    {CATS.map(c => {
+                      const cc = c === 'all' ? { bg:'rgba(232,71,42,0.10)',color:'#E8472A' } : CAT_COLORS[c];
+                      const cnt = c === 'all' ? companies.length : companies.filter(co => co.category === c).length;
+                      return (
+                        <Chip key={c} label={`${c === 'all' ? 'All' : c} (${cnt})`} size="small" clickable
+                          onClick={() => setCatTab(c)}
+                          sx={{ fontSize:11.5, fontWeight:700, height:26,
+                            bgcolor: catTab===c ? cc.bg : 'transparent',
+                            color:   catTab===c ? cc.color : '#9CA3AF',
+                            border:  catTab===c ? `1.5px solid ${cc.color}` : '1.5px solid rgba(107,114,128,0.20)',
+                          }} />
+                      );
+                    })}
+                  </Stack>
+
+                  {/* Search */}
+                  <TextField size="small" fullWidth placeholder="Search by company or email…"
+                    value={coSearch} onChange={e => setCoSearch(e.target.value)}
+                    sx={{ mb:1.5, '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+
+                  {/* Select all / clear */}
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb:1, px:0.5 }}>
+                    <Typography sx={{ fontSize:12, color:'#9CA3AF' }}>
+                      {visible.length} shown · {selectedCos.length} selected
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" sx={{ fontSize:11, color:'#6366f1', p:0 }} onClick={selectAll}>Select all visible</Button>
+                      {selectedCos.length > 0 && (
+                        <Button size="small" sx={{ fontSize:11, color:'#9CA3AF', p:0 }} onClick={clearAll}>Clear visible</Button>
+                      )}
+                    </Stack>
+                  </Stack>
+
+                  {/* Company list */}
+                  <Box sx={{ maxHeight:320, overflowY:'auto', border:'1px solid rgba(255,139,90,0.12)', borderRadius:'12px' }}>
+                    {visible.length === 0 ? (
+                      <Box sx={{ textAlign:'center', py:3 }}>
+                        <Typography sx={{ fontSize:13, color:'#9CA3AF' }}>No companies match this filter.</Typography>
+                      </Box>
+                    ) : visible.map((co, i) => {
+                      const sel  = isSelected(co);
+                      const cc   = CAT_COLORS[co.category] || { bg:'rgba(107,114,128,0.08)', color:'#6B7280' };
+                      return (
+                        <Box key={co.id} onClick={() => toggle(co)}
+                          sx={{
+                            display:'flex', alignItems:'center', gap:1.5,
+                            px:2, py:1.2, cursor:'pointer',
+                            bgcolor: sel ? 'rgba(232,71,42,0.04)' : i%2===0 ? '#fff' : 'rgba(255,248,245,0.5)',
+                            borderBottom: i < visible.length-1 ? '1px solid rgba(255,139,90,0.06)' : 'none',
+                            transition:'background 0.1s',
+                            '&:hover': { bgcolor:'rgba(232,71,42,0.06)' },
+                          }}>
+                          <Checkbox size="small" checked={sel}
+                            sx={{ p:0.3, color: sel ? '#E8472A' : '#D1D5DB', '&.Mui-checked':{ color:'#E8472A' } }} />
+                          <Box sx={{ flex:1, minWidth:0 }}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography sx={{ fontWeight:600, fontSize:13 }}>{co.name}</Typography>
+                              {co.category && (
+                                <Chip label={co.category} size="small"
+                                  sx={{ fontSize:9.5, height:16, fontWeight:700, bgcolor:cc.bg, color:cc.color }} />
+                              )}
+                            </Stack>
+                            <Typography sx={{ fontSize:11.5, color:'#9CA3AF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                              {co.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              );
+            })()}
             {!EMAILJS_SERVICE && (
-              <Alert severity="warning" sx={{ fontSize: 12, mt: 2 }}>
-                EmailJS is not configured. Quotes will be saved but emails won't be sent automatically.
-                Set REACT_APP_EMAILJS_SERVICE_ID, REACT_APP_EMAILJS_TEMPLATE_ID, and REACT_APP_EMAILJS_PUBLIC_KEY in your Vercel environment variables.
+              <Alert severity="warning" sx={{ fontSize:12, mt:2 }}>
+                EmailJS is not configured — quotes will be saved but emails won't be sent automatically.
               </Alert>
             )}
           </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(255,139,90,0.10)' }}>
+          <DialogActions sx={{ px:3, py:2, borderTop:'1px solid rgba(255,139,90,0.10)' }}>
             <Button onClick={() => setSendOpen(false)} variant="outlined"
-              sx={{ borderColor: '#e0e0e0', color: '#6B7280' }}>Cancel</Button>
+              sx={{ borderColor:'#e0e0e0', color:'#6B7280' }}>Cancel</Button>
             <Button variant="contained" startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <SendIcon />}
               onClick={handleSendQuotes} disabled={sending || !selectedCos.length}>
               {sending ? 'Sending…' : `Send to ${selectedCos.length} insurer${selectedCos.length !== 1 ? 's' : ''}`}
