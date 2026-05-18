@@ -190,7 +190,11 @@ export default function DevicesManager() {
   useEffect(() => {
     const q = query(collection(db, 'device_sessions'), orderBy('last_seen', 'desc'));
     return onSnapshot(q, snap => {
-      setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Auto-delete orphaned sessions created when device_id was a Promise (bug now fixed)
+      all.filter(s => s.id.includes('[object') || typeof s.device_id !== 'string')
+         .forEach(s => deleteDoc(doc(db, 'device_sessions', s.id)).catch(() => {}));
+      setSessions(all.filter(s => !s.id.includes('[object') && typeof s.device_id === 'string'));
       setLoading(false);
     }, () => setLoading(false));
   }, []);
