@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../App';
 import { MODULES, DEFAULT_MODULE_ACCESS } from '../config/products';
 
 import Box from '@mui/material/Box';
@@ -14,10 +15,24 @@ import CardContent from '@mui/material/CardContent';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
+import Chip from '@mui/material/Chip';
 
-const ROLES = ['admin', 'manager', 'employee'];
+// Role columns shown in the UI
+// Admin: always locked ON (admin always has full access)
+// Manager: only admin can toggle
+// Employee: admin and manager can toggle
+const ROLE_COLS = [
+  { key: 'admin',    label: 'Admin',    color: '#ef4444', bg: 'rgba(239,68,68,0.10)'  },
+  { key: 'manager',  label: 'Manager',  color: '#d97706', bg: 'rgba(245,158,11,0.10)' },
+  { key: 'employee', label: 'Employee', color: '#2563eb', bg: 'rgba(59,130,246,0.10)' },
+];
 
 const ModuleAccessManager = () => {
+  const { userProfile } = useAuth();
+  const currentRole = userProfile?.role || 'employee';
+  const isAdmin   = currentRole === 'admin';
+  const isManager = currentRole === 'manager';
+
   const [access,  setAccess]  = useState(DEFAULT_MODULE_ACCESS);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -29,14 +44,21 @@ const ModuleAccessManager = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Whether a given role column is editable by the current user
+  const canEditRole = (role) => {
+    if (role === 'admin')    return false;            // admin always locked
+    if (role === 'manager')  return isAdmin;           // only admin changes manager access
+    if (role === 'employee') return isAdmin || isManager; // both can change employee
+    return false;
+  };
+
   const toggle = (moduleKey, role) => {
+    if (!canEditRole(role)) return;
     setAccess(prev => {
       const current = prev[moduleKey] || [];
       const next = current.includes(role)
         ? current.filter(r => r !== role)
         : [...current, role];
-      // admin always has access to everything
-      if (role === 'admin') return prev;
       return { ...prev, [moduleKey]: next };
     });
   };
@@ -55,7 +77,7 @@ const ModuleAccessManager = () => {
   };
 
   const resetToDefaults = () => {
-    if (!window.confirm('Reset all module access to defaults? Employees will get access to all modules.')) return;
+    if (!window.confirm('Reset all module access to defaults? All roles will get access to all modules.')) return;
     save(DEFAULT_MODULE_ACCESS);
   };
 
@@ -63,22 +85,41 @@ const ModuleAccessManager = () => {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} sx={{ mb: 2.5 }} spacing={1.5}>
         <Box>
           <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Module Access Control</Typography>
           <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
-            Choose which roles can access each module. Admins always have full access.
+            {isAdmin
+              ? 'As admin you can configure access for both managers and employees.'
+              : 'As manager you can configure employee access only.'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" size="small" onClick={resetToDefaults} disabled={saving}
-            sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1' }}>
-            Reset to Defaults
-          </Button>
+          {isAdmin && (
+            <Button variant="outlined" size="small" onClick={resetToDefaults} disabled={saving}
+              sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1' }}>
+              Reset to Defaults
+            </Button>
+          )}
           <Button variant="contained" size="small" onClick={() => save()} disabled={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </Stack>
+      </Stack>
+
+      {/* Role legend */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
+        {ROLE_COLS.map(rc => (
+          <Chip key={rc.key} size="small" label={
+            rc.key === 'admin'
+              ? `${rc.label} — always full access`
+              : rc.key === 'manager' && !isAdmin
+              ? `${rc.label} — view only`
+              : rc.label
+          }
+          sx={{ fontSize: 11, fontWeight: 700, bgcolor: rc.bg, color: rc.color,
+                border: `1px solid ${rc.bg}`, opacity: canEditRole(rc.key) || rc.key === 'admin' ? 1 : 0.6 }} />
+        ))}
       </Stack>
 
       <Stack spacing={1.5}>
@@ -96,22 +137,35 @@ const ModuleAccessManager = () => {
                     </Box>
                   </Box>
                   <Stack direction="row" spacing={1}>
-                    {ROLES.map(role => (
-                      <FormControlLabel
-                        key={role}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={allowed.includes(role)}
-                            disabled={role === 'admin'}
-                            onChange={() => toggle(mod.key, role)}
-                            sx={{ color: '#FF8B5A', '&.Mui-checked': { color: '#FF5A5A' } }}
-                          />
-                        }
-                        label={<Typography sx={{ fontSize: 12.5, fontWeight: 600, textTransform: 'capitalize', color: role === 'admin' ? '#9CA3AF' : '#374151' }}>{role}</Typography>}
-                        sx={{ mr: 0 }}
-                      />
-                    ))}
+                    {ROLE_COLS.map(rc => {
+                      const editable = canEditRole(rc.key);
+                      const checked  = rc.key === 'admin' ? true : allowed.includes(rc.key);
+                      return (
+                        <FormControlLabel
+                          key={rc.key}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={checked}
+                              disabled={!editable}
+                              onChange={() => toggle(mod.key, rc.key)}
+                              sx={{
+                                color: rc.color,
+                                '&.Mui-checked': { color: rc.color },
+                                opacity: editable ? 1 : 0.45,
+                              }}
+                            />
+                          }
+                          label={
+                            <Typography sx={{ fontSize: 12.5, fontWeight: 600, textTransform: 'capitalize',
+                                             color: editable ? rc.color : '#9CA3AF' }}>
+                              {rc.label}
+                            </Typography>
+                          }
+                          sx={{ mr: 0 }}
+                        />
+                      );
+                    })}
                   </Stack>
                 </Stack>
               </CardContent>
