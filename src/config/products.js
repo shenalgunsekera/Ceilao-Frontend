@@ -1519,9 +1519,9 @@ export const DEFAULT_MODULE_ACCESS = {
   quotations:   ['admin', 'manager', 'employee'],
   underwriting: ['admin', 'manager', 'employee'],
   claims:       ['admin', 'manager', 'employee'],
-  accounting:   ['admin', 'manager'],
+  accounting:   ['admin', 'manager', 'employee'],
   reports:      ['admin', 'manager', 'employee'],
   renewals:     ['admin', 'manager', 'employee'],
-  marketing:    ['admin', 'manager'],
+  marketing:    ['admin', 'manager', 'employee'],
   portfolio:    ['admin', 'manager', 'employee'],
 };

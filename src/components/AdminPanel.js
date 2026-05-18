@@ -15,6 +15,7 @@ import CreateAccountModal from './CreateAccountModal';
 import InsuranceCompaniesManager from './InsuranceCompaniesManager';
 import ModuleAccessManager from './ModuleAccessManager';
 import DevicesManager from './DevicesManager';
+import UsersManager from './UsersManager';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -416,7 +417,7 @@ function TicketCard({ ticket, onSave, onDelete }) {
 
 /* ── main AdminPanel ─────────────────────────────────────────────────────── */
 const AdminPanel = () => {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
 
   const [tab,        setTab]        = useState(0);
@@ -648,23 +649,18 @@ const AdminPanel = () => {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
             <Box>
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Employee Accounts</Typography>
-              <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>Create login credentials for new staff members</Typography>
+              <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>Manage staff roles and create login credentials</Typography>
             </Box>
             <Button variant="contained" startIcon={<GroupAddOutlinedIcon />}
               onClick={() => setCreateAccOpen(true)} sx={{ fontSize: 13 }}>
               Create Account
             </Button>
           </Box>
-          <Box sx={{ p: 3, borderRadius: '14px', bgcolor: 'rgba(255,90,90,0.04)', border: '1px solid rgba(255,139,90,0.12)' }}>
-            <Typography sx={{ fontSize: 13, color: '#6B7280', lineHeight: 1.8 }}>
-              Use this to create login accounts for your employees and managers. They receive an email and password you can share with them.
-              Employees can add clients (pending manager approval). Managers get full access including the Admin Panel.
-            </Typography>
-          </Box>
+          <UsersManager currentUserId={user?.uid} isAdmin={isAdmin} />
           <CreateAccountModal
             open={createAccOpen}
             onClose={() => setCreateAccOpen(false)}
-            onCreated={() => setToast({ open: true, msg: 'Account created successfully!', severity: 'success' })}
+            onCreated={() => { setToast({ open: true, msg: 'Account created successfully!', severity: 'success' }); }}
           />
         </Box>
       )}

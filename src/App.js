@@ -357,7 +357,7 @@ function RequireAuth({ children }) {
         </Typography>
         <Typography sx={{ fontSize: 12, color: '#6B7280', bgcolor: 'rgba(255,255,255,0.05)',
                          borderRadius: '10px', p: 1.5, fontFamily: 'monospace' }}>
-          Device ID: {deviceId ? deviceId.slice(0, 18) + '…' : '…'}
+          Device ID: {getOrCreateDeviceId().slice(0, 18)}…
         </Typography>
         <Button variant="outlined" onClick={() => signOut(auth)} sx={{ mt: 3, borderColor: 'rgba(255,139,90,0.4)', color: '#FF8B5A', fontSize: 13 }}>
           Sign Out
@@ -410,8 +410,13 @@ function App() {
         } else {
           // No Firestore profile — auto-create one.
           // First account ever in the system becomes admin; all others get employee.
-          const anyExisting = await getDocs(query(collection(db, 'users'), limit(1)));
-          const role = anyExisting.empty ? 'admin' : 'employee';
+          let role = 'employee';
+          try {
+            const anyExisting = await getDocs(query(collection(db, 'users'), limit(1)));
+            if (anyExisting.empty) role = 'admin';
+          } catch (_) {
+            // Employees can't list users collection — default to employee
+          }
           const profile = {
             full_name:  firebaseUser.displayName || firebaseUser.email.split('@')[0],
             email:      firebaseUser.email,

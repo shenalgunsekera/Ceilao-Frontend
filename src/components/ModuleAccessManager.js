@@ -41,15 +41,22 @@ const ModuleAccessManager = () => {
     });
   };
 
-  const save = async () => {
+  const save = async (overrideAccess) => {
     setSaving(true);
+    const payload = overrideAccess || access;
     try {
-      await setDoc(doc(db, 'settings', 'module_access'), access, { merge: true });
+      await setDoc(doc(db, 'settings', 'module_access'), payload);
+      setAccess(payload);
       setToast({ open: true, msg: 'Module access updated.', severity: 'success' });
     } catch (err) {
       setToast({ open: true, msg: err.message, severity: 'error' });
     }
     setSaving(false);
+  };
+
+  const resetToDefaults = () => {
+    if (!window.confirm('Reset all module access to defaults? Employees will get access to all modules.')) return;
+    save(DEFAULT_MODULE_ACCESS);
   };
 
   if (loading) return <Stack spacing={1.5}>{[1,2,3,4,5,6].map(i => <Skeleton key={i} height={72} sx={{ borderRadius: '12px' }} />)}</Stack>;
@@ -63,9 +70,15 @@ const ModuleAccessManager = () => {
             Choose which roles can access each module. Admins always have full access.
           </Typography>
         </Box>
-        <Button variant="contained" size="small" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save Changes'}
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" size="small" onClick={resetToDefaults} disabled={saving}
+            sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1' }}>
+            Reset to Defaults
+          </Button>
+          <Button variant="contained" size="small" onClick={() => save()} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </Button>
+        </Stack>
       </Stack>
 
       <Stack spacing={1.5}>
