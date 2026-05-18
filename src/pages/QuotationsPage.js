@@ -693,17 +693,38 @@ function ComparisonView({ quote, onBack, onConfirm }) {
 
       const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;border-radius:10px;overflow:hidden;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
 
-      // Selection buttons + PDF download link for email
+      // Selection buttons + PDF download link for email (table-based for Outlook/Gmail compatibility)
       const baseUrl = window.location.origin;
       const selectionSection = `
-        <div style="margin-top:28px;padding:20px 0;border-top:2px solid rgba(255,90,90,0.15);text-align:center;">
-          <p style="margin:0 0 14px;color:#1A1A2E;font-size:15px;font-weight:700;">Select Your Preferred Insurer</p>
-          <p style="margin:0 0 18px;color:#6B7280;font-size:13px;">Click the company you'd like to proceed with:</p>
-          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">
-            ${responses.map(r => `<a href="${baseUrl}/quote-select?qid=${quote.id}&cid=${encodeURIComponent(r.company_id)}&cn=${encodeURIComponent(r.company_name)}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#FF5A5A,#FF8B5A);color:#fff;padding:11px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;margin:3px;">Go with ${r.company_name} →</a>`).join('')}
-          </div>
-          <a href="${baseUrl}/comparison-pdf?qid=${quote.id}" target="_blank" style="display:inline-block;background:#1A1A2E;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">📄 Download PDF Comparison</a>
-        </div>`;
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;border-top:2px solid #ffe0d4;">
+          <tr><td style="padding:20px 0;text-align:center;">
+            <p style="margin:0 0 10px;color:#1A1A2E;font-size:15px;font-weight:700;font-family:Arial,sans-serif;">Select Your Preferred Insurer</p>
+            <p style="margin:0 0 18px;color:#6B7280;font-size:13px;font-family:Arial,sans-serif;">Click the company you would like to proceed with:</p>
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto 18px;">
+              <tr>
+                ${responses.map(r => `
+                <td style="padding:3px;">
+                  <table cellpadding="0" cellspacing="0"><tr>
+                    <td align="center" bgcolor="#FF5A5A" style="border-radius:8px;">
+                      <a href="${baseUrl}/quote-select?qid=${quote.id}&cid=${encodeURIComponent(r.company_id)}&cn=${encodeURIComponent(r.company_name)}" target="_blank"
+                         style="display:inline-block;background:#FF5A5A;color:#ffffff;padding:11px 20px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;">
+                        Go with ${r.company_name} &#8594;
+                      </a>
+                    </td>
+                  </tr></table>
+                </td>`).join('')}
+              </tr>
+            </table>
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>
+              <td align="center" bgcolor="#1A1A2E" style="border-radius:8px;">
+                <a href="${baseUrl}/comparison-pdf?qid=${quote.id}" target="_blank"
+                   style="display:inline-block;background:#1A1A2E;color:#ffffff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;font-family:Arial,sans-serif;">
+                  Download PDF Comparison
+                </a>
+              </td>
+            </tr></table>
+          </td></tr>
+        </table>`;
 
       await emailjs.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
