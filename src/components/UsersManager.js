@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 import Box from '@mui/material/Box';
@@ -52,9 +52,16 @@ const UsersManager = ({ currentUserId, isAdmin }) => {
   useEffect(() => {
     setLoading(true);
     const unsub = onSnapshot(
-      query(collection(db, 'users'), orderBy('created_at', 'asc')),
-      snap => { setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
-      ()   => setLoading(false),
+      collection(db, 'users'),
+      snap => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort client-side: admins first, then managers, then employees, then by name
+        const order = { admin: 0, manager: 1, employee: 2 };
+        all.sort((a, b) => (order[a.role] ?? 3) - (order[b.role] ?? 3) || (a.full_name || '').localeCompare(b.full_name || ''));
+        setUsers(all);
+        setLoading(false);
+      },
+      () => setLoading(false),
     );
     return unsub;
   }, []);
