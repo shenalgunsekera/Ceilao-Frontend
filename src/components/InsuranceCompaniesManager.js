@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { collection, addDoc, writeBatch, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { DEFAULT_INSURANCE_COMPANIES, COMPANY_CATEGORIES, CATEGORY_COLORS } from '../config/insuranceCompanies';
+import { DEFAULT_INSURANCE_COMPANIES, CATEGORY_COLORS } from '../config/insuranceCompanies';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -19,10 +19,6 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
 import Chip from '@mui/material/Chip';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
@@ -100,8 +96,11 @@ const InsuranceCompaniesManager = () => {
     setImporting(false);
   };
 
+  // All unique categories that actually exist in the data
+  const allCategories = [...new Set(companies.map(c => c.category || '').filter(Boolean))].sort();
+
   const filtered = companies.filter(c => {
-    if (filterCat !== 'all' && c.category !== filterCat) return false;
+    if (filterCat !== 'all' && (c.category || '') !== filterCat) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return [c.name, c.email, c.category].some(v => (v||'').toLowerCase().includes(q));
@@ -119,14 +118,12 @@ const InsuranceCompaniesManager = () => {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          {companies.length === 0 && (
-            <Button variant="outlined" size="small"
-              startIcon={importing ? <CircularProgress size={13} color="inherit" /> : <FileDownloadOutlinedIcon />}
-              onClick={handleImportDefaults} disabled={importing}
-              sx={{ fontSize:12, borderColor:'rgba(99,102,241,0.35)', color:'#6366f1' }}>
-              {importing ? 'Importing…' : 'Import Defaults'}
-            </Button>
-          )}
+          <Button variant="outlined" size="small"
+            startIcon={importing ? <CircularProgress size={13} color="inherit" /> : <FileDownloadOutlinedIcon />}
+            onClick={handleImportDefaults} disabled={importing}
+            sx={{ fontSize:12, borderColor:'rgba(99,102,241,0.35)', color:'#6366f1' }}>
+            {importing ? 'Importing…' : 'Import Defaults'}
+          </Button>
           <Button variant="contained" size="small" startIcon={<AddIcon />}
             onClick={() => { setForm({ name:'', email:'', category:'' }); setAddOpen(true); }}>
             Add Company
@@ -140,10 +137,11 @@ const InsuranceCompaniesManager = () => {
           value={search} onChange={e => setSearch(e.target.value)}
           sx={{ flex:1, '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
         <Stack direction="row" spacing={0.8}>
-          {['all','Motor','Non Motor','Life'].map(c => {
+          {['all', ...allCategories].map(c => {
             const cc = c === 'all' ? { bg:'rgba(99,102,241,0.10)',color:'#6366f1' } : catColor(c);
+            const cnt = c === 'all' ? companies.length : companies.filter(co => (co.category||'') === c).length;
             return (
-              <Chip key={c} label={c === 'all' ? 'All' : c} size="small" clickable
+              <Chip key={c} label={`${c === 'all' ? 'All' : c} (${cnt})`} size="small" clickable
                 onClick={() => setFilterCat(c)}
                 sx={{ fontSize:11.5, fontWeight:700, height:26,
                   bgcolor: filterCat===c ? cc.bg : 'transparent',
@@ -161,13 +159,8 @@ const InsuranceCompaniesManager = () => {
         <Box sx={{ textAlign:'center', py:5 }}>
           <BusinessOutlinedIcon sx={{ fontSize:40, color:'rgba(255,90,90,0.2)', mb:1 }} />
           <Typography sx={{ color:'#9CA3AF' }}>
-            {companies.length === 0 ? 'No insurance companies yet.' : 'No results for this filter.'}
+            {companies.length === 0 ? 'No companies yet — click "Import Defaults" above.' : 'No results for this filter.'}
           </Typography>
-          {companies.length === 0 && (
-            <Button variant="outlined" size="small" onClick={handleImportDefaults} sx={{ mt:2, fontSize:12 }}>
-              Import Default Companies
-            </Button>
-          )}
         </Box>
       ) : (
         <Stack spacing={1}>
@@ -180,13 +173,9 @@ const InsuranceCompaniesManager = () => {
                     <Stack direction={{ xs:'column', sm:'row' }} spacing={1.5} alignItems={{ sm:'center' }} sx={{ p:2 }}>
                       <TextField size="small" label="Company Name" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} sx={{ flex:1 }} />
                       <TextField size="small" label="Email" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} sx={{ flex:1 }} />
-                      <FormControl size="small" sx={{ minWidth:130 }}>
-                        <InputLabel>Category</InputLabel>
-                        <Select value={form.category} label="Category" onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
-                          <MenuItem value="">General</MenuItem>
-                          {COMPANY_CATEGORIES.map(c=><MenuItem key={c} value={c}>{c}</MenuItem>)}
-                        </Select>
-                      </FormControl>
+                      <TextField size="small" label="Category" placeholder="e.g. Motor"
+                        value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}
+                        sx={{ minWidth:130 }} />
                       <Stack direction="row" spacing={0.5}>
                         <Button size="small" variant="contained" startIcon={<SaveOutlinedIcon />} onClick={handleSave} disabled={saving}>Save</Button>
                         <Button size="small" variant="outlined" onClick={()=>setEditId(null)} sx={{ borderColor:'#e0e0e0', color:'#6B7280' }}>Cancel</Button>
@@ -233,13 +222,9 @@ const InsuranceCompaniesManager = () => {
             <TextField label="Company Name *" fullWidth size="small" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} />
             <TextField label="Email Address *" type="email" fullWidth size="small" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
               helperText="This email receives quote requests" />
-            <FormControl fullWidth size="small">
-              <InputLabel>Category</InputLabel>
-              <Select value={form.category} label="Category" onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
-                <MenuItem value="">General</MenuItem>
-                {COMPANY_CATEGORIES.map(c=><MenuItem key={c} value={c}>{c}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <TextField fullWidth size="small" label="Category" placeholder="e.g. Motor, Non Motor, Life…"
+              value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}
+              helperText="Type any category — filter chips auto-update" />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px:3, py:2, borderTop:'1px solid rgba(255,139,90,0.10)' }}>

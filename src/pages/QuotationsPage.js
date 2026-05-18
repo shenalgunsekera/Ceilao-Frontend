@@ -2131,6 +2131,9 @@ const QuotationsPage = () => {
                 'Life':      { bg:'rgba(139,92,246,0.10)', color:'#7c3aed'  },
               };
 
+              // Dynamic categories from actual data
+              const dialogCats = [...new Set(companies.map(c => c.category || '').filter(Boolean))].sort();
+
               const visible = companies.filter(c => {
                 if (insurerCatTab !== 'all' && (c.category || '') !== insurerCatTab) return false;
                 if (!insurerSearch) return true;
@@ -2147,11 +2150,11 @@ const QuotationsPage = () => {
 
               return (
                 <Box>
-                  {/* Category tabs */}
+                  {/* Category tabs — auto-generated from actual data */}
                   <Stack direction="row" spacing={0.8} sx={{ mb:1.5, flexWrap:'wrap', gap:0.8 }}>
-                    {['all','Motor','Non Motor','Life'].map(c => {
-                      const cc  = c === 'all' ? { bg:'rgba(232,71,42,0.10)',color:'#E8472A' } : (CAT_COLORS[c] || {});
-                      const cnt = c === 'all' ? companies.length : companies.filter(co => co.category === c).length;
+                    {['all', ...dialogCats].map(c => {
+                      const cc  = c === 'all' ? { bg:'rgba(232,71,42,0.10)',color:'#E8472A' } : (CAT_COLORS[c] || { bg:'rgba(107,114,128,0.10)', color:'#6B7280' });
+                      const cnt = c === 'all' ? companies.length : companies.filter(co => (co.category||'') === c).length;
                       return (
                         <Chip key={c} label={`${c === 'all' ? 'All' : c} (${cnt})`} size="small" clickable
                           onClick={() => setInsurerCatTab(c)}
