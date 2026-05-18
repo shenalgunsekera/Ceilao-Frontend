@@ -296,17 +296,25 @@ function RequireAuth({ children }) {
         setDeviceState('allowed');
       };
 
-      const onSessionError  = () => { sessionData  = { approved: false, blocked: false }; evaluate(); };
-      const onSettingsError = () => { settingsData = { lockdown_mode: false };             evaluate(); };
+      // Safety net: if Firestore listeners haven't responded in 7s (slow network / cold start),
+      // fall back to open access so the user isn't stuck on loading forever.
+      const fallbackTimer = setTimeout(() => {
+        if (sessionData  === null) sessionData  = { approved: false, blocked: false };
+        if (settingsData === null) settingsData = { lockdown_mode: false };
+        evaluate();
+      }, 7000);
+
+      const onSessionError  = () => { clearTimeout(fallbackTimer); sessionData  = { approved: false, blocked: false }; evaluate(); };
+      const onSettingsError = () => { clearTimeout(fallbackTimer); settingsData = { lockdown_mode: false };             evaluate(); };
 
       unsubSession  = onSnapshot(
         doc(db, 'device_sessions', sessionId),
-        snap => { sessionData  = snap.exists() ? snap.data() : { approved: false, blocked: false }; evaluate(); },
+        snap => { clearTimeout(fallbackTimer); sessionData  = snap.exists() ? snap.data() : { approved: false, blocked: false }; evaluate(); },
         onSessionError,
       );
       unsubSettings = onSnapshot(
         doc(db, 'settings', 'device_control'),
-        snap => { settingsData = snap.exists() ? snap.data() : { lockdown_mode: false }; evaluate(); },
+        snap => { clearTimeout(fallbackTimer); settingsData = snap.exists() ? snap.data() : { lockdown_mode: false }; evaluate(); },
         onSettingsError,
       );
     };
