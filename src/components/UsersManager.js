@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 import Box from '@mui/material/Box';
@@ -49,16 +49,15 @@ const UsersManager = ({ currentUserId, isAdmin }) => {
   const [deleteDlg,  setDeleteDlg]  = useState({ open: false, userId: null, userName: '' });
   const [saving,     setSaving]     = useState(false);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     setLoading(true);
-    try {
-      const snap = await getDocs(query(collection(db, 'users'), orderBy('created_at', 'asc')));
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch { /* ignore */ }
-    setLoading(false);
+    const unsub = onSnapshot(
+      query(collection(db, 'users'), orderBy('created_at', 'asc')),
+      snap => { setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      ()   => setLoading(false),
+    );
+    return unsub;
   }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const filtered = users.filter(u => {
     if (!search) return true;
@@ -105,13 +104,9 @@ const UsersManager = ({ currentUserId, isAdmin }) => {
         <Box>
           <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Staff Accounts</Typography>
           <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
-            {users.length} user{users.length !== 1 ? 's' : ''} — manage roles and access
+            {users.length} user{users.length !== 1 ? 's' : ''} — updates live
           </Typography>
         </Box>
-        <Button size="small" variant="outlined" onClick={load}
-          sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.3)', color: '#FF8B5A' }}>
-          Refresh
-        </Button>
       </Stack>
 
       <TextField

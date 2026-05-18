@@ -404,6 +404,9 @@ function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Anonymous users (insurer/customer public pages) never get a staff profile
+        if (firebaseUser.isAnonymous) { setLoading(false); return; }
+
         setUser(firebaseUser);
         const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
 
