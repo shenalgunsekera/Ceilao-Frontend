@@ -249,6 +249,15 @@ function RequireAuth({ children }) {
   const [deviceState, setDeviceState] = useState('checking'); // checking | allowed | restricted
   const [deviceId,    setDeviceId]    = useState('');
 
+  // Keep userProfile in a ref so the device-check effect doesn't re-run
+  // just because the profile loaded — that caused a double-loading flash on refresh.
+  const userProfileRef = useRef(userProfile);
+  useEffect(() => { userProfileRef.current = userProfile; }, [userProfile]);
+
+  // Only re-run when the authenticated user UID or loading state changes,
+  // NOT when userProfile loads (that's a secondary Firestore fetch).
+  const userUid = user?.uid ?? null;
+
   useEffect(() => {
     if (loading) return;
     if (!user) { setDeviceState('allowed'); return; }
@@ -275,7 +284,7 @@ function RequireAuth({ children }) {
             device_id:   devId,
             user_id:     user.uid,
             user_email:  user.email || '',
-            user_name:   userProfile?.full_name || user.displayName || user.email?.split('@')[0] || '',
+            user_name:   userProfileRef.current?.full_name || user.displayName || user.email?.split('@')[0] || '',
             ...deviceInfo,
             ...(location2 || {}),
             last_seen:   serverTimestamp(),
@@ -322,7 +331,7 @@ function RequireAuth({ children }) {
     init();
 
     return () => { unsubSession(); unsubSettings(); };
-  }, [user, userProfile, loading]);
+  }, [userUid, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || deviceState === 'checking') return (
     <Box sx={{
