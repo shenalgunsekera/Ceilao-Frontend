@@ -1587,6 +1587,8 @@ const QuotationsPage = () => {
   const [fieldErrors,    setFieldErrors]    = useState({});
   const [valIssues,      setValIssues]      = useState({ missing: [], invalid: [] });
   const [valOpen,        setValOpen]        = useState(false);
+  const [insurerCatTab,  setInsurerCatTab]  = useState('all');
+  const [insurerSearch,  setInsurerSearch]  = useState('');
   const [draftBanner,    setDraftBanner]    = useState(null); // { product, formValues, savedAt }
   const [hasDraft,       setHasDraft]       = useState(() => {
     try { const s = localStorage.getItem(DRAFT_KEY); return !!(s && Object.keys(JSON.parse(s).formValues || {}).length > 0); }
@@ -2111,7 +2113,7 @@ const QuotationsPage = () => {
         </Dialog>
 
         {/* ── Send to Insurers Dialog ── */}
-        <Dialog open={sendOpen} onClose={() => setSendOpen(false)} maxWidth="sm" fullWidth
+        <Dialog open={sendOpen} onClose={() => { setSendOpen(false); setInsurerCatTab('all'); setInsurerSearch(''); }} maxWidth="sm" fullWidth
           PaperProps={{ sx: { maxHeight:'88vh' } }}>
           <DialogTitle sx={{ display:'flex', alignItems:'center', gap:1.5 }}>
             <SendIcon sx={{ color:'#FF8B5A', fontSize:20 }} />
@@ -2123,11 +2125,6 @@ const QuotationsPage = () => {
                 No insurance companies configured. Add them in the Admin Panel → Insurance Companies tab.
               </Alert>
             ) : (() => {
-              // Local state via IIFE — keep it self-contained inside the dialog render
-              const [catTab,    setCatTab]    = React.useState('all');
-              const [coSearch,  setCoSearch]  = React.useState('');
-
-              const CATS = ['all','Motor','Non Motor','Life'];
               const CAT_COLORS = {
                 'Motor':     { bg:'rgba(59,130,246,0.10)',  color:'#2563eb'  },
                 'Non Motor': { bg:'rgba(16,185,129,0.10)', color:'#059669'  },
@@ -2135,9 +2132,9 @@ const QuotationsPage = () => {
               };
 
               const visible = companies.filter(c => {
-                if (catTab !== 'all' && (c.category || '') !== catTab) return false;
-                if (!coSearch) return true;
-                const q = coSearch.toLowerCase();
+                if (insurerCatTab !== 'all' && (c.category || '') !== insurerCatTab) return false;
+                if (!insurerSearch) return true;
+                const q = insurerSearch.toLowerCase();
                 return [c.name, c.email].some(v => (v||'').toLowerCase().includes(q));
               });
 
@@ -2145,26 +2142,23 @@ const QuotationsPage = () => {
               const toggle = (c) => setSelectedCos(prev =>
                 isSelected(c) ? prev.filter(s => s.id !== c.id) : [...prev, c]
               );
-              const selectAll = () => setSelectedCos(prev => {
-                const newIds = visible.filter(c => !isSelected(c));
-                return [...prev, ...newIds];
-              });
-              const clearAll = () => setSelectedCos(prev => prev.filter(s => !visible.some(v => v.id === s.id)));
+              const selectAll = () => setSelectedCos(prev => [...prev, ...visible.filter(c => !isSelected(c))]);
+              const clearAll  = () => setSelectedCos(prev => prev.filter(s => !visible.some(v => v.id === s.id)));
 
               return (
                 <Box>
                   {/* Category tabs */}
                   <Stack direction="row" spacing={0.8} sx={{ mb:1.5, flexWrap:'wrap', gap:0.8 }}>
-                    {CATS.map(c => {
-                      const cc = c === 'all' ? { bg:'rgba(232,71,42,0.10)',color:'#E8472A' } : CAT_COLORS[c];
+                    {['all','Motor','Non Motor','Life'].map(c => {
+                      const cc  = c === 'all' ? { bg:'rgba(232,71,42,0.10)',color:'#E8472A' } : (CAT_COLORS[c] || {});
                       const cnt = c === 'all' ? companies.length : companies.filter(co => co.category === c).length;
                       return (
                         <Chip key={c} label={`${c === 'all' ? 'All' : c} (${cnt})`} size="small" clickable
-                          onClick={() => setCatTab(c)}
+                          onClick={() => setInsurerCatTab(c)}
                           sx={{ fontSize:11.5, fontWeight:700, height:26,
-                            bgcolor: catTab===c ? cc.bg : 'transparent',
-                            color:   catTab===c ? cc.color : '#9CA3AF',
-                            border:  catTab===c ? `1.5px solid ${cc.color}` : '1.5px solid rgba(107,114,128,0.20)',
+                            bgcolor: insurerCatTab===c ? cc.bg : 'transparent',
+                            color:   insurerCatTab===c ? cc.color : '#9CA3AF',
+                            border:  insurerCatTab===c ? `1.5px solid ${cc.color}` : '1.5px solid rgba(107,114,128,0.20)',
                           }} />
                       );
                     })}
@@ -2172,7 +2166,7 @@ const QuotationsPage = () => {
 
                   {/* Search */}
                   <TextField size="small" fullWidth placeholder="Search by company or email…"
-                    value={coSearch} onChange={e => setCoSearch(e.target.value)}
+                    value={insurerSearch} onChange={e => setInsurerSearch(e.target.value)}
                     sx={{ mb:1.5, '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
 
                   {/* Select all / clear */}
@@ -2195,8 +2189,8 @@ const QuotationsPage = () => {
                         <Typography sx={{ fontSize:13, color:'#9CA3AF' }}>No companies match this filter.</Typography>
                       </Box>
                     ) : visible.map((co, i) => {
-                      const sel  = isSelected(co);
-                      const cc   = CAT_COLORS[co.category] || { bg:'rgba(107,114,128,0.08)', color:'#6B7280' };
+                      const sel = isSelected(co);
+                      const cc  = CAT_COLORS[co.category] || { bg:'rgba(107,114,128,0.08)', color:'#6B7280' };
                       return (
                         <Box key={co.id} onClick={() => toggle(co)}
                           sx={{
