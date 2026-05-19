@@ -525,30 +525,58 @@ async function exportExcel(columns, rows, reportName, chartEls=[]) {
 }
 
 /* ── Chart component ─────────────────────────────────────────────────────── */
-function ReportChart({ chartCfg, data, innerRef, onRemove, onUpdate }) {
-  const { type, field, label } = chartCfg;
-  const chartData = data.slice(0,15).map(r=>({
-    name: String(Object.values(r).find(v=>typeof v==='string'&&!v.startsWith('_'))||'').slice(0,20),
-    value: parseNum(r[field]),
-  })).filter(d=>d.value>0||d.name);
+function ReportChart({ chartCfg, data, groupByLabel, innerRef, onRemove, onUpdate, allFields }) {
+  const { type, label } = chartCfg;
+  // data is already pre-computed [{name, value}] — just use it directly
+  const chartData = data.filter(d => d.name);
   const ChIcon = type==='pie'?PieChartOutlineIcon:type==='line'?ShowChartIcon:BarChartIcon;
+  const yLabel = label || '';
   return (
     <Card sx={{ border:'1px solid rgba(255,139,90,0.12)', mb:2 }}>
       <CardContent ref={innerRef} sx={{ p:2.5 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1.5 }}>
-          <ChIcon sx={{ color:'#6366f1', fontSize:18 }} />
+        <Stack direction={{ xs:'column', sm:'row' }} spacing={1} alignItems={{ sm:'center' }} sx={{ mb:1.5 }} flexWrap="wrap">
+          <ChIcon sx={{ color:'#6366f1', fontSize:18, flexShrink:0 }} />
           <TextField size="small" value={label} onChange={e=>onUpdate({label:e.target.value})}
-            variant="standard" sx={{ flex:1,'& input':{fontSize:13,fontWeight:700} }} />
+            variant="standard" placeholder="Chart title…"
+            sx={{ flex:1, minWidth:120, '& input':{fontSize:13,fontWeight:700} }} />
+
+          {/* Y axis field + aggregation — the clear bit the user picks */}
+          {allFields && (
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Typography sx={{fontSize:11,color:'#9CA3AF',fontWeight:600}}>Y:</Typography>
+              <Select size="small" value={chartCfg.field||''} onChange={e=>onUpdate({field:e.target.value})}
+                sx={{fontSize:12,height:30,minWidth:140}}>
+                {allFields.filter(f=>f.type==='number').map(f=>(
+                  <MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>
+                ))}
+              </Select>
+              <Select size="small" value={chartCfg.aggOp||'sum'} onChange={e=>onUpdate({aggOp:e.target.value})}
+                sx={{fontSize:12,height:30,width:70}}>
+                {['sum','count','avg','min','max'].map(op=>(
+                  <MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>
+                ))}
+              </Select>
+            </Stack>
+          )}
+
+          {/* Chart type */}
           <Stack direction="row" spacing={0.5}>
-            {['bar','pie','line'].map(t=>(
-              <Chip key={t} label={t} size="small" clickable onClick={()=>onUpdate({type:t})}
-                sx={{ fontSize:10,height:22,fontWeight:700,
+            {[['bar',<BarChartIcon sx={{fontSize:14}}/>],['pie',<PieChartOutlineIcon sx={{fontSize:14}}/>],['line',<ShowChartIcon sx={{fontSize:14}}/>]].map(([t,icon])=>(
+              <Chip key={t} label={t} icon={icon} size="small" clickable onClick={()=>onUpdate({type:t})}
+                sx={{ fontSize:10,height:26,fontWeight:700,
                       bgcolor:type===t?'rgba(99,102,241,0.12)':'transparent',
-                      color:type===t?'#6366f1':'#9CA3AF' }} />
+                      color:type===t?'#6366f1':'#9CA3AF',
+                      border:`1px solid ${type===t?'rgba(99,102,241,0.35)':'rgba(0,0,0,0.08)'}` }} />
             ))}
           </Stack>
           {onRemove && <IconButton size="small" onClick={onRemove} sx={{ color:'#9CA3AF','&:hover':{color:'#ef4444'} }}><DeleteOutlineIcon fontSize="small"/></IconButton>}
         </Stack>
+        {groupByLabel && (
+          <Typography sx={{fontSize:11,color:'#9CA3AF',mb:1}}>
+            X Axis: <strong style={{color:'#6366f1'}}>{groupByLabel}</strong>
+            {chartCfg.field && <span> · Y Axis: <strong style={{color:'#FF5A5A'}}>{yLabel} ({chartCfg.aggOp||'sum'})</strong></span>}
+          </Typography>
+        )}
         <ResponsiveContainer width="100%" height={240}>
           {type==='pie'?(
             <PieChart>
@@ -779,7 +807,7 @@ const ReportsPage = () => {
       acc[ch.id] = data.filter(d=>d.value>0||d.name);
       return acc;
     },{});
-  },[results,charts,groupBy,selFields,viewMode]);
+  },[results,charts,groupBy,selFields,viewMode,aggregations]);
 
   const addChart = ()=>setCharts(p=>[...p,{id:Date.now().toString(),type:'bar',field:sourceFields.find(f=>f.type==='number')?.key||'',label:'New Chart'}]);
   const removeChart = (id)=>setCharts(p=>p.filter(c=>c.id!==id));
@@ -1014,18 +1042,11 @@ const ReportsPage = () => {
                 </Stack>
                 <Stack spacing={1} sx={{mb:2.5}}>
                   {charts.map((ch,i)=>(
-                    <Box key={ch.id} sx={{p:1.5,border:'1px solid rgba(99,102,241,0.15)',borderRadius:'8px',bgcolor:'rgba(99,102,241,0.03)'}}>
-                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{mb:0.8}}>
-                        <Typography sx={{fontSize:12,fontWeight:700,color:'#6366f1'}}>Chart {i+1}</Typography>
-                        <IconButton size="small" onClick={()=>removeChart(ch.id)} sx={{ml:'auto',color:'#9CA3AF','&:hover':{color:'#ef4444'}}}><DeleteOutlineIcon fontSize="small"/></IconButton>
-                      </Stack>
-                      <Stack spacing={0.8}>
-                        <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Type</InputLabel><Select label="Type" value={ch.type} onChange={e=>updateChart(ch.id,{type:e.target.value})}>{['bar','pie','line'].map(t=><MenuItem key={t} value={t} sx={{fontSize:12}}>{t.charAt(0).toUpperCase()+t.slice(1)}</MenuItem>)}</Select></FormControl>
-                        <Stack direction="row" spacing={0.5}>
-                          <FormControl size="small" sx={{flex:1}}><InputLabel sx={{fontSize:11}}>Y-Axis Field</InputLabel><Select label="Y-Axis Field" value={ch.field.replace(/_(sum|count|avg|min|max)$/,'')} onChange={e=>updateChart(ch.id,{field:e.target.value})}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
-                          <FormControl size="small" sx={{width:80}}><InputLabel sx={{fontSize:11}}>Op</InputLabel><Select label="Op" value={ch.aggOp||aggregations.find(a=>a.field===ch.field.replace(/_(sum|count|avg|min|max)$/,''))?.op||'sum'} onChange={e=>updateChart(ch.id,{aggOp:e.target.value})}>{NUMBER_OPS.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
-                        </Stack>
-                      </Stack>
+                    <Box key={ch.id} sx={{p:1.2,border:'1px solid rgba(99,102,241,0.15)',borderRadius:'8px',bgcolor:'rgba(99,102,241,0.03)',display:'flex',alignItems:'center',gap:1}}>
+                      <Typography sx={{fontSize:12,fontWeight:700,color:'#6366f1',flex:1}}>
+                        Chart {i+1}: {sourceFields.find(f=>f.key===ch.field)?.label||'—'} ({ch.aggOp||'sum'})
+                      </Typography>
+                      <IconButton size="small" onClick={()=>removeChart(ch.id)} sx={{color:'#9CA3AF','&:hover':{color:'#ef4444'}}}><DeleteOutlineIcon fontSize="small"/></IconButton>
                     </Box>
                   ))}
                   {!charts.length&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>No charts — click "Add Chart"</Typography>}
@@ -1080,6 +1101,8 @@ const ReportsPage = () => {
                 {charts.map(ch=>(
                   chartsData[ch.id]?.length>0&&(
                     <ReportChart key={ch.id} chartCfg={ch} data={chartsData[ch.id]}
+                      groupByLabel={groupBy ? sourceFields.find(f=>f.key===groupBy)?.label : null}
+                      allFields={sourceFields}
                       innerRef={el=>setChartRef(ch.id,el)}
                       onRemove={()=>removeChart(ch.id)}
                       onUpdate={patch=>updateChart(ch.id,patch)}/>
