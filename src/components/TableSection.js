@@ -359,11 +359,12 @@ const TableSection = () => {
       'ceilao_ib_file_no','vehicle_number','main_class','insurer','introducer_code',
       'branch','street1','street2','city','district','province','telephone',
       'contact_person','email','social_media','nic_proof','dob_proof',
-      'business_registration','svat_proof','vat_proof','policy_type','policy_no',
-      'policy_period_from','policy_period_to','coverage','sum_insured',
-      'basic_premium','srcc_premium','tc_premium','net_premium','stamp_duty',
-      'admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
-      'commission_type','commission_basic','commission_srcc','commission_tc','sales_rep_id',
+      'business_registration','svat_proof','vat_proof',
+      'policy_','policy_type','policy_no','policy_period_from','policy_period_to',
+      'coverage','sum_insured','basic_premium','srcc_premium','tc_premium','net_premium',
+      'stamp_duty','admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
+      'commission_type','commission_basic','commission_srcc','commission_tc',
+      'sales_rep_id','policies',
       'date_added', // optional — preserves original date on restore (YYYY-MM-DD)
     ];
     const example = {

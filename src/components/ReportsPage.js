@@ -42,6 +42,8 @@ import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
@@ -59,11 +61,14 @@ import AddIcon from '@mui/icons-material/Add';
 import TuneIcon from '@mui/icons-material/Tune';
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import GridOnIcon from '@mui/icons-material/GridOn';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import FunctionsIcon from '@mui/icons-material/Functions';
 
 /* ── Palette ─────────────────────────────────────────────────────────────── */
-const CHART_COLORS = ['#FF5A5A','#6366f1','#10B981','#f59e0b','#0ea5e9','#8b5cf6','#ec4899','#14b8a6'];
+const CHART_COLORS = ['#FF5A5A','#6366f1','#10B981','#f59e0b','#0ea5e9','#8b5cf6','#ec4899','#14b8a6','#f97316','#84cc16'];
 
-/* ── All available fields from clients collection ────────────────────────── */
+/* ── Field definitions ───────────────────────────────────────────────────── */
 const CLIENT_FIELDS = [
   { key: 'client_name',        label: 'Client Name',        type: 'string'  },
   { key: 'customer_type',      label: 'Customer Type',      type: 'string'  },
@@ -92,107 +97,61 @@ const CLIENT_FIELDS = [
   { key: 'stamp_duty',         label: 'Stamp Duty',         type: 'number'  },
   { key: 'admin_fees',         label: 'Admin Fees',         type: 'number'  },
   { key: 'vat_fee',            label: 'VAT',                type: 'number'  },
+  { key: 'road_safety_fee',    label: 'Road Safety Fee',    type: 'number'  },
+  { key: 'policy_fee',         label: 'Policy Fee',         type: 'number'  },
+  { key: 'policy_',            label: 'Policy',             type: 'string'  },
+  { key: 'policies',           label: 'Policies',           type: 'number'  },
+  { key: 'coverage',           label: 'Coverage',           type: 'string'  },
   { key: 'status',             label: 'Status',             type: 'string'  },
   { key: 'created_at',         label: 'Date Added',         type: 'date'    },
 ];
 
 const CLAIM_FIELDS = [
-  { key: 'client_name',      label: 'Client Name',    type: 'string' },
-  { key: 'claim_no',         label: 'Claim No',       type: 'string' },
-  { key: 'insurer',          label: 'Insurer',        type: 'string' },
-  { key: 'status',           label: 'Status',         type: 'string' },
-  { key: 'claim_amount',     label: 'Claim Amount',   type: 'number' },
-  { key: 'settled_amount',   label: 'Settled Amount', type: 'number' },
-  { key: 'product',          label: 'Product',        type: 'string' },
-  { key: 'main_class',       label: 'Main Class',     type: 'string' },
+  { key: 'client_name',    label: 'Client Name',    type: 'string' },
+  { key: 'claim_no',       label: 'Claim No',       type: 'string' },
+  { key: 'insurer',        label: 'Insurer',        type: 'string' },
+  { key: 'status',         label: 'Status',         type: 'string' },
+  { key: 'claim_amount',   label: 'Claim Amount',   type: 'number' },
+  { key: 'settled_amount', label: 'Settled Amount', type: 'number' },
+  { key: 'product',        label: 'Product',        type: 'string' },
+  { key: 'main_class',     label: 'Main Class',     type: 'string' },
 ];
 
-const NUMBER_OPS  = ['sum','avg','min','max','count'];
-
-const FILTER_OPS  = {
+const NUMBER_OPS = ['sum','avg','min','max','count'];
+const FILTER_OPS = {
   string: ['equals','contains','starts with','not equals'],
   number: ['=','>','<','>=','<='],
-  date:   ['after','before','between'], // between uses "YYYY-MM-DD|YYYY-MM-DD"
+  date:   ['after','before','between'],
 };
 
-/* ── Built-in templates ──────────────────────────────────────────────────── */
 const BUILTIN_TEMPLATES = [
-  {
-    id: 'premium_summary',
-    name: 'Premium Summary',
-    description: 'Total premiums by insurer and product',
-    icon: '💰',
-    source: 'clients',
-    fields: ['insurance_provider','product','net_premium','total_invoice'],
-    groupBy: 'insurance_provider',
-    aggregations: [{ field: 'net_premium', op: 'sum' }, { field: 'total_invoice', op: 'sum' }, { field: 'client_name', op: 'count' }],
-    filters: [],
-    sortBy: 'total_invoice_sum',
-    sortDir: 'desc',
-    chartType: 'bar',
-    chartField: 'total_invoice_sum',
-  },
-  {
-    id: 'expiry_report',
-    name: 'Policy Expiry Report',
-    description: 'Policies expiring in the next 90 days',
-    icon: '📅',
-    source: 'clients',
-    fields: ['client_name','policy_no','policy_period_to','insurance_provider','product','mobile_no','net_premium'],
-    groupBy: '',
-    aggregations: [],
-    filters: [{ field: 'policy_period_to', op: 'between', value: '__next90__' }],
-    sortBy: 'policy_period_to',
-    sortDir: 'asc',
-    chartType: 'bar',
-    chartField: '',
-  },
-  {
-    id: 'commission_report',
-    name: 'Commission Report',
-    description: 'Commission earned by type and insurer',
-    icon: '📊',
-    source: 'clients',
-    fields: ['insurance_provider','commission_basic','commission_srcc','commission_tc'],
-    groupBy: 'insurance_provider',
-    aggregations: [{ field: 'commission_basic', op: 'sum' }, { field: 'commission_srcc', op: 'sum' }, { field: 'commission_tc', op: 'sum' }],
-    filters: [],
-    sortBy: 'commission_basic_sum',
-    sortDir: 'desc',
-    chartType: 'bar',
-    chartField: 'commission_basic_sum',
-  },
-  {
-    id: 'claims_summary',
-    name: 'Claims Summary',
-    description: 'Claims by status and insurer',
-    icon: '🛡️',
-    source: 'claims',
-    fields: ['insurer','status','claim_amount','settled_amount','client_name'],
-    groupBy: 'status',
-    aggregations: [{ field: 'claim_amount', op: 'sum' }, { field: 'settled_amount', op: 'sum' }, { field: 'client_name', op: 'count' }],
-    filters: [],
-    sortBy: 'client_name_count',
-    sortDir: 'desc',
-    chartType: 'pie',
-    chartField: 'client_name_count',
-  },
+  { id:'premium_summary',  name:'Premium Summary',     description:'Total premiums by insurer and product',  icon:'💰', source:'clients', fields:['insurance_provider','product','net_premium','total_invoice'], groupBy:'insurance_provider', aggregations:[{field:'net_premium',op:'sum'},{field:'total_invoice',op:'sum'},{field:'client_name',op:'count'}], filters:[], sortBy:'total_invoice_sum', sortDir:'desc', viewMode:'aggregated', charts:[{id:'c1',type:'bar',field:'total_invoice_sum',label:'Total Invoice by Insurer'}] },
+  { id:'expiry_report',    name:'Policy Expiry Report', description:'Policies expiring in the next 90 days', icon:'📅', source:'clients', fields:['client_name','policy_no','policy_period_to','insurance_provider','product','mobile_no','net_premium'], groupBy:'', aggregations:[], filters:[{field:'policy_period_to',op:'between',value:'__next90__'}], sortBy:'policy_period_to', sortDir:'asc', viewMode:'flat', charts:[] },
+  { id:'commission_report',name:'Commission Report',   description:'Commission earned by insurer',          icon:'📊', source:'clients', fields:['insurance_provider','commission_basic','commission_srcc','commission_tc'], groupBy:'insurance_provider', aggregations:[{field:'commission_basic',op:'sum'},{field:'commission_srcc',op:'sum'},{field:'commission_tc',op:'sum'}], filters:[], sortBy:'commission_basic_sum', sortDir:'desc', viewMode:'subtotals', charts:[{id:'c1',type:'bar',field:'commission_basic_sum',label:'Basic Commission by Insurer'}] },
+  { id:'claims_summary',   name:'Claims Summary',      description:'Claims by status and insurer',          icon:'🛡️', source:'claims',  fields:['insurer','status','claim_amount','settled_amount','client_name'], groupBy:'status', aggregations:[{field:'claim_amount',op:'sum'},{field:'settled_amount',op:'sum'},{field:'client_name',op:'count'}], filters:[], sortBy:'client_name_count', sortDir:'desc', viewMode:'aggregated', charts:[{id:'c1',type:'pie',field:'client_name_count',label:'Claims by Status'}] },
 ];
 
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
+/* ── Pure helpers ────────────────────────────────────────────────────────── */
 function fmtNum(v) {
   if (v === null || v === undefined || v === '') return '—';
   const n = Number(v);
   return isNaN(n) ? v : n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
-
-function parseNum(v) { const n = parseFloat(String(v || '').replace(/,/g, '')); return isNaN(n) ? 0 : n; }
-
+function parseNum(v) { const n = parseFloat(String(v||'').replace(/,/g,'')); return isNaN(n)?0:n; }
 function fmtDate(v) {
   if (!v) return '—';
   if (v?.toDate) return v.toDate().toLocaleDateString('en-GB');
-  const d = new Date(v);
-  return isNaN(d) ? v : d.toLocaleDateString('en-GB');
+  const d = new Date(v); return isNaN(d)?v:d.toLocaleDateString('en-GB');
+}
+
+function computeAgg(op, vals) {
+  if (!vals.length) return 0;
+  if (op==='sum')   return vals.reduce((a,b)=>a+b,0);
+  if (op==='avg')   return vals.reduce((a,b)=>a+b,0)/vals.length;
+  if (op==='min')   return Math.min(...vals);
+  if (op==='max')   return Math.max(...vals);
+  if (op==='count') return vals.length;
+  return 0;
 }
 
 function applyFilters(rows, filters) {
@@ -200,38 +159,36 @@ function applyFilters(rows, filters) {
     for (const f of filters) {
       const rawVal = row[f.field];
       if (f.value === '__next90__') {
-        const now = new Date(); now.setHours(0,0,0,0);
-        const end = new Date(now); end.setDate(end.getDate() + 90);
-        const d = rawVal?.toDate ? rawVal.toDate() : new Date(rawVal);
-        if (isNaN(d) || d < now || d > end) return false;
-        continue;
+        const now=new Date(); now.setHours(0,0,0,0);
+        const end=new Date(now); end.setDate(end.getDate()+90);
+        const d=rawVal?.toDate?rawVal.toDate():new Date(rawVal);
+        if (isNaN(d)||d<now||d>end) return false; continue;
       }
-      const field = [...CLIENT_FIELDS, ...CLAIM_FIELDS].find(f2 => f2.key === f.field);
+      const field=[...CLIENT_FIELDS,...CLAIM_FIELDS].find(f2=>f2.key===f.field);
       if (!field) continue;
-      if (field.type === 'string') {
-        const val = (rawVal || '').toLowerCase();
-        const cmp = (f.value || '').toLowerCase();
-        if (f.op === 'equals'     && val !== cmp) return false;
-        if (f.op === 'not equals' && val === cmp) return false;
-        if (f.op === 'contains'   && !val.includes(cmp)) return false;
-        if (f.op === 'starts with'&& !val.startsWith(cmp)) return false;
-      } else if (field.type === 'number') {
-        const a = parseNum(rawVal); const b = parseNum(f.value);
-        if (f.op === '='  && a !== b) return false;
-        if (f.op === '>'  && a <= b)  return false;
-        if (f.op === '<'  && a >= b)  return false;
-        if (f.op === '>=' && a < b)   return false;
-        if (f.op === '<=' && a > b)   return false;
-      } else if (field.type === 'date') {
-        const d = rawVal?.toDate ? rawVal.toDate() : new Date(rawVal);
+      if (field.type==='string') {
+        const val=(rawVal||'').toLowerCase(); const cmp=(f.value||'').toLowerCase();
+        if (f.op==='equals'&&val!==cmp) return false;
+        if (f.op==='not equals'&&val===cmp) return false;
+        if (f.op==='contains'&&!val.includes(cmp)) return false;
+        if (f.op==='starts with'&&!val.startsWith(cmp)) return false;
+      } else if (field.type==='number') {
+        const a=parseNum(rawVal); const b=parseNum(f.value);
+        if (f.op==='='&&a!==b) return false;
+        if (f.op==='>'&&a<=b) return false;
+        if (f.op==='<'&&a>=b) return false;
+        if (f.op==='>='&&a<b) return false;
+        if (f.op==='<='&&a>b) return false;
+      } else if (field.type==='date') {
+        const d=rawVal?.toDate?rawVal.toDate():new Date(rawVal);
         if (isNaN(d)) return false;
-        if (f.op === 'after'   && f.value && d <= new Date(f.value)) return false;
-        if (f.op === 'before'  && f.value && d >= new Date(f.value)) return false;
-        if (f.op === 'between' && f.value) {
-          const [from, to] = f.value.split('|');
-          const start = new Date(from); start.setHours(0,0,0,0);
-          const end   = new Date(to);   end.setHours(23,59,59,999);
-          if (d < start || d > end) return false;
+        if (f.op==='after'&&f.value&&d<=new Date(f.value)) return false;
+        if (f.op==='before'&&f.value&&d>=new Date(f.value)) return false;
+        if (f.op==='between'&&f.value) {
+          const [from,to]=f.value.split('|');
+          const start=new Date(from); start.setHours(0,0,0,0);
+          const end=new Date(to); end.setHours(23,59,59,999);
+          if (d<start||d>end) return false;
         }
       }
     }
@@ -239,170 +196,273 @@ function applyFilters(rows, filters) {
   });
 }
 
-function aggregate(rows, groupBy, aggregations) {
-  if (!groupBy || !aggregations.length) return rows;
-  const groups = {};
+/* Aggregated: collapse groups into single summary rows */
+function aggregated(rows, groupBy, aggs) {
+  if (!groupBy||!aggs.length) return rows;
+  const groups={};
   for (const row of rows) {
-    const key = groupBy ? (row[groupBy] || '(None)') : '__all__';
-    if (!groups[key]) groups[key] = { [groupBy]: key, _rows: [] };
-    groups[key]._rows.push(row);
+    const k=row[groupBy]||'(None)';
+    if (!groups[k]) groups[k]={[groupBy]:k,_rows:[]};
+    groups[k]._rows.push(row);
   }
-  return Object.values(groups).map(g => {
-    const result = { [groupBy]: g[groupBy] };
-    for (const agg of aggregations) {
-      const vals = g._rows.map(r => parseNum(r[agg.field]));
-      const key2 = `${agg.field}_${agg.op}`;
-      if (agg.op === 'sum')   result[key2] = vals.reduce((a, b) => a + b, 0);
-      if (agg.op === 'avg')   result[key2] = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
-      if (agg.op === 'min')   result[key2] = Math.min(...vals);
-      if (agg.op === 'max')   result[key2] = Math.max(...vals);
-      if (agg.op === 'count') result[key2] = g._rows.length;
+  return Object.values(groups).map(g=>{
+    const r={[groupBy]:g[groupBy]};
+    for (const agg of aggs) {
+      const vals=g._rows.map(x=>parseNum(x[agg.field]));
+      r[`${agg.field}_${agg.op}`]=computeAgg(agg.op,vals);
     }
-    return result;
+    return r;
   });
+}
+
+/* Subtotals: keep each individual row, inject subtotal + grand-total rows */
+function withSubtotals(rows, groupBy, aggs) {
+  if (!groupBy||!aggs.length) return rows.map(r=>({...r,_type:'data'}));
+  const sorted=[...rows].sort((a,b)=>String(a[groupBy]||'').localeCompare(String(b[groupBy]||'')));
+  const result=[]; let curGroup=null; let curRows=[];
+  const pushSub=(grp,gRows)=>{
+    const s={[groupBy]:grp,_type:'subtotal',_count:gRows.length};
+    for (const agg of aggs){
+      const vals=gRows.map(r=>parseNum(r[agg.field]));
+      s[`${agg.field}_${agg.op}`]=computeAgg(agg.op,vals);
+    }
+    result.push(s);
+  };
+  for (const row of sorted){
+    const g=row[groupBy]||'(None)';
+    if (curGroup!==g){ if (curGroup!==null) pushSub(curGroup,curRows); curGroup=g; curRows=[]; }
+    result.push({...row,_type:'data'}); curRows.push(row);
+  }
+  if (curGroup!==null) pushSub(curGroup,curRows);
+  const gt={_type:'grandtotal',_count:rows.length};
+  if (groupBy) gt[groupBy]='GRAND TOTAL';
+  for (const agg of aggs){
+    const vals=rows.map(r=>parseNum(r[agg.field]));
+    gt[`${agg.field}_${agg.op}`]=computeAgg(agg.op,vals);
+  }
+  result.push(gt);
+  return result;
+}
+
+/* Pivot: cross-tab rowField × colField → value */
+function buildPivot(rows, rowField, colField, valueField, valueOp) {
+  if (!rowField||!colField||!valueField) return { pivotRows:[], colValues:[] };
+  const colValues=[...new Set(rows.map(r=>String(r[colField]||'(None)')))].sort().slice(0,20);
+  const rowGroups={};
+  for (const row of rows){
+    const rk=String(row[rowField]||'(None)');
+    const ck=String(row[colField]||'(None)');
+    if (!rowGroups[rk]) rowGroups[rk]={};
+    if (!rowGroups[rk][ck]) rowGroups[rk][ck]=[];
+    rowGroups[rk][ck].push(parseNum(row[valueField]));
+  }
+  const pivotRows=Object.entries(rowGroups).map(([rk,cols])=>{
+    const r={_rowLabel:rk,_type:'pivot'};
+    let total=0;
+    for (const cv of colValues){ const val=cols[cv]?computeAgg(valueOp,cols[cv]):0; r[`_p_${cv}`]=val; total+=val; }
+    r._rowTotal=total; return r;
+  });
+  // Grand total row
+  const gt={_rowLabel:'TOTAL',_type:'pivottotal'};
+  for (const cv of colValues){
+    const allVals=rows.filter(r=>String(r[colField]||'(None)')===cv).map(r=>parseNum(r[valueField]));
+    gt[`_p_${cv}`]=computeAgg(valueOp,allVals);
+  }
+  gt._rowTotal=computeAgg(valueOp,rows.map(r=>parseNum(r[valueField])));
+  pivotRows.push(gt);
+  return { pivotRows, colValues };
 }
 
 function sortRows(rows, sortBy, sortDir) {
   if (!sortBy) return rows;
-  return [...rows].sort((a, b) => {
-    const av = parseNum(a[sortBy]) || 0; const bv = parseNum(b[sortBy]) || 0;
-    if (av !== bv) return sortDir === 'asc' ? av - bv : bv - av;
-    const as = String(a[sortBy] || ''); const bs = String(b[sortBy] || '');
-    return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+  return [...rows].sort((a,b)=>{
+    if (a._type&&a._type!=='data') return 1;
+    if (b._type&&b._type!=='data') return -1;
+    const av=parseNum(a[sortBy])||0; const bv=parseNum(b[sortBy])||0;
+    if (av!==bv) return sortDir==='asc'?av-bv:bv-av;
+    const as=String(a[sortBy]||''); const bs=String(b[sortBy]||'');
+    return sortDir==='asc'?as.localeCompare(bs):bs.localeCompare(as);
   });
 }
 
-/* ── PDF export — includes chart screenshot if chartEl provided ──────────── */
-async function exportPDF(columns, rows, reportName, chartEl) {
-  const landscape = columns.length > 6;
-  const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm' });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const dateStr = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+/* ── PDF export with multiple chart captures ────────────────────────────── */
+async function exportPDF(columns, rows, reportName, chartEls=[]) {
+  const landscape=columns.length>6;
+  const pdf=new jsPDF({orientation:landscape?'landscape':'portrait',unit:'mm'});
+  const pageW=pdf.internal.pageSize.getWidth(); const pageH=pdf.internal.pageSize.getHeight();
+  const dateStr=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
 
-  // ── Header gradient block
-  pdf.setFillColor(255, 90, 90);
-  pdf.rect(0, 0, pageW, 26, 'F');
-  pdf.setFillColor(26, 26, 46);
-  pdf.rect(0, 26, pageW, 10, 'F');
-
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(15); pdf.setFont('helvetica', 'bold');
-  pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', pageW / 2, 11, { align: 'center' });
-  pdf.setFontSize(10); pdf.setFont('helvetica', 'normal');
-  pdf.text(reportName, pageW / 2, 20, { align: 'center' });
+  pdf.setFillColor(255,90,90); pdf.rect(0,0,pageW,26,'F');
+  pdf.setFillColor(26,26,46);  pdf.rect(0,26,pageW,10,'F');
+  pdf.setTextColor(255,255,255);
+  pdf.setFontSize(15); pdf.setFont('helvetica','bold');
+  pdf.text('Ceilao Insurance Brokers (Pvt) Ltd',pageW/2,11,{align:'center'});
+  pdf.setFontSize(10); pdf.setFont('helvetica','normal');
+  pdf.text(reportName,pageW/2,20,{align:'center'});
   pdf.setFontSize(8.5);
-  pdf.text(`Generated: ${dateStr}  ·  ${rows.length} record${rows.length !== 1 ? 's' : ''}`, pageW / 2, 32, { align: 'center' });
+  pdf.text(`Generated: ${dateStr}  ·  ${rows.filter(r=>!r._type||r._type==='data').length} records`,pageW/2,32,{align:'center'});
 
-  let currentY = 42;
-
-  // ── Summary stats row
-  const numCols = columns.filter(c => c.type === 'number').slice(0, 4);
-  if (numCols.length) {
-    const boxW = (pageW - 20) / numCols.length;
-    numCols.forEach((c, i) => {
-      const total = rows.reduce((a, r) => a + parseNum(r[c.key]), 0);
-      const x = 10 + i * boxW;
-      pdf.setFillColor(255, 248, 245);
-      pdf.roundedRect(x, currentY, boxW - 3, 18, 2, 2, 'F');
-      pdf.setDrawColor(255, 139, 90); pdf.setLineWidth(0.3);
-      pdf.roundedRect(x, currentY, boxW - 3, 18, 2, 2, 'S');
-      pdf.setTextColor(255, 90, 90); pdf.setFontSize(12); pdf.setFont('helvetica', 'bold');
-      pdf.text(fmtNum(total), x + (boxW-3)/2, currentY + 10, { align: 'center' });
-      pdf.setTextColor(107, 114, 128); pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal');
-      pdf.text(c.label, x + (boxW-3)/2, currentY + 16, { align: 'center' });
+  let Y=42;
+  // Summary stat boxes
+  const numCols=columns.filter(c=>c.type==='number').slice(0,4);
+  if (numCols.length){
+    const boxW=(pageW-20)/numCols.length;
+    numCols.forEach((c,i)=>{
+      const total=rows.filter(r=>!r._type||r._type==='data').reduce((a,r)=>a+parseNum(r[c.key]),0);
+      const x=10+i*boxW;
+      pdf.setFillColor(255,248,245); pdf.roundedRect(x,Y,boxW-3,18,2,2,'F');
+      pdf.setDrawColor(255,139,90); pdf.setLineWidth(0.3); pdf.roundedRect(x,Y,boxW-3,18,2,2,'S');
+      pdf.setTextColor(255,90,90); pdf.setFontSize(12); pdf.setFont('helvetica','bold');
+      pdf.text(fmtNum(total),x+(boxW-3)/2,Y+10,{align:'center'});
+      pdf.setTextColor(107,114,128); pdf.setFontSize(7.5); pdf.setFont('helvetica','normal');
+      pdf.text(c.label,x+(boxW-3)/2,Y+16,{align:'center'});
     });
-    currentY += 24;
+    Y+=24;
   }
 
-  // ── Chart image (capture the Recharts container)
-  if (chartEl) {
+  // All charts
+  for (const chartEl of chartEls.filter(Boolean)) {
+    if (Y>pageH-40) { pdf.addPage(); Y=15; }
     try {
-      const canvas = await html2canvas(chartEl, { scale: 2, backgroundColor: '#ffffff', logging: false });
-      const imgData = canvas.toDataURL('image/png');
-      const chartH = Math.min(65, (canvas.height / canvas.width) * (pageW - 20));
-      pdf.addImage(imgData, 'PNG', 10, currentY, pageW - 20, chartH);
-      currentY += chartH + 6;
-    } catch { /* skip chart if capture fails */ }
+      const canvas=await html2canvas(chartEl,{scale:2,backgroundColor:'#ffffff',logging:false});
+      const imgData=canvas.toDataURL('image/png');
+      const chartH=Math.min(60,(canvas.height/canvas.width)*(pageW-20));
+      pdf.addImage(imgData,'PNG',10,Y,pageW-20,chartH);
+      Y+=chartH+6;
+    } catch { /* skip chart */ }
   }
 
-  // ── Data table
-  autoTable(pdf, {
-    startY: currentY,
-    head: [columns.map(c => c.label)],
-    body: rows.map(r => columns.map(c => {
-      const v = r[c.key];
-      if (v === null || v === undefined) return '—';
-      if (c.type === 'date')   return fmtDate(v);
-      if (c.type === 'number') return fmtNum(v);
-      return String(v);
-    })),
-    headStyles: { fillColor: [26, 26, 46], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, cellPadding: 3 },
-    alternateRowStyles: { fillColor: [255, 248, 245] },
-    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [26, 26, 46] },
-    columnStyles: columns.reduce((acc, c, i) => {
-      if (c.type === 'number') acc[i] = { halign: 'right' };
-      return acc;
-    }, {}),
-    didDrawPage: () => {
-      // Footer on every page
-      pdf.setFontSize(7); pdf.setTextColor(180, 180, 180);
-      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd — Confidential', 10, pageH - 6);
-      pdf.text(`Page ${pdf.getNumberOfPages()}`, pageW - 10, pageH - 6, { align: 'right' });
+  if (Y>pageH-60) { pdf.addPage(); Y=15; }
+
+  autoTable(pdf,{
+    startY:Y,
+    head:[columns.map(c=>c.label)],
+    body:rows.map(r=>{
+      const isSub=r._type==='subtotal'; const isGT=r._type==='grandtotal';
+      return columns.map(c=>{
+        if (isSub||isGT) {
+          const v=r[c.key]; if (v===null||v===undefined) return '';
+          return typeof v==='number'?fmtNum(v):String(v);
+        }
+        const v=r[c.key];
+        if (v===null||v===undefined) return '—';
+        if (c.type==='date') return fmtDate(v);
+        if (c.type==='number') return fmtNum(v);
+        return String(v);
+      });
+    }),
+    headStyles:{fillColor:[26,26,46],textColor:[255,255,255],fontStyle:'bold',fontSize:9,cellPadding:3},
+    alternateRowStyles:{fillColor:[255,248,245]},
+    styles:{fontSize:8.5,cellPadding:2.5,textColor:[26,26,46]},
+    columnStyles:columns.reduce((acc,c,i)=>{if(c.type==='number')acc[i]={halign:'right'};return acc;},{}),
+    didParseCell:(d)=>{
+      const r=rows[d.row.index];
+      if (!r) return;
+      if (r._type==='subtotal'){d.cell.styles.fillColor=[230,230,255];d.cell.styles.fontStyle='bold';d.cell.styles.textColor=[60,60,200];}
+      if (r._type==='grandtotal'){d.cell.styles.fillColor=[26,26,46];d.cell.styles.textColor=[255,255,255];d.cell.styles.fontStyle='bold';}
+    },
+    didDrawPage:()=>{
+      pdf.setFontSize(7); pdf.setTextColor(180,180,180);
+      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd — Confidential',10,pageH-6);
+      pdf.text(`Page ${pdf.getNumberOfPages()}`,pageW-10,pageH-6,{align:'right'});
     },
   });
-
   pdf.save(`${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
-/* ── CSV export — clean, properly quoted, with summary header ────────────── */
+/* ── CSV export ──────────────────────────────────────────────────────────── */
 function exportCSV(columns, rows, reportName) {
-  const dateStr = new Date().toLocaleDateString('en-GB');
-  const lines = [
-    // Report header block
+  const dateStr=new Date().toLocaleDateString('en-GB');
+  const numCols=columns.filter(c=>c.type==='number');
+  const dataRows=rows.filter(r=>!r._type||r._type==='data');
+  const lines=[
     `"${reportName}"`,
     `"Generated by Ceilao Insurance Brokers","${dateStr}"`,
-    `"Total records","${rows.length}"`,
+    `"Total data records","${dataRows.length}"`,
     '',
-    // Summary totals for number columns
-    ...(() => {
-      const numCols = columns.filter(c => c.type === 'number');
-      if (!numCols.length) return [];
-      return [
-        '"— SUMMARY TOTALS —"',
-        numCols.map(c => `"${c.label}"`).join(','),
-        numCols.map(c => parseNum(rows.reduce((a, r) => a + parseNum(r[c.key]), 0))).join(','),
-        '',
-      ];
-    })(),
-    // Column headers
-    columns.map(c => `"${c.label}"`).join(','),
-    // Data rows
-    ...rows.map(r => columns.map(c => {
-      const v = r[c.key];
-      if (v === null || v === undefined || v === '') return '';
-      if (c.type === 'date')   return `"${fmtDate(v)}"`;
-      if (c.type === 'number') return parseNum(v);
-      return `"${String(v).replace(/"/g, '""')}"`;
-    }).join(',')),
+    ...(numCols.length?[
+      '"— SUMMARY TOTALS —"',
+      numCols.map(c=>`"${c.label}"`).join(','),
+      numCols.map(c=>parseNum(dataRows.reduce((a,r)=>a+parseNum(r[c.key]),0))).join(','),
+      '',
+    ]:[]),
+    columns.map(c=>`"${c.label}"`).join(','),
+    ...rows.map(r=>{
+      const prefix=r._type==='subtotal'?'[SUBTOTAL] ':r._type==='grandtotal'?'[GRAND TOTAL] ':'';
+      return columns.map(c=>{
+        const v=r[c.key];
+        if (v===null||v===undefined||v==='') return prefix&&c===columns[0]?`"${prefix}"`:'' ;
+        if (c.type==='date') return `"${prefix}${fmtDate(v)}"`;
+        if (c.type==='number') return parseNum(v);
+        return `"${prefix}${String(v).replace(/"/g,'""')}"`;
+      }).join(',');
+    }),
   ];
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  saveAs(blob, `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`);
+  const blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  saveAs(blob,`${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   MAIN COMPONENT
-   ════════════════════════════════════════════════════════════════════════════ */
-const ReportsPage = () => {
-  const [tab, setTab] = useState(0); // 0=builder 1=saved
+/* ── Chart component ─────────────────────────────────────────────────────── */
+function ReportChart({ chartCfg, data, innerRef, onRemove, onUpdate }) {
+  const { type, field, label } = chartCfg;
+  const chartData = data.slice(0,15).map(r=>({
+    name: String(Object.values(r).find(v=>typeof v==='string'&&!v.startsWith('_'))||'').slice(0,20),
+    value: parseNum(r[field]),
+  })).filter(d=>d.value>0||d.name);
+  const ChIcon = type==='pie'?PieChartOutlineIcon:type==='line'?ShowChartIcon:BarChartIcon;
+  return (
+    <Card sx={{ border:'1px solid rgba(255,139,90,0.12)', mb:2 }}>
+      <CardContent ref={innerRef} sx={{ p:2.5 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1.5 }}>
+          <ChIcon sx={{ color:'#6366f1', fontSize:18 }} />
+          <TextField size="small" value={label} onChange={e=>onUpdate({label:e.target.value})}
+            variant="standard" sx={{ flex:1,'& input':{fontSize:13,fontWeight:700} }} />
+          <Stack direction="row" spacing={0.5}>
+            {['bar','pie','line'].map(t=>(
+              <Chip key={t} label={t} size="small" clickable onClick={()=>onUpdate({type:t})}
+                sx={{ fontSize:10,height:22,fontWeight:700,
+                      bgcolor:type===t?'rgba(99,102,241,0.12)':'transparent',
+                      color:type===t?'#6366f1':'#9CA3AF' }} />
+            ))}
+          </Stack>
+          {onRemove && <IconButton size="small" onClick={onRemove} sx={{ color:'#9CA3AF','&:hover':{color:'#ef4444'} }}><DeleteOutlineIcon fontSize="small"/></IconButton>}
+        </Stack>
+        <ResponsiveContainer width="100%" height={240}>
+          {type==='pie'?(
+            <PieChart>
+              <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`}>
+                {chartData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
+              </Pie>
+              <RTooltip formatter={v=>fmtNum(v)}/><Legend/>
+            </PieChart>
+          ):type==='line'?(
+            <LineChart data={chartData} margin={{left:10,right:10}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)"/>
+              <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>fmtNum(v)}/>
+              <RTooltip formatter={v=>fmtNum(v)}/>
+              <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.5} dot={{r:4}}/>
+            </LineChart>
+          ):(
+            <BarChart data={chartData} margin={{left:10,right:10}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)"/>
+              <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>fmtNum(v)}/>
+              <RTooltip formatter={v=>fmtNum(v)}/>
+              <Bar dataKey="value" radius={[6,6,0,0]}>{chartData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
 
-  // Data
+/* ════════════════ MAIN ════════════════ */
+const ReportsPage = () => {
+  const [tab, setTab] = useState(0);
   const [clients,    setClients]    = useState([]);
   const [claims,     setClaims]     = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [loading,    setLoading]    = useState(false);
-
-  // Saved templates in Firestore
   const [savedTemplates, setSavedTemplates] = useState([]);
 
   // Builder state
@@ -413,601 +473,525 @@ const ReportsPage = () => {
   const [filters,      setFilters]      = useState([]);
   const [sortBy,       setSortBy]       = useState('');
   const [sortDir,      setSortDir]      = useState('desc');
-  const [chartType,    setChartType]    = useState('bar');
-  const [chartField,   setChartField]   = useState('');
+  const [viewMode,     setViewMode]     = useState('flat'); // flat|subtotals|aggregated|pivot
+  const [charts,       setCharts]       = useState([]); // [{id,type,field,label}]
+  // Pivot config
+  const [pivotColField,  setPivotColField]  = useState('');
+  const [pivotValField,  setPivotValField]  = useState('');
+  const [pivotValOp,     setPivotValOp]     = useState('sum');
 
   // Results
-  const [results,      setResults]      = useState(null);
-  const [rPage,        setRPage]        = useState(1);
-  const R_PER_PAGE = 20;
+  const [results,    setResults]    = useState(null);
+  const [pivotData,  setPivotData]  = useState(null);
+  const [rPage,      setRPage]      = useState(1);
+  const R_PER_PAGE = 25;
 
-  // Save template dialog
-  const [saveOpen,    setSaveOpen]    = useState(false);
-  const [saveName,    setSaveName]    = useState('');
-  const [saveDesc,    setSaveDesc]    = useState('');
-  const [savingTpl,   setSavingTpl]   = useState(false);
+  const [saveOpen,  setSaveOpen]  = useState(false);
+  const [saveName,  setSaveName]  = useState('');
+  const [saveDesc,  setSaveDesc]  = useState('');
+  const [savingTpl, setSavingTpl] = useState(false);
+  const [toast, setToast] = useState({ open:false, msg:'', severity:'success' });
+  const showToast = (msg,severity='success') => setToast({open:true,msg,severity});
 
-  const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
-  const showToast = (msg, severity = 'success') => setToast({ open: true, msg, severity });
-  const chartRef = useRef(null); // ref to chart container for PDF screenshot
+  // Chart refs (one per chart)
+  const chartRefsMap = useRef({});
+  const setChartRef = (id, el) => { chartRefsMap.current[id] = el; };
 
-  // Load data once
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async()=>{
     setLoading(true);
-    const [cSnap, clSnap] = await Promise.all([
-      getDocs(query(collection(db, 'clients'), orderBy('created_at', 'desc'))),
-      getDocs(query(collection(db, 'claims'),  orderBy('created_at', 'desc'))),
+    const [cS,clS]=await Promise.all([
+      getDocs(query(collection(db,'clients'),orderBy('created_at','desc'))),
+      getDocs(query(collection(db,'claims'), orderBy('created_at','desc'))),
     ]);
-    setClients(cSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    setClaims(clSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    setDataLoaded(true);
-    setLoading(false);
-  }, []);
+    setClients(cS.docs.map(d=>({id:d.id,...d.data()})));
+    setClaims(clS.docs.map(d=>({id:d.id,...d.data()})));
+    setDataLoaded(true); setLoading(false);
+  },[]);
 
-  const loadSavedTemplates = useCallback(async () => {
-    try {
-      const snap = await getDocs(query(collection(db, 'report_templates'), orderBy('created_at', 'desc')));
-      setSavedTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch { /* ignore */ }
-  }, []);
+  const loadSaved = useCallback(async()=>{
+    try{
+      const snap=await getDocs(query(collection(db,'report_templates'),orderBy('created_at','desc')));
+      setSavedTemplates(snap.docs.map(d=>({id:d.id,...d.data()})));
+    } catch{}
+  },[]);
 
-  useEffect(() => { loadData(); loadSavedTemplates(); }, [loadData, loadSavedTemplates]);
+  useEffect(()=>{loadData();loadSaved();},[loadData,loadSaved]);
 
-  const sourceFields = source === 'clients' ? CLIENT_FIELDS : CLAIM_FIELDS;
+  const sourceFields = source==='clients'?CLIENT_FIELDS:CLAIM_FIELDS;
 
-  // Run report
-  const runReport = useCallback(() => {
-    const raw = source === 'clients' ? clients : claims;
+  const runReport = useCallback(()=>{
+    const raw = source==='clients'?clients:claims;
     const filtered = applyFilters(raw, filters);
-    const agged = aggregate(filtered, groupBy, aggregations);
-    const sorted = sortRows(agged, sortBy, sortDir);
-    setResults(sorted);
+    if (viewMode==='pivot') {
+      setPivotData(buildPivot(filtered,groupBy,pivotColField,pivotValField,pivotValOp));
+      setResults(filtered);
+    } else if (viewMode==='aggregated') {
+      setResults(sortRows(aggregated(filtered,groupBy,aggregations),sortBy,sortDir));
+      setPivotData(null);
+    } else if (viewMode==='subtotals') {
+      setResults(withSubtotals(filtered,groupBy,aggregations));
+      setPivotData(null);
+    } else {
+      setResults(sortRows(filtered,sortBy,sortDir));
+      setPivotData(null);
+    }
     setRPage(1);
-  }, [source, clients, claims, filters, groupBy, aggregations, sortBy, sortDir]);
+  },[source,clients,claims,filters,viewMode,groupBy,pivotColField,pivotValField,pivotValOp,aggregations,sortBy,sortDir]);
 
-  // Load a template (builtin or saved) into builder
   const loadTemplate = (tpl) => {
-    setSource(tpl.source || 'clients');
-    setSelFields(tpl.fields || []);
-    setGroupBy(tpl.groupBy || '');
-    setAggregations(tpl.aggregations || []);
-    setFilters(tpl.filters?.filter(f => f.value !== '__next90__') || []);
-    setSortBy(tpl.sortBy || '');
-    setSortDir(tpl.sortDir || 'desc');
-    setChartType(tpl.chartType || 'bar');
-    setChartField(tpl.chartField || '');
-    setResults(null);
-    setTab(0);
-    // Auto-run for expiry report since filter is dynamic
-    if (tpl.id === 'expiry_report') {
-      const raw = clients;
-      const now = new Date(); now.setHours(0,0,0,0);
-      const end = new Date(now); end.setDate(end.getDate() + 90);
-      const filtered = raw.filter(r => {
-        const v = r.policy_period_to;
-        const d = v?.toDate ? v.toDate() : new Date(v);
-        return !isNaN(d) && d >= now && d <= end;
-      });
-      setResults(sortRows(filtered, 'policy_period_to', 'asc'));
+    setSource(tpl.source||'clients');
+    setSelFields(tpl.fields||[]);
+    setGroupBy(tpl.groupBy||'');
+    setAggregations(tpl.aggregations||[]);
+    setFilters((tpl.filters||[]).filter(f=>f.value!=='__next90__'));
+    setSortBy(tpl.sortBy||'');
+    setSortDir(tpl.sortDir||'desc');
+    setViewMode(tpl.viewMode||'flat');
+    setCharts(tpl.charts||[]);
+    setResults(null); setPivotData(null); setTab(0);
+    if (tpl.id==='expiry_report') {
+      const now=new Date(); now.setHours(0,0,0,0);
+      const end=new Date(now); end.setDate(end.getDate()+90);
+      const f=applyFilters(clients,[{field:'policy_period_to',op:'between',value:null}]);
+      const ex=clients.filter(r=>{const v=r.policy_period_to;const d=v?.toDate?v.toDate():new Date(v);return !isNaN(d)&&d>=now&&d<=end;});
+      setResults(sortRows(ex,'policy_period_to','asc'));
     }
   };
 
-  // Save template
-  const handleSaveTemplate = async () => {
-    if (!saveName.trim()) return;
-    setSavingTpl(true);
+  const handleSaveTpl = async()=>{
+    if (!saveName.trim()) return; setSavingTpl(true);
     try {
-      const tpl = {
-        name: saveName.trim(), description: saveDesc.trim(),
-        source, fields: selFields, groupBy, aggregations, filters, sortBy, sortDir, chartType, chartField,
-        created_at: serverTimestamp(),
-      };
-      await setDoc(doc(collection(db, 'report_templates')), tpl);
-      setSaveOpen(false); setSaveName(''); setSaveDesc('');
-      loadSavedTemplates();
-      showToast('Template saved!');
-    } catch (err) { showToast(err.message, 'error'); }
+      const tpl={name:saveName.trim(),description:saveDesc.trim(),source,fields:selFields,groupBy,aggregations,filters,sortBy,sortDir,viewMode,charts,pivotColField,pivotValField,pivotValOp,created_at:serverTimestamp()};
+      await setDoc(doc(collection(db,'report_templates')),tpl);
+      setSaveOpen(false); setSaveName(''); setSaveDesc(''); loadSaved(); showToast('Template saved!');
+    } catch(err){showToast(err.message,'error');}
     setSavingTpl(false);
   };
 
-  const handleDeleteTemplate = async (id) => {
-    await deleteDoc(doc(db, 'report_templates', id));
-    setSavedTemplates(p => p.filter(t => t.id !== id));
-    showToast('Template deleted.', 'info');
-  };
+  const handleDelTpl = async(id)=>{ await deleteDoc(doc(db,'report_templates',id)); setSavedTemplates(p=>p.filter(t=>t.id!==id)); showToast('Template deleted.','info'); };
 
-  // Compute display columns
-  const displayCols = useMemo(() => {
+  // displayCols for the flat/subtotals/aggregated table
+  const displayCols = useMemo(()=>{
     if (!results) return [];
-    if (groupBy && aggregations.length) {
-      const groupField = sourceFields.find(f => f.key === groupBy);
-      const cols = [{ key: groupBy, label: groupField?.label || groupBy, type: 'string' }];
-      for (const agg of aggregations) {
-        const f = sourceFields.find(ff => ff.key === agg.field);
-        cols.push({ key: `${agg.field}_${agg.op}`, label: `${f?.label || agg.field} (${agg.op})`, type: 'number' });
+    if ((viewMode==='aggregated'||viewMode==='subtotals') && groupBy && aggregations.length) {
+      const gf=sourceFields.find(f=>f.key===groupBy);
+      const cols=[{key:groupBy,label:gf?.label||groupBy,type:'string'}];
+      for (const agg of aggregations){
+        const f=sourceFields.find(ff=>ff.key===agg.field);
+        cols.push({key:`${agg.field}_${agg.op}`,label:`${f?.label||agg.field} (${agg.op})`,type:'number'});
+      }
+      if (viewMode==='subtotals'){
+        const dataFields=selFields.map(k=>sourceFields.find(f=>f.key===k)).filter(Boolean);
+        return [...new Map([...dataFields,...cols].map(c=>[c.key,c])).values()];
       }
       return cols;
     }
-    return selFields.map(k => sourceFields.find(f => f.key === k)).filter(Boolean);
-  }, [results, groupBy, aggregations, selFields, sourceFields]);
+    return selFields.map(k=>sourceFields.find(f=>f.key===k)).filter(Boolean);
+  },[results,viewMode,groupBy,aggregations,selFields,sourceFields]);
 
-  const pagedResults = useMemo(() => {
+  const pagedResults = useMemo(()=>{
     if (!results) return [];
-    return results.slice((rPage-1)*R_PER_PAGE, rPage*R_PER_PAGE);
-  }, [results, rPage]);
+    if (viewMode==='subtotals') return results; // no pagination for subtotals — shows full structure
+    return results.slice((rPage-1)*R_PER_PAGE,rPage*R_PER_PAGE);
+  },[results,viewMode,rPage]);
 
-  // Chart data
-  const chartData = useMemo(() => {
-    if (!results || !chartField) return [];
-    return results.slice(0, 12).map(r => ({
-      name: String(groupBy ? r[groupBy] : r[selFields[0]] || '').slice(0, 20),
-      value: parseNum(r[chartField]),
-    }));
-  }, [results, chartField, groupBy, selFields]);
+  // Charts data
+  const chartsData = useMemo(()=>{
+    if (!results||!charts.length) return {};
+    const src = viewMode==='aggregated'||viewMode==='subtotals'
+      ? results.filter(r=>!r._type||r._type==='subtotal')
+      : results.filter(r=>!r._type||r._type==='data');
+    return charts.reduce((acc,ch)=>{
+      acc[ch.id]=src.slice(0,15).map(r=>({
+        name:String(r[groupBy]||r[selFields[0]]||'').slice(0,22),
+        value:parseNum(r[ch.field]),
+      })).filter(d=>d.value>0||d.name);
+      return acc;
+    },{});
+  },[results,charts,groupBy,selFields,viewMode]);
 
-  // Toggle field selection
-  const toggleField = (key) => {
-    setSelFields(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key]);
+  const addChart = ()=>setCharts(p=>[...p,{id:Date.now().toString(),type:'bar',field:sourceFields.find(f=>f.type==='number')?.key||'',label:'New Chart'}]);
+  const removeChart = (id)=>setCharts(p=>p.filter(c=>c.id!==id));
+  const updateChart = (id,patch)=>setCharts(p=>p.map(c=>c.id===id?{...c,...patch}:c));
+
+  const allChartEls = () => charts.map(c=>chartRefsMap.current[c.id]).filter(Boolean);
+
+  const renderCell = (col, row) => {
+    const v = row[col.key];
+    if (v===null||v===undefined) return '—';
+    if (col.type==='date') return fmtDate(v);
+    if (col.type==='number') return fmtNum(v);
+    return String(v);
   };
 
-  // Add/remove filter
-  const addFilter = () => setFilters(p => [...p, { field: sourceFields[0].key, op: 'equals', value: '' }]);
-  const removeFilter = (i) => setFilters(p => p.filter((_,idx) => idx !== i));
-  const updateFilter = (i, patch) => setFilters(p => p.map((f,idx) => idx===i ? {...f,...patch} : f));
+  const rowSx = (row) => {
+    if (row._type==='grandtotal') return { bgcolor:'#1A1A2E','& td':{color:'#fff',fontWeight:800,borderBottom:'none'} };
+    if (row._type==='subtotal')   return { bgcolor:'rgba(99,102,241,0.08)','& td':{color:'#4338ca',fontWeight:700,fontStyle:'italic'} };
+    return { '&:nth-of-type(even)':{ bgcolor:'rgba(255,248,245,0.6)' }, '&:hover':{ bgcolor:'rgba(255,90,90,0.04)' } };
+  };
 
-  // Add/remove aggregation
-  const addAgg = () => setAggregations(p => [...p, { field: sourceFields.find(f=>f.type==='number')?.key || '', op: 'sum' }]);
-  const removeAgg = (i) => setAggregations(p => p.filter((_,idx) => idx !== i));
-  const updateAgg = (i, patch) => setAggregations(p => p.map((a,idx) => idx===i ? {...a,...patch} : a));
-
-  const ChartIcon = chartType === 'pie' ? PieChartOutlineIcon : chartType === 'line' ? ShowChartIcon : BarChartIcon;
+  const totalDataRows = results ? results.filter(r=>!r._type||r._type==='data').length : 0;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-    <Box className="page-enter" sx={{ maxWidth: 1200, mx: 'auto' }}>
+    <Box className="page-enter" sx={{ maxWidth:1200, mx:'auto' }}>
 
       {/* Header */}
-      <Stack direction={{ xs:'column', sm:'row' }} justifyContent="space-between" alignItems={{ sm:'center' }} sx={{ mb: 3 }}>
+      <Stack direction={{xs:'column',sm:'row'}} justifyContent="space-between" alignItems={{sm:'center'}} sx={{mb:3}}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.3 }}>Reports</Typography>
-          <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>
-            Build custom reports, apply filters, visualise with charts and export
-          </Typography>
+          <Typography variant="h5" sx={{fontWeight:800,mb:0.3}}>Reports</Typography>
+          <Typography sx={{fontSize:13,color:'#9CA3AF'}}>Build custom reports with subtotals, pivot tables, multiple charts and exports</Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
-          <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={loadData} disabled={loading}
-            sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.35)', color: '#FF8B5A' }}>
-            {loading ? 'Loading…' : 'Refresh Data'}
-          </Button>
-          {results && (
-            <>
-              <Button size="small" variant="outlined" startIcon={<PictureAsPdfOutlinedIcon />}
-                onClick={() => exportPDF(displayCols, results, saveName || 'Report', chartRef.current)}
-                sx={{ fontSize: 12, borderColor: 'rgba(239,68,68,0.35)', color: '#ef4444' }}>
-                Export PDF
-              </Button>
-              <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon />}
-                onClick={() => exportCSV(displayCols, results, saveName || 'Report')}
-                sx={{ fontSize: 12, borderColor: 'rgba(16,185,129,0.35)', color: '#059669' }}>
-                Export CSV
-              </Button>
-              <Button size="small" variant="contained" startIcon={<SaveOutlinedIcon />}
-                onClick={() => setSaveOpen(true)}
-                sx={{ fontSize: 12 }}>
-                Save Template
-              </Button>
-            </>
-          )}
+        <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Button size="small" variant="outlined" startIcon={<RefreshIcon/>} onClick={loadData} disabled={loading}
+            sx={{fontSize:12,borderColor:'rgba(255,139,90,0.35)',color:'#FF8B5A'}}>{loading?'Loading…':'Refresh'}</Button>
+          {results&&<>
+            <Button size="small" variant="outlined" startIcon={<PictureAsPdfOutlinedIcon/>}
+              onClick={()=>exportPDF(displayCols,results,saveName||'Report',allChartEls())}
+              sx={{fontSize:12,borderColor:'rgba(239,68,68,0.35)',color:'#ef4444'}}>Export PDF</Button>
+            <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon/>}
+              onClick={()=>exportCSV(displayCols,results,saveName||'Report')}
+              sx={{fontSize:12,borderColor:'rgba(16,185,129,0.35)',color:'#059669'}}>Export CSV</Button>
+            <Button size="small" variant="contained" startIcon={<SaveOutlinedIcon/>} onClick={()=>setSaveOpen(true)} sx={{fontSize:12}}>Save Template</Button>
+          </>}
         </Stack>
       </Stack>
 
-      {/* ── Built-in templates quick-launch ── */}
-      <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5 }}>
-        Quick Templates
-      </Typography>
-      <Stack direction={{ xs:'column', sm:'row' }} spacing={1.5} sx={{ mb: 3 }} flexWrap="wrap">
-        {BUILTIN_TEMPLATES.map(tpl => (
-          <Card key={tpl.id} onClick={() => loadTemplate(tpl)} sx={{
-            flex: 1, minWidth: 180, cursor: 'pointer', border: '1px solid rgba(255,139,90,0.12)',
-            transition: 'all 0.18s', '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 6px 20px rgba(255,90,90,0.12)' }
-          }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                <Typography sx={{ fontSize: 20 }}>{tpl.icon}</Typography>
-                <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{tpl.name}</Typography>
+      {/* Quick templates */}
+      <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1,mb:1.5}}>Quick Templates</Typography>
+      <Stack direction={{xs:'column',sm:'row'}} spacing={1.5} sx={{mb:3}} flexWrap="wrap">
+        {BUILTIN_TEMPLATES.map(tpl=>(
+          <Card key={tpl.id} onClick={()=>loadTemplate(tpl)} sx={{flex:1,minWidth:160,cursor:'pointer',border:'1px solid rgba(255,139,90,0.12)',transition:'all 0.18s','&:hover':{transform:'translateY(-2px)',boxShadow:'0 6px 20px rgba(255,90,90,0.12)'}}}>
+            <CardContent sx={{p:2,'&:last-child':{pb:2}}}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{mb:0.5}}>
+                <Typography sx={{fontSize:20}}>{tpl.icon}</Typography>
+                <Typography sx={{fontWeight:700,fontSize:13}}>{tpl.name}</Typography>
               </Stack>
-              <Typography sx={{ fontSize: 11.5, color: '#9CA3AF' }}>{tpl.description}</Typography>
+              <Typography sx={{fontSize:11.5,color:'#9CA3AF'}}>{tpl.description}</Typography>
             </CardContent>
           </Card>
         ))}
       </Stack>
 
-      <Tabs value={tab} onChange={(_,v)=>setTab(v)} sx={{
-        mb: 2.5, borderBottom: '1px solid rgba(255,139,90,0.12)',
-        '& .MuiTab-root': { fontSize: 13, fontWeight: 600, textTransform: 'none', color: '#9CA3AF' },
-        '& .Mui-selected': { color: '#FF5A5A' },
-        '& .MuiTabs-indicator': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)', height: 2.5 },
-      }}>
-        <Tab icon={<TuneIcon sx={{ fontSize: 17 }} />} iconPosition="start" label="Report Builder" />
-        <Tab icon={<BookmarkIcon sx={{ fontSize: 17 }} />} iconPosition="start"
-          label={`Saved Templates${savedTemplates.length ? ` (${savedTemplates.length})` : ''}`} />
+      <Tabs value={tab} onChange={(_,v)=>setTab(v)} sx={{mb:2.5,borderBottom:'1px solid rgba(255,139,90,0.12)','& .MuiTab-root':{fontSize:13,fontWeight:600,textTransform:'none',color:'#9CA3AF'},'& .Mui-selected':{color:'#FF5A5A'},'& .MuiTabs-indicator':{background:'linear-gradient(90deg,#FF5A5A,#FF8B5A)',height:2.5}}}>
+        <Tab icon={<TuneIcon sx={{fontSize:17}}/>} iconPosition="start" label="Report Builder"/>
+        <Tab icon={<BookmarkIcon sx={{fontSize:17}}/>} iconPosition="start" label={`Saved${savedTemplates.length?` (${savedTemplates.length})`:''}`}/>
       </Tabs>
 
-      {/* ════════ TAB 0 — Builder ════════ */}
-      {tab === 0 && (
-        <Stack direction={{ xs:'column', lg:'row' }} spacing={2.5} alignItems="flex-start">
+      {tab===0&&(
+        <Stack direction={{xs:'column',lg:'row'}} spacing={2.5} alignItems="flex-start">
 
-          {/* ── LEFT: Config panel ── */}
-          <Box sx={{ width: { xs:'100%', lg: 340 }, flexShrink: 0 }}>
-            <Card sx={{ border: '1px solid rgba(255,139,90,0.12)', mb: 2 }}>
-              <CardContent sx={{ p: 2.5 }}>
+          {/* ── Config panel ── */}
+          <Box sx={{width:{xs:'100%',lg:340},flexShrink:0}}>
+            <Card sx={{border:'1px solid rgba(255,139,90,0.12)',mb:2}}>
+              <CardContent sx={{p:2.5}}>
 
                 {/* Source */}
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
-                  Data Source
-                </Typography>
-                <FormControl fullWidth size="small" sx={{ mb: 2.5 }}>
-                  <Select value={source} onChange={e => { setSource(e.target.value); setSelFields([]); setGroupBy(''); setAggregations([]); setFilters([]); setResults(null); }}>
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Data Source</Typography>
+                <FormControl fullWidth size="small" sx={{mb:2.5}}>
+                  <Select value={source} onChange={e=>{setSource(e.target.value);setSelFields([]);setGroupBy('');setAggregations([]);setFilters([]);setResults(null);setPivotData(null);}}>
                     <MenuItem value="clients">Underwriting (Clients)</MenuItem>
                     <MenuItem value="claims">Claims</MenuItem>
                   </Select>
                 </FormControl>
 
                 {/* Fields */}
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
-                  Fields to Show
-                </Typography>
-                <Box sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px', p: 1, mb: 2.5 }}>
-                  {sourceFields.map(f => (
-                    <FormControlLabel key={f.key} control={
-                      <Checkbox size="small" checked={selFields.includes(f.key)} onChange={() => toggleField(f.key)}
-                        sx={{ color: '#FF8B5A', '&.Mui-checked': { color: '#FF5A5A' }, p: 0.5 }} />
-                    } label={<Typography sx={{ fontSize: 12 }}>{f.label}</Typography>}
-                      sx={{ display: 'block', m: 0, py: 0.2 }} />
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Fields to Show</Typography>
+                <Box sx={{maxHeight:180,overflowY:'auto',border:'1px solid rgba(0,0,0,0.08)',borderRadius:'8px',p:1,mb:2.5}}>
+                  {sourceFields.map(f=>(
+                    <FormControlLabel key={f.key} control={<Checkbox size="small" checked={selFields.includes(f.key)} onChange={()=>setSelFields(p=>p.includes(f.key)?p.filter(k=>k!==f.key):[...p,f.key])} sx={{color:'#FF8B5A','&.Mui-checked':{color:'#FF5A5A'},p:0.5}}/>} label={<Typography sx={{fontSize:12}}>{f.label}</Typography>} sx={{display:'block',m:0,py:0.2}}/>
                   ))}
                 </Box>
 
-                {/* Group By */}
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
-                  Group By (optional)
-                </Typography>
-                <FormControl fullWidth size="small" sx={{ mb: 2.5 }}>
-                  <Select value={groupBy} onChange={e => setGroupBy(e.target.value)}>
-                    <MenuItem value="">No grouping — show all rows</MenuItem>
-                    {sourceFields.filter(f => f.type === 'string').map(f => (
-                      <MenuItem key={f.key} value={f.key}>{f.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                {/* View Mode */}
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>View Mode</Typography>
+                <ToggleButtonGroup value={viewMode} exclusive onChange={(_,v)=>{ if(v) setViewMode(v); }} size="small" fullWidth sx={{mb:2.5}}>
+                  <ToggleButton value="flat"       sx={{fontSize:10,textTransform:'none',fontWeight:600}}><ViewListIcon sx={{fontSize:14,mr:0.5}}/>Flat</ToggleButton>
+                  <ToggleButton value="subtotals"  sx={{fontSize:10,textTransform:'none',fontWeight:600}}><FunctionsIcon sx={{fontSize:14,mr:0.5}}/>Subtotals</ToggleButton>
+                  <ToggleButton value="aggregated" sx={{fontSize:10,textTransform:'none',fontWeight:600}}><TableChartOutlinedIcon sx={{fontSize:14,mr:0.5}}/>Grouped</ToggleButton>
+                  <ToggleButton value="pivot"      sx={{fontSize:10,textTransform:'none',fontWeight:600}}><GridOnIcon sx={{fontSize:14,mr:0.5}}/>Pivot</ToggleButton>
+                </ToggleButtonGroup>
 
-                {/* Aggregations (only when grouped) */}
-                {groupBy && (
+                {/* Group By (flat/subtotals/aggregated) */}
+                {viewMode!=='pivot'&&(
                   <>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                      <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                        Aggregations
-                      </Typography>
-                      <IconButton size="small" onClick={addAgg} sx={{ color: '#FF5A5A' }}>
-                        <AddIcon fontSize="small" />
-                      </IconButton>
+                    <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Group By</Typography>
+                    <FormControl fullWidth size="small" sx={{mb:2.5}}>
+                      <Select value={groupBy} onChange={e=>setGroupBy(e.target.value)}>
+                        <MenuItem value="">None — show all rows</MenuItem>
+                        {sourceFields.filter(f=>f.type==='string').map(f=><MenuItem key={f.key} value={f.key}>{f.label}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </>
+                )}
+
+                {/* Aggregations (subtotals/aggregated) */}
+                {(viewMode==='subtotals'||viewMode==='aggregated')&&groupBy&&(
+                  <>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{mb:1}}>
+                      <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8}}>Aggregations</Typography>
+                      <IconButton size="small" onClick={()=>setAggregations(p=>[...p,{field:sourceFields.find(f=>f.type==='number')?.key||'',op:'sum'}])} sx={{color:'#FF5A5A'}}><AddIcon fontSize="small"/></IconButton>
                     </Stack>
-                    <Stack spacing={1} sx={{ mb: 2.5 }}>
-                      {aggregations.map((agg, i) => (
+                    <Stack spacing={1} sx={{mb:2.5}}>
+                      {aggregations.map((agg,i)=>(
                         <Stack key={i} direction="row" spacing={0.5} alignItems="center">
-                          <FormControl size="small" sx={{ flex: 1 }}>
-                            <Select value={agg.field} onChange={e => updateAgg(i, { field: e.target.value })}>
-                              {sourceFields.map(f => <MenuItem key={f.key} value={f.key} sx={{ fontSize: 12 }}>{f.label}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                          <FormControl size="small" sx={{ width: 80 }}>
-                            <Select value={agg.op} onChange={e => updateAgg(i, { op: e.target.value })}>
-                              {NUMBER_OPS.map(op => <MenuItem key={op} value={op} sx={{ fontSize: 12 }}>{op}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                          <IconButton size="small" onClick={() => removeAgg(i)} sx={{ color: '#9CA3AF', flexShrink: 0 }}>
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
+                          <FormControl size="small" sx={{flex:1}}><Select value={agg.field} onChange={e=>setAggregations(p=>p.map((a,idx)=>idx===i?{...a,field:e.target.value}:a))}>{sourceFields.map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                          <FormControl size="small" sx={{width:80}}><Select value={agg.op} onChange={e=>setAggregations(p=>p.map((a,idx)=>idx===i?{...a,op:e.target.value}:a))}>{NUMBER_OPS.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
+                          <IconButton size="small" onClick={()=>setAggregations(p=>p.filter((_,idx)=>idx!==i))} sx={{color:'#9CA3AF',flexShrink:0}}><DeleteOutlineIcon fontSize="small"/></IconButton>
                         </Stack>
                       ))}
-                      {!aggregations.length && (
-                        <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>Click + to add an aggregation</Typography>
-                      )}
+                      {!aggregations.length&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>Click + to add</Typography>}
                     </Stack>
                   </>
                 )}
 
-                {/* Quick Date Presets */}
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
-                  Quick Date Filter
-                </Typography>
-                <Stack direction="row" spacing={0.7} flexWrap="wrap" sx={{ mb: 2.5 }}>
+                {/* Pivot config */}
+                {viewMode==='pivot'&&(
+                  <>
+                    <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Pivot Settings</Typography>
+                    <Stack spacing={1.2} sx={{mb:2.5}}>
+                      <FormControl size="small" fullWidth><InputLabel sx={{fontSize:12}}>Row field</InputLabel><Select label="Row field" value={groupBy} onChange={e=>setGroupBy(e.target.value)}>{sourceFields.filter(f=>f.type==='string').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                      <FormControl size="small" fullWidth><InputLabel sx={{fontSize:12}}>Column field</InputLabel><Select label="Column field" value={pivotColField} onChange={e=>setPivotColField(e.target.value)}>{sourceFields.filter(f=>f.type==='string').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                      <FormControl size="small" fullWidth><InputLabel sx={{fontSize:12}}>Value field</InputLabel><Select label="Value field" value={pivotValField} onChange={e=>setPivotValField(e.target.value)}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                      <FormControl size="small" fullWidth><InputLabel sx={{fontSize:12}}>Aggregation</InputLabel><Select label="Aggregation" value={pivotValOp} onChange={e=>setPivotValOp(e.target.value)}>{NUMBER_OPS.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
+                    </Stack>
+                  </>
+                )}
+
+                {/* Quick date presets */}
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Quick Date Filter</Typography>
+                <Stack direction="row" spacing={0.7} flexWrap="wrap" sx={{mb:2.5}}>
                   {[
-                    { label: 'This Month',  getFilter: () => { const n=new Date(); return { field:'created_at', op:'between', value: `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01|${new Date(n.getFullYear(),n.getMonth()+1,0).toISOString().slice(0,10)}` }; } },
-                    { label: 'Last Month',  getFilter: () => { const n=new Date(); const m=new Date(n.getFullYear(),n.getMonth()-1,1); return { field:'created_at', op:'between', value: `${m.toISOString().slice(0,10)}|${new Date(n.getFullYear(),n.getMonth(),0).toISOString().slice(0,10)}` }; } },
-                    { label: 'This Year',   getFilter: () => { const y=new Date().getFullYear(); return { field:'created_at', op:'between', value:`${y}-01-01|${y}-12-31` }; } },
-                    { label: 'Last Year',   getFilter: () => { const y=new Date().getFullYear()-1; return { field:'created_at', op:'between', value:`${y}-01-01|${y}-12-31` }; } },
-                  ].map(({ label, getFilter }) => (
-                    <Chip key={label} label={label} size="small" clickable
-                      onClick={() => {
-                        const f = getFilter();
-                        setFilters(p => {
-                          const without = p.filter(x => x.field !== 'created_at');
-                          return [...without, f];
-                        });
-                      }}
-                      sx={{ fontSize: 11, height: 24, fontWeight: 600,
-                            bgcolor: 'rgba(99,102,241,0.08)', color: '#6366f1',
-                            border: '1px solid rgba(99,102,241,0.20)',
-                            '&:hover': { bgcolor: 'rgba(99,102,241,0.15)' } }} />
+                    {label:'This Month',fn:()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01|${new Date(n.getFullYear(),n.getMonth()+1,0).toISOString().slice(0,10)}`;}},
+                    {label:'Last Month',fn:()=>{const n=new Date();const m=new Date(n.getFullYear(),n.getMonth()-1,1);return`${m.toISOString().slice(0,10)}|${new Date(n.getFullYear(),n.getMonth(),0).toISOString().slice(0,10)}`;}},
+                    {label:'This Year', fn:()=>{const y=new Date().getFullYear();return`${y}-01-01|${y}-12-31`;}},
+                    {label:'Last Year', fn:()=>{const y=new Date().getFullYear()-1;return`${y}-01-01|${y}-12-31`;}},
+                  ].map(({label,fn})=>(
+                    <Chip key={label} label={label} size="small" clickable onClick={()=>setFilters(p=>[...p.filter(f=>f.field!=='created_at'),{field:'created_at',op:'between',value:fn()}])}
+                      sx={{fontSize:11,height:24,fontWeight:600,bgcolor:'rgba(99,102,241,0.08)',color:'#6366f1',border:'1px solid rgba(99,102,241,0.20)'}}/>
                   ))}
-                  {filters.some(f => f.field === 'created_at') && (
-                    <Chip label="Clear date" size="small" clickable
-                      onClick={() => setFilters(p => p.filter(f => f.field !== 'created_at'))}
-                      sx={{ fontSize: 11, height: 24, bgcolor: 'rgba(239,68,68,0.07)', color: '#ef4444' }} />
-                  )}
+                  {filters.some(f=>f.field==='created_at')&&<Chip label="Clear date" size="small" clickable onClick={()=>setFilters(p=>p.filter(f=>f.field!=='created_at'))} sx={{fontSize:11,height:24,bgcolor:'rgba(239,68,68,0.07)',color:'#ef4444'}}/>}
                 </Stack>
 
                 {/* Filters */}
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                    Filters
-                  </Typography>
-                  <IconButton size="small" onClick={addFilter} sx={{ color: '#FF5A5A' }}>
-                    <AddIcon fontSize="small" />
-                  </IconButton>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{mb:1}}>
+                  <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8}}>Filters</Typography>
+                  <IconButton size="small" onClick={()=>setFilters(p=>[...p,{field:sourceFields[0].key,op:'equals',value:''}])} sx={{color:'#FF5A5A'}}><AddIcon fontSize="small"/></IconButton>
                 </Stack>
-                <Stack spacing={1.2} sx={{ mb: 2.5 }}>
-                  {filters.map((f, i) => {
-                    const fieldDef = sourceFields.find(sf => sf.key === f.field);
-                    const ops = FILTER_OPS[fieldDef?.type || 'string'];
-                    return (
-                      <Box key={i} sx={{ p: 1.5, border: '1px solid rgba(0,0,0,0.08)', borderRadius: '8px' }}>
-                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.8 }}>
-                          <FormControl size="small" sx={{ flex: 1 }}>
-                            <Select value={f.field} onChange={e => updateFilter(i, { field: e.target.value, op: 'equals', value: '' })}>
-                              {sourceFields.map(sf => <MenuItem key={sf.key} value={sf.key} sx={{ fontSize: 12 }}>{sf.label}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                          <IconButton size="small" onClick={() => removeFilter(i)} sx={{ color: '#9CA3AF' }}>
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
+                <Stack spacing={1.2} sx={{mb:2.5}}>
+                  {filters.map((f,i)=>{
+                    const fd=sourceFields.find(sf=>sf.key===f.field);
+                    const ops=FILTER_OPS[fd?.type||'string'];
+                    return(
+                      <Box key={i} sx={{p:1.5,border:'1px solid rgba(0,0,0,0.08)',borderRadius:'8px'}}>
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{mb:0.8}}>
+                          <FormControl size="small" sx={{flex:1}}><Select value={f.field} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{field:e.target.value,op:'equals',value:''}:ff))}>{sourceFields.map(sf=><MenuItem key={sf.key} value={sf.key} sx={{fontSize:12}}>{sf.label}</MenuItem>)}</Select></FormControl>
+                          <IconButton size="small" onClick={()=>setFilters(p=>p.filter((_,idx)=>idx!==i))} sx={{color:'#9CA3AF'}}><DeleteOutlineIcon fontSize="small"/></IconButton>
                         </Stack>
                         <Stack direction="row" spacing={0.5}>
-                          <FormControl size="small" sx={{ width: 110 }}>
-                            <Select value={f.op} onChange={e => updateFilter(i, { op: e.target.value })}>
-                              {ops.map(op => <MenuItem key={op} value={op} sx={{ fontSize: 12 }}>{op}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                          <TextField size="small" value={f.value} onChange={e => updateFilter(i, { value: e.target.value })}
-                            placeholder="Value" sx={{ flex: 1, '& input': { fontSize: 12 } }} />
+                          <FormControl size="small" sx={{width:110}}><Select value={f.op} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,op:e.target.value}:ff))}>{ops.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
+                          <TextField size="small" value={f.value} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,value:e.target.value}:ff))} placeholder={fd?.type==='date'?'YYYY-MM-DD':'Value'} sx={{flex:1,'& input':{fontSize:12}}}/>
                         </Stack>
                       </Box>
                     );
                   })}
-                  {!filters.length && (
-                    <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>No filters — showing all records</Typography>
-                  )}
+                  {!filters.length&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>No filters — showing all records</Typography>}
                 </Stack>
 
                 {/* Sort */}
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
-                  Sort
-                </Typography>
-                <Stack direction="row" spacing={1} sx={{ mb: 2.5 }}>
-                  <FormControl size="small" sx={{ flex: 1 }}>
-                    <InputLabel sx={{ fontSize: 12 }}>Sort by</InputLabel>
-                    <Select label="Sort by" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                      <MenuItem value="">None</MenuItem>
-                      {sourceFields.map(f => <MenuItem key={f.key} value={f.key} sx={{ fontSize: 12 }}>{f.label}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small" sx={{ width: 90 }}>
-                    <Select value={sortDir} onChange={e => setSortDir(e.target.value)}>
-                      <MenuItem value="asc">Asc</MenuItem>
-                      <MenuItem value="desc">Desc</MenuItem>
-                    </Select>
-                  </FormControl>
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Sort</Typography>
+                <Stack direction="row" spacing={1} sx={{mb:2.5}}>
+                  <FormControl size="small" sx={{flex:1}}><InputLabel sx={{fontSize:12}}>Sort by</InputLabel><Select label="Sort by" value={sortBy} onChange={e=>setSortBy(e.target.value)}><MenuItem value="">None</MenuItem>{sourceFields.map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                  <FormControl size="small" sx={{width:90}}><Select value={sortDir} onChange={e=>setSortDir(e.target.value)}><MenuItem value="asc">Asc</MenuItem><MenuItem value="desc">Desc</MenuItem></Select></FormControl>
                 </Stack>
 
-                {/* Chart */}
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
-                  Chart
-                </Typography>
-                <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-                  {[['bar','Bar',<BarChartIcon />],['pie','Pie',<PieChartOutlineIcon />],['line','Line',<ShowChartIcon />]].map(([v,l,icon]) => (
-                    <Chip key={v} label={l} icon={icon} size="small" clickable onClick={() => setChartType(v)}
-                      sx={{ fontSize: 11, fontWeight: 700,
-                            bgcolor: chartType===v ? 'rgba(99,102,241,0.12)' : 'transparent',
-                            color: chartType===v ? '#6366f1' : '#9CA3AF',
-                            border: `1.5px solid ${chartType===v ? 'rgba(99,102,241,0.4)' : 'rgba(0,0,0,0.10)'}` }} />
+                {/* Charts */}
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{mb:1}}>
+                  <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8}}>Charts</Typography>
+                  <Button size="small" startIcon={<AddIcon/>} onClick={addChart} sx={{fontSize:11,color:'#6366f1',minWidth:0}}>Add Chart</Button>
+                </Stack>
+                <Stack spacing={1} sx={{mb:2.5}}>
+                  {charts.map((ch,i)=>(
+                    <Box key={ch.id} sx={{p:1.5,border:'1px solid rgba(99,102,241,0.15)',borderRadius:'8px',bgcolor:'rgba(99,102,241,0.03)'}}>
+                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{mb:0.8}}>
+                        <Typography sx={{fontSize:12,fontWeight:700,color:'#6366f1'}}>Chart {i+1}</Typography>
+                        <IconButton size="small" onClick={()=>removeChart(ch.id)} sx={{ml:'auto',color:'#9CA3AF','&:hover':{color:'#ef4444'}}}><DeleteOutlineIcon fontSize="small"/></IconButton>
+                      </Stack>
+                      <Stack spacing={0.8}>
+                        <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Type</InputLabel><Select label="Type" value={ch.type} onChange={e=>updateChart(ch.id,{type:e.target.value})}>{['bar','pie','line'].map(t=><MenuItem key={t} value={t} sx={{fontSize:12}}>{t.charAt(0).toUpperCase()+t.slice(1)}</MenuItem>)}</Select></FormControl>
+                        <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Field</InputLabel><Select label="Field" value={ch.field} onChange={e=>updateChart(ch.id,{field:e.target.value})}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={groupBy?`${f.key}_sum`:f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                      </Stack>
+                    </Box>
                   ))}
+                  {!charts.length&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>No charts — click "Add Chart"</Typography>}
                 </Stack>
-                <FormControl fullWidth size="small" sx={{ mb: 2.5 }}>
-                  <InputLabel sx={{ fontSize: 12 }}>Chart field (Y-axis)</InputLabel>
-                  <Select label="Chart field (Y-axis)" value={chartField} onChange={e => setChartField(e.target.value)}>
-                    <MenuItem value="">None</MenuItem>
-                    {sourceFields.filter(f => f.type === 'number').map(f => (
-                      <MenuItem key={f.key} value={groupBy ? `${f.key}_sum` : f.key} sx={{ fontSize: 12 }}>{f.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
 
-                <Button fullWidth variant="contained" size="large" startIcon={<PlayArrowIcon />}
-                  onClick={runReport} disabled={!dataLoaded || loading || selFields.length === 0}
-                  sx={{ fontWeight: 700, fontSize: 14 }}>
-                  {loading ? 'Loading data…' : 'Run Report'}
+                <Button fullWidth variant="contained" size="large" startIcon={<PlayArrowIcon/>} onClick={runReport} disabled={!dataLoaded||loading||selFields.length===0} sx={{fontWeight:700,fontSize:14}}>
+                  {loading?'Loading data…':'Run Report'}
                 </Button>
               </CardContent>
             </Card>
           </Box>
 
-          {/* ── RIGHT: Results ── */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            {!dataLoaded && (
-              <Stack spacing={1}>{[1,2,3].map(i=><Skeleton key={i} height={56} sx={{ borderRadius:'10px' }} />)}</Stack>
-            )}
+          {/* ── Results ── */}
+          <Box sx={{flex:1,minWidth:0}}>
+            {!dataLoaded&&<Stack spacing={1}>{[1,2,3].map(i=><Skeleton key={i} height={56} sx={{borderRadius:'10px'}}/>)}</Stack>}
 
-            {dataLoaded && !results && (
-              <Box sx={{ textAlign:'center', py: 8, bgcolor: 'rgba(255,90,90,0.03)', borderRadius:'16px', border:'1px dashed rgba(255,139,90,0.20)' }}>
-                <Typography sx={{ fontSize: 40, mb: 1 }}>📊</Typography>
-                <Typography sx={{ fontWeight: 700, fontSize: 15, color: '#1A1A2E', mb: 0.5 }}>Configure and run your report</Typography>
-                <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>Select fields, add filters, then click Run Report</Typography>
+            {dataLoaded&&!results&&(
+              <Box sx={{textAlign:'center',py:8,bgcolor:'rgba(255,90,90,0.03)',borderRadius:'16px',border:'1px dashed rgba(255,139,90,0.20)'}}>
+                <Typography sx={{fontSize:40,mb:1}}>📊</Typography>
+                <Typography sx={{fontWeight:700,fontSize:15,color:'#1A1A2E',mb:0.5}}>Configure and run your report</Typography>
+                <Typography sx={{fontSize:13,color:'#9CA3AF'}}>Select fields, set a view mode, add filters, then click Run Report</Typography>
               </Box>
             )}
 
-            {results && (
+            {results&&(
               <>
-                {/* Summary bar */}
-                <Stack direction="row" spacing={1.5} sx={{ mb: 2 }} flexWrap="wrap">
+                {/* Summary stats */}
+                <Stack direction="row" spacing={1.5} sx={{mb:2}} flexWrap="wrap">
                   {[
-                    { label: 'Total Rows', val: results.length, color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
-                    ...displayCols.filter(c => c.type === 'number').slice(0,3).map(c => ({
-                      label: c.label,
-                      val: fmtNum(results.reduce((a,r) => a + parseNum(r[c.key]), 0)),
-                      color: '#FF5A5A', bg: 'rgba(255,90,90,0.07)',
+                    {label:'Total Records',val:totalDataRows,color:'#6366f1',bg:'rgba(99,102,241,0.08)'},
+                    ...displayCols.filter(c=>c.type==='number').slice(0,3).map(c=>({
+                      label:c.label,
+                      val:fmtNum(results.filter(r=>!r._type||r._type==='data').reduce((a,r)=>a+parseNum(r[c.key]),0)),
+                      color:'#FF5A5A',bg:'rgba(255,90,90,0.07)',
                     })),
-                  ].map((s,i) => (
-                    <Box key={i} sx={{ p: 1.5, borderRadius:'10px', bgcolor: s.bg, border: `1px solid ${s.bg}`, minWidth: 120 }}>
-                      <Typography sx={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.val}</Typography>
-                      <Typography sx={{ fontSize: 11, color: '#6B7280' }}>{s.label}</Typography>
+                  ].map((s,i)=>(
+                    <Box key={i} sx={{p:1.5,borderRadius:'10px',bgcolor:s.bg,border:`1px solid ${s.bg}`,minWidth:120}}>
+                      <Typography sx={{fontSize:18,fontWeight:800,color:s.color}}>{s.val}</Typography>
+                      <Typography sx={{fontSize:11,color:'#6B7280'}}>{s.label}</Typography>
                     </Box>
                   ))}
                 </Stack>
 
-                {/* Chart */}
-                {chartField && chartData.length > 0 && (
-                  <Card sx={{ border: '1px solid rgba(255,139,90,0.12)', mb: 2 }}>
-                    <CardContent ref={chartRef} sx={{ p: 2.5 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                        <ChartIcon sx={{ color: '#6366f1', fontSize: 20 }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Chart</Typography>
-                        <Stack direction="row" spacing={0.8} sx={{ ml: 'auto' }}>
-                          {[['bar','Bar'],['pie','Pie'],['line','Line']].map(([v,l]) => (
-                            <Chip key={v} label={l} size="small" clickable onClick={() => setChartType(v)}
-                              sx={{ fontSize: 10, height: 22, fontWeight: 700,
-                                    bgcolor: chartType===v ? 'rgba(99,102,241,0.12)' : 'transparent',
-                                    color: chartType===v ? '#6366f1' : '#9CA3AF' }} />
-                          ))}
-                        </Stack>
-                      </Stack>
-                      <ResponsiveContainer width="100%" height={260}>
-                        {chartType === 'pie' ? (
-                          <PieChart>
-                            <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`}>
-                              {chartData.map((_,i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                            </Pie>
-                            <RTooltip formatter={v => fmtNum(v)} />
-                            <Legend />
-                          </PieChart>
-                        ) : chartType === 'line' ? (
-                          <LineChart data={chartData} margin={{ left: 10, right: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtNum(v)} />
-                            <RTooltip formatter={v => fmtNum(v)} />
-                            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4 }} />
-                          </LineChart>
-                        ) : (
-                          <BarChart data={chartData} margin={{ left: 10, right: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtNum(v)} />
-                            <RTooltip formatter={v => fmtNum(v)} />
-                            <Bar dataKey="value" radius={[6,6,0,0]}>
-                              {chartData.map((_,i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                            </Bar>
-                          </BarChart>
-                        )}
-                      </ResponsiveContainer>
+                {/* Mode badge */}
+                <Stack direction="row" spacing={1} sx={{mb:2}}>
+                  <Chip size="small" label={{flat:'Flat View',subtotals:'Grouped + Subtotals',aggregated:'Aggregated',pivot:'Pivot Table'}[viewMode]}
+                    sx={{fontSize:11,height:22,fontWeight:700,bgcolor:'rgba(99,102,241,0.10)',color:'#6366f1'}}/>
+                  {groupBy&&<Chip size="small" label={`Grouped by ${sourceFields.find(f=>f.key===groupBy)?.label||groupBy}`} sx={{fontSize:11,height:22,bgcolor:'rgba(16,185,129,0.08)',color:'#059669'}}/>}
+                </Stack>
+
+                {/* Charts */}
+                {charts.map(ch=>(
+                  chartsData[ch.id]?.length>0&&(
+                    <ReportChart key={ch.id} chartCfg={ch} data={chartsData[ch.id]}
+                      innerRef={el=>setChartRef(ch.id,el)}
+                      onRemove={()=>removeChart(ch.id)}
+                      onUpdate={patch=>updateChart(ch.id,patch)}/>
+                  )
+                ))}
+
+                {/* Pivot Table */}
+                {viewMode==='pivot'&&pivotData&&(
+                  <Card sx={{border:'1px solid rgba(255,139,90,0.12)',mb:2}}>
+                    <CardContent sx={{p:0,'&:last-child':{pb:0}}}>
+                      <Box sx={{px:2.5,py:1.5,borderBottom:'1px solid rgba(255,139,90,0.08)'}}>
+                        <Typography sx={{fontWeight:700,fontSize:14}}>
+                          Pivot: {sourceFields.find(f=>f.key===groupBy)?.label} × {sourceFields.find(f=>f.key===pivotColField)?.label} → {sourceFields.find(f=>f.key===pivotValField)?.label} ({pivotValOp})
+                        </Typography>
+                      </Box>
+                      <Box sx={{overflowX:'auto'}}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{bgcolor:'#1A1A2E'}}>
+                              <TableCell sx={{color:'#FF8B5A',fontWeight:700,fontSize:11.5,whiteSpace:'nowrap',py:1.2}}>{sourceFields.find(f=>f.key===groupBy)?.label||groupBy}</TableCell>
+                              {pivotData.colValues.map(cv=><TableCell key={cv} sx={{color:'#FF8B5A',fontWeight:700,fontSize:11.5,whiteSpace:'nowrap',py:1.2,textAlign:'right'}}>{cv}</TableCell>)}
+                              <TableCell sx={{color:'#fff',fontWeight:800,fontSize:11.5,textAlign:'right',py:1.2}}>TOTAL</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {pivotData.pivotRows.map((row,i)=>(
+                              <TableRow key={i} sx={row._type==='pivottotal'?{bgcolor:'#1A1A2E','& td':{color:'#fff',fontWeight:800}}:{
+                                '&:nth-of-type(even)':{bgcolor:'rgba(255,248,245,0.6)'},
+                                '&:hover':{bgcolor:'rgba(255,90,90,0.04)'},
+                              }}>
+                                <TableCell sx={{fontSize:12.5,fontWeight:row._type==='pivottotal'?800:600,py:1,whiteSpace:'nowrap'}}>{row._rowLabel}</TableCell>
+                                {pivotData.colValues.map(cv=><TableCell key={cv} sx={{fontSize:12.5,py:1,textAlign:'right',fontFamily:'monospace'}}>{fmtNum(row[`_p_${cv}`])}</TableCell>)}
+                                <TableCell sx={{fontSize:12.5,py:1,textAlign:'right',fontWeight:700,fontFamily:'monospace'}}>{fmtNum(row._rowTotal)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Box>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Data table */}
-                <Card sx={{ border: '1px solid rgba(255,139,90,0.12)' }}>
-                  <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid rgba(255,139,90,0.08)' }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <TableChartOutlinedIcon sx={{ color: '#9CA3AF', fontSize: 18 }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Data ({results.length} rows)</Typography>
-                      </Stack>
-                    </Stack>
-                    <TableContainer>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow sx={{ bgcolor: '#1A1A2E' }}>
-                            {displayCols.map(c => (
-                              <TableCell key={c.key} sx={{ color: '#FF8B5A', fontWeight: 700, fontSize: 11.5, whiteSpace: 'nowrap',
-                                                           borderBottom: 'none', py: 1.2 }}>
-                                {c.label}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {pagedResults.map((row, i) => (
-                            <TableRow key={i} sx={{ '&:nth-of-type(even)': { bgcolor: 'rgba(255,248,245,0.6)' },
-                                                    '&:hover': { bgcolor: 'rgba(255,90,90,0.04)' } }}>
-                              {displayCols.map(c => (
-                                <TableCell key={c.key} sx={{ fontSize: 12.5, py: 1, borderBottom: '1px solid rgba(255,139,90,0.07)' }}>
-                                  {c.type === 'date' ? fmtDate(row[c.key]) : c.type === 'number' ? fmtNum(row[c.key]) : (row[c.key] ?? '—')}
-                                </TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                    {results.length > R_PER_PAGE && (
-                      <Box sx={{ display:'flex', justifyContent:'center', py: 1.5 }}>
-                        <Pagination count={Math.ceil(results.length/R_PER_PAGE)} page={rPage} onChange={(_,v)=>setRPage(v)} size="small"
-                          sx={{ '& .Mui-selected': { bgcolor: 'rgba(255,90,90,0.12) !important', color: '#FF5A5A', fontWeight: 700 } }} />
+                {/* Flat / Subtotals / Aggregated table */}
+                {viewMode!=='pivot'&&(
+                  <Card sx={{border:'1px solid rgba(255,139,90,0.12)'}}>
+                    <CardContent sx={{p:0,'&:last-child':{pb:0}}}>
+                      <Box sx={{px:2.5,py:1.5,borderBottom:'1px solid rgba(255,139,90,0.08)',display:'flex',alignItems:'center',gap:1}}>
+                        <TableChartOutlinedIcon sx={{color:'#9CA3AF',fontSize:18}}/>
+                        <Typography sx={{fontWeight:700,fontSize:14}}>
+                          Data ({totalDataRows} rows{viewMode==='subtotals'&&groupBy?', with subtotals':''})
+                        </Typography>
                       </Box>
-                    )}
-                  </CardContent>
-                </Card>
+                      <Box sx={{overflowX:'auto'}}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{bgcolor:'#1A1A2E'}}>
+                              {displayCols.map(c=><TableCell key={c.key} sx={{color:'#FF8B5A',fontWeight:700,fontSize:11.5,whiteSpace:'nowrap',borderBottom:'none',py:1.2,textAlign:c.type==='number'?'right':'left'}}>{c.label}</TableCell>)}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {pagedResults.map((row,i)=>(
+                              <TableRow key={i} sx={rowSx(row)}>
+                                {displayCols.map(c=>(
+                                  <TableCell key={c.key} sx={{fontSize:12.5,py:1,borderBottom:'1px solid rgba(255,139,90,0.07)',textAlign:c.type==='number'?'right':'left',fontFamily:c.type==='number'?'monospace':'inherit'}}>
+                                    {row._type==='subtotal'&&c===displayCols[0]?`↳ Subtotal: ${row[c.key]||''}`:
+                                     row._type==='grandtotal'&&c===displayCols[0]?'GRAND TOTAL':
+                                     renderCell(c,row)}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Box>
+                      {viewMode!=='subtotals'&&results.length>R_PER_PAGE&&(
+                        <Box sx={{display:'flex',justifyContent:'center',py:1.5}}>
+                          <Pagination count={Math.ceil(results.length/R_PER_PAGE)} page={rPage} onChange={(_,v)=>setRPage(v)} size="small"
+                            sx={{'& .Mui-selected':{bgcolor:'rgba(255,90,90,0.12) !important',color:'#FF5A5A',fontWeight:700}}}/>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </Box>
         </Stack>
       )}
 
-      {/* ════════ TAB 1 — Saved Templates ════════ */}
-      {tab === 1 && (
+      {/* Saved templates tab */}
+      {tab===1&&(
         <Box>
-          {savedTemplates.length === 0 ? (
-            <Box sx={{ textAlign:'center', py: 8 }}>
-              <BookmarkOutlinedIcon sx={{ fontSize: 48, color: 'rgba(255,90,90,0.2)', mb: 1 }} />
-              <Typography sx={{ fontWeight: 700, color: '#374151', mb: 0.5 }}>No saved templates yet</Typography>
-              <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>
-                Build a report in the builder tab and click "Save Template" to store it here
-              </Typography>
+          {savedTemplates.length===0?(
+            <Box sx={{textAlign:'center',py:8}}>
+              <BookmarkOutlinedIcon sx={{fontSize:48,color:'rgba(255,90,90,0.2)',mb:1}}/>
+              <Typography sx={{fontWeight:700,color:'#374151',mb:0.5}}>No saved templates yet</Typography>
+              <Typography sx={{fontSize:13,color:'#9CA3AF'}}>Build a report and click "Save Template"</Typography>
             </Box>
-          ) : (
+          ):(
             <Stack spacing={1.5}>
-              {savedTemplates.map(tpl => (
-                <Card key={tpl.id} sx={{ border: '1px solid rgba(255,139,90,0.12)' }}>
-                  <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                    <Box sx={{ px: 2.5, py: 1.5, display:'flex', alignItems:'center', gap: 1.5 }}>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{tpl.name}</Typography>
-                        {tpl.description && <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>{tpl.description}</Typography>}
-                        <Stack direction="row" spacing={0.8} sx={{ mt: 0.5 }} flexWrap="wrap">
-                          <Chip label={tpl.source} size="small" sx={{ fontSize: 10, height: 18, bgcolor:'rgba(99,102,241,0.08)', color:'#6366f1' }} />
-                          <Chip label={`${(tpl.fields||[]).length} fields`} size="small" sx={{ fontSize: 10, height: 18, bgcolor:'rgba(255,90,90,0.08)', color:'#FF5A5A' }} />
-                          {tpl.groupBy && <Chip label={`Grouped by ${tpl.groupBy}`} size="small" sx={{ fontSize: 10, height: 18, bgcolor:'rgba(16,185,129,0.08)', color:'#059669' }} />}
-                          {(tpl.filters||[]).length > 0 && <Chip label={`${tpl.filters.length} filter${tpl.filters.length!==1?'s':''}`} size="small" sx={{ fontSize: 10, height: 18, bgcolor:'rgba(245,158,11,0.08)', color:'#d97706' }} />}
+              {savedTemplates.map(tpl=>(
+                <Card key={tpl.id} sx={{border:'1px solid rgba(255,139,90,0.12)'}}>
+                  <CardContent sx={{p:0,'&:last-child':{pb:0}}}>
+                    <Box sx={{px:2.5,py:1.5,display:'flex',alignItems:'center',gap:1.5}}>
+                      <Box sx={{flex:1,minWidth:0}}>
+                        <Typography sx={{fontWeight:700,fontSize:14}}>{tpl.name}</Typography>
+                        {tpl.description&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>{tpl.description}</Typography>}
+                        <Stack direction="row" spacing={0.8} sx={{mt:0.5}} flexWrap="wrap">
+                          <Chip label={tpl.source} size="small" sx={{fontSize:10,height:18,bgcolor:'rgba(99,102,241,0.08)',color:'#6366f1'}}/>
+                          <Chip label={tpl.viewMode||'flat'} size="small" sx={{fontSize:10,height:18,bgcolor:'rgba(255,90,90,0.08)',color:'#FF5A5A'}}/>
+                          {tpl.groupBy&&<Chip label={`By ${tpl.groupBy}`} size="small" sx={{fontSize:10,height:18,bgcolor:'rgba(16,185,129,0.08)',color:'#059669'}}/>}
+                          {tpl.charts?.length>0&&<Chip label={`${tpl.charts.length} chart${tpl.charts.length!==1?'s':''}`} size="small" sx={{fontSize:10,height:18,bgcolor:'rgba(99,102,241,0.08)',color:'#6366f1'}}/>}
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={0.8}>
-                        <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={() => loadTemplate(tpl)} sx={{ fontSize: 12 }}>
-                          Load & Run
-                        </Button>
-                        <Tooltip title="Delete template">
-                          <IconButton size="small" onClick={() => handleDeleteTemplate(tpl.id)} sx={{ color: '#9CA3AF', '&:hover': { color: '#ef4444' } }}>
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Button size="small" variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>loadTemplate(tpl)} sx={{fontSize:12}}>Load & Run</Button>
+                        <Tooltip title="Delete"><IconButton size="small" onClick={()=>handleDelTpl(tpl.id)} sx={{color:'#9CA3AF','&:hover':{color:'#ef4444'}}}><DeleteOutlineIcon fontSize="small"/></IconButton></Tooltip>
                       </Stack>
                     </Box>
                   </CardContent>
@@ -1018,27 +1002,19 @@ const ReportsPage = () => {
         </Box>
       )}
 
-      {/* Save template dialog */}
-      <Dialog open={saveOpen} onClose={() => setSaveOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: '16px' } }}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Save Report Template</DialogTitle>
-        <DialogContent sx={{ pt: 1.5 }}>
-          <Stack spacing={2}>
-            <TextField label="Template Name *" fullWidth size="small" value={saveName} onChange={e => setSaveName(e.target.value)} />
-            <TextField label="Description" fullWidth size="small" value={saveDesc} onChange={e => setSaveDesc(e.target.value)} />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setSaveOpen(false)} variant="outlined" sx={{ borderColor: '#e0e0e0', color: '#6B7280' }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveTemplate} disabled={!saveName.trim() || savingTpl}>
-            {savingTpl ? 'Saving…' : 'Save'}
-          </Button>
+      {/* Save dialog */}
+      <Dialog open={saveOpen} onClose={()=>setSaveOpen(false)} maxWidth="xs" fullWidth PaperProps={{sx:{borderRadius:'16px'}}}>
+        <DialogTitle sx={{fontWeight:700}}>Save Report Template</DialogTitle>
+        <DialogContent sx={{pt:1.5}}><Stack spacing={2}><TextField label="Template Name *" fullWidth size="small" value={saveName} onChange={e=>setSaveName(e.target.value)}/><TextField label="Description" fullWidth size="small" value={saveDesc} onChange={e=>setSaveDesc(e.target.value)}/></Stack></DialogContent>
+        <DialogActions sx={{px:3,py:2}}>
+          <Button onClick={()=>setSaveOpen(false)} variant="outlined" sx={{borderColor:'#e0e0e0',color:'#6B7280'}}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveTpl} disabled={!saveName.trim()||savingTpl}>{savingTpl?'Saving…':'Save'}</Button>
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={toast.open} autoHideDuration={3500} onClose={() => setToast(t => ({ ...t, open: false }))}>
+      <Snackbar open={toast.open} autoHideDuration={3500} onClose={()=>setToast(t=>({...t,open:false}))}>
         <Alert severity={toast.severity} variant="filled">{toast.msg}</Alert>
       </Snackbar>
-
     </Box>
     </LocalizationProvider>
   );
