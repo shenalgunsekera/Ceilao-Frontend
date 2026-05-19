@@ -243,7 +243,7 @@ async function buildClientWorkbook(client, logoBase64, ExcelJS) {
   return wb.xlsx.writeBuffer();
 }
 
-/* ── fetch all docs for a client into a JSZip ───────────────────────────── */
+/* ── Document field map ──────────────────────────────────────────────────── */
 const DOC_FIELDS = [
   { label: 'policyholder',     key: 'policyholder_doc_url' },
   { label: 'proposal_form',    key: 'proposal_form_doc_url' },
@@ -254,6 +254,59 @@ const DOC_FIELDS = [
   { label: 'payment_receipt',  key: 'payment_receipt_doc_url' },
   { label: 'nic_br',           key: 'nic_br_doc_url' },
 ];
+
+// CSV import columns — must match TableSection handleImportCSV exactly
+const CLIENT_IMPORT_COLS = [
+  'customer_type','product','insurance_provider','client_name','mobile_no',
+  'ceilao_ib_file_no','vehicle_number','main_class','insurer','introducer_code',
+  'branch','street1','street2','city','district','province','telephone',
+  'contact_person','email','social_media','nic_proof','dob_proof',
+  'business_registration','svat_proof','vat_proof','policy_type','policy_no',
+  'policy_period_from','policy_period_to','coverage','sum_insured',
+  'basic_premium','srcc_premium','tc_premium','net_premium','stamp_duty',
+  'admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
+  'commission_type','commission_basic','commission_srcc','commission_tc','sales_rep_id',
+];
+
+/* Strip Cloudinary transformation params so PDFs/images download correctly.
+   e.g. /upload/fl_inline/v123/file.pdf  →  /upload/v123/file.pdf            */
+function stripCloudinaryTransforms(url) {
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  const idx = url.indexOf('/upload/');
+  if (idx === -1) return url;
+  const base = url.slice(0, idx + 8);
+  const rest = url.slice(idx + 8);
+  const parts = rest.split('/');
+  // Find the version segment (v followed by 5+ digits); everything before it is transforms
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (/^v\d{5,}$/.test(parts[i])) return base + parts.slice(i).join('/');
+  }
+  return url; // no version segment — return as-is
+}
+
+/* Fetch one URL and return ArrayBuffer, or null on failure */
+async function fetchFile(url) {
+  const clean = stripCloudinaryTransforms(url);
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30_000);
+    const resp = await fetch(clean, { mode: 'cors', cache: 'no-cache', signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!resp.ok) return null;
+    const buf = await resp.arrayBuffer();
+    return buf.byteLength > 0 ? buf : null;
+  } catch { return null; }
+}
+
+/* Extract original file extension from a URL */
+function extFromUrl(url) {
+  if (!url) return 'bin';
+  const clean = url.split('?')[0].split('#')[0];
+  const last = clean.split('/').pop() || '';
+  const dot = last.lastIndexOf('.');
+  if (dot === -1) return 'bin';
+  return last.slice(dot + 1).toLowerCase().slice(0, 5) || 'bin';
+}
 
 async function fetchLogoBase64() {
   try {
@@ -268,61 +321,96 @@ async function fetchLogoBase64() {
   } catch { return null; }
 }
 
-async function buildDocZip(client, JSZip) {
-  const zip = new JSZip();
+/* Returns array of { filename, buf } — each doc in its original format.
+   Also returns urlLines for the fallback document_links.txt             */
+async function fetchClientDocs(client) {
+  const files = [];
   const urlLines = [];
-  let fetchedAny = false;
 
   for (const { label, key } of DOC_FIELDS) {
     const url = client[key];
     if (!url) continue;
+    urlLines.push(`${label}: ${url}`);
+    const buf = await fetchFile(url);
+    if (buf) files.push({ filename: `${label}.${extFromUrl(url)}`, buf });
+  }
 
-    // Always record the URL so the zip is never empty
-    urlLines.push(`${label}:\n  ${url}\n`);
+  return { files, urlLines };
+}
 
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 30_000); // 30s per file
-      const resp = await fetch(url, {
-        mode: 'cors',
-        cache: 'no-cache',
-        signal: ctrl.signal,
-        headers: { 'Accept': '*/*' },
+/* Build the root CLIENTS_IMPORT.csv — ready for direct re-import */
+function buildClientsImportCsv(clients) {
+  const header = CLIENT_IMPORT_COLS.join(',');
+  const rows = clients.map(c =>
+    CLIENT_IMPORT_COLS.map(col => {
+      const v = c[col] ?? '';
+      // Quote values that contain commas or quotes
+      const s = String(v).replace(/"/g, '""');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+    }).join(',')
+  );
+  return [header, ...rows].join('\r\n');
+}
+
+/* Build QUOTATIONS_DATA.xlsx with one row per quote + responses sheet */
+async function buildQuotationsWorkbook(quotes, ExcelJS) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Ceilao Insurance Brokers';
+  wb.created = new Date();
+
+  // Sheet 1 — summary
+  const ws = wb.addWorksheet('Quotations');
+  ws.columns = [
+    { header: 'Reference',          key: 'reference',         width: 18 },
+    { header: 'Product',            key: 'product_key',       width: 16 },
+    { header: 'Main Class',         key: 'main_class',        width: 14 },
+    { header: 'Client Name',        key: 'client_name',       width: 24 },
+    { header: 'Mobile',             key: 'client_mobile',     width: 16 },
+    { header: 'Status',             key: 'status',            width: 14 },
+    { header: 'Customer Selection', key: 'customer_selection',width: 22 },
+    { header: 'Created',            key: 'created_at',        width: 20 },
+    { header: 'Insurer Count',      key: 'insurer_count',     width: 14 },
+  ];
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } };
+  quotes.forEach(q => {
+    ws.addRow({
+      reference:          q.reference || '',
+      product_key:        q.product_key || '',
+      main_class:         q.main_class || '',
+      client_name:        q.client_name || '',
+      client_mobile:      q.client_mobile || '',
+      status:             q.status || '',
+      customer_selection: q.customer_selection || '',
+      created_at:         q.created_at?.toDate?.()?.toLocaleDateString('en-GB') || '',
+      insurer_count:      (q.responses || []).length,
+    });
+  });
+
+  // Sheet 2 — responses
+  const ws2 = wb.addWorksheet('Responses');
+  ws2.columns = [
+    { header: 'Reference',     key: 'reference',     width: 18 },
+    { header: 'Company',       key: 'company_name',  width: 24 },
+    { header: 'Premium',       key: 'premium',       width: 14 },
+    { header: 'Submitted At',  key: 'submitted_at',  width: 20 },
+    { header: 'Document URL',  key: 'doc_url',       width: 60 },
+  ];
+  ws2.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  ws2.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF5A5A' } };
+  quotes.forEach(q => {
+    (q.responses || []).forEach(r => {
+      ws2.addRow({
+        reference:    q.reference || '',
+        company_name: r.company_name || '',
+        premium:      r.premium || '',
+        submitted_at: r.submitted_at || '',
+        doc_url:      r.doc_url || '',
       });
-      clearTimeout(timer);
-      if (!resp.ok) continue;
-      const buf = await resp.arrayBuffer();
-      if (buf.byteLength === 0) continue;
+    });
+  });
 
-      // Extract extension from URL path (before any query string)
-      const pathPart = url.split('?')[0];
-      const ext = pathPart.includes('.')
-        ? pathPart.split('.').pop().toLowerCase().slice(0, 5) || 'pdf'
-        : 'pdf';
-
-      zip.file(`${label}.${ext}`, buf);
-      fetchedAny = true;
-    } catch {
-      // Binary fetch failed — URL is still recorded in document_links.txt
-    }
-  }
-
-  // Always include a plain-text list of all document URLs as a reliable fallback
-  if (urlLines.length === 0) return null;
-  zip.file('document_links.txt', urlLines.join('\n'));
-
-  // If binary fetch failed entirely, add a note explaining how to access files
-  if (!fetchedAny && urlLines.length > 0) {
-    zip.file('README.txt', [
-      'Binary download of documents was blocked by CORS in this browser session.',
-      'Open document_links.txt and paste each URL into your browser to view/save the files.',
-      '',
-      'To enable direct binary backup, configure CORS in your Cloudinary dashboard:',
-      '  Settings → Security → Allowed fetch domains → add your Vercel domain',
-    ].join('\n'));
-  }
-
-  return zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+  return wb.xlsx.writeBuffer();
 }
 
 /* ── ticket chip helpers ─────────────────────────────────────────────────── */
@@ -503,54 +591,156 @@ const AdminPanel = () => {
   /* ── backup ── */
   const runBackup = async () => {
     setBackupOpen(true);
-    setBackupState({ step: 'Loading client records…', progress: 0, done: false });
+    setBackupState({ step: 'Loading records…', progress: 0, done: false });
 
     try {
-      const snap = await getDocs(query(collection(db, 'clients'), orderBy('created_at', 'desc')));
-      const clients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // ── 1. Load all data ──────────────────────────────────────────────────
+      const [clientSnap, quoteSnap] = await Promise.all([
+        getDocs(query(collection(db, 'clients'),    orderBy('created_at', 'desc'))),
+        getDocs(query(collection(db, 'quotes'),     orderBy('created_at', 'desc'))),
+      ]);
+      const clients = clientSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const quotes  = quoteSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const total   = clients.length + quotes.length;
 
-      setBackupState(s => ({ ...s, step: 'Loading company logo…' }));
+      setBackupState({ step: 'Loading company logo…', progress: 2, done: false });
       const logoBase64 = await fetchLogoBase64();
 
       const masterZip = new JSZip();
-      const total = clients.length;
+      const clientsFolder = masterZip.folder('clients');
+      const quotesFolder  = masterZip.folder('quotations');
+      const bulkFolder    = masterZip.folder('bulk_documents');
 
-      for (let i = 0; i < total; i++) {
+      // ── 2. Clients ────────────────────────────────────────────────────────
+      for (let i = 0; i < clients.length; i++) {
         const c = clients[i];
-        const fileNo = (c.ceilao_ib_file_no || c.id).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileNo   = (c.ceilao_ib_file_no || c.id).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
         const safeName = (c.client_name || 'Unknown').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
-        const folderName = `${fileNo}_${safeName}`;
-        const folder = masterZip.folder(folderName);
+        const folder   = clientsFolder.folder(`${fileNo}_${safeName}`);
 
         setBackupState({
-          step: `Backing up ${i + 1} of ${total}: ${c.client_name || fileNo}`,
-          progress: Math.round(((i) / total) * 90),
+          step: `Clients ${i + 1}/${clients.length}: ${c.client_name || fileNo}`,
+          progress: 4 + Math.round((i / total) * 78),
           done: false,
         });
 
-        // Excel info sheet
+        // Per-client detailed Excel
         try {
           const xlBuf = await buildClientWorkbook(c, logoBase64, ExcelJS);
-          folder.file(`${fileNo}_info.xlsx`, xlBuf);
-        } catch { /* skip on error */ }
+          folder.file('info.xlsx', xlBuf);
+        } catch { /* skip */ }
 
-        // Documents zip
+        // Documents — saved individually in original format
         try {
-          const docBuf = await buildDocZip(c, JSZip);
-          if (docBuf) folder.file(`${fileNo}_documents.zip`, docBuf);
-        } catch { /* skip on error */ }
+          const { files, urlLines } = await fetchClientDocs(c);
+          files.forEach(({ filename, buf }) => {
+            folder.file(filename, buf);
+            // Also add to flat bulk_documents folder: {fileNo}_{name}_{doctype}.ext
+            bulkFolder.file(`${fileNo}_${safeName}_${filename}`, buf);
+          });
+          if (urlLines.length > 0)
+            folder.file('document_links.txt', urlLines.join('\n'));
+        } catch { /* skip */ }
       }
 
-      setBackupState({ step: 'Generating master ZIP…', progress: 92, done: false });
+      // ── 3. Quotations ─────────────────────────────────────────────────────
+      for (let i = 0; i < quotes.length; i++) {
+        const q   = quotes[i];
+        const ref = (q.reference || q.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const folder = quotesFolder.folder(ref);
+
+        setBackupState({
+          step: `Quotations ${i + 1}/${quotes.length}: ${q.reference || ref}`,
+          progress: 4 + Math.round(((clients.length + i) / total) * 78),
+          done: false,
+        });
+
+        // Quote data as JSON (preserves full structure including all responses)
+        folder.file('quote_data.json', JSON.stringify({
+          reference:          q.reference,
+          product_key:        q.product_key,
+          main_class:         q.main_class,
+          client_name:        q.client_name,
+          client_mobile:      q.client_mobile,
+          status:             q.status,
+          customer_selection: q.customer_selection,
+          created_at:         q.created_at?.toDate?.()?.toISOString() || '',
+          responses:          q.responses || [],
+        }, null, 2));
+
+        // Download insurer response documents
+        for (const r of (q.responses || [])) {
+          if (!r.doc_url) continue;
+          const buf = await fetchFile(r.doc_url);
+          if (buf) {
+            const co = (r.company_name || 'insurer').replace(/[^a-zA-Z0-9_-]/g, '_');
+            folder.file(`response_${co}.${extFromUrl(r.doc_url)}`, buf);
+            bulkFolder.file(`${ref}_response_${co}.${extFromUrl(r.doc_url)}`, buf);
+          }
+        }
+      }
+
+      // ── 4. Root import files ──────────────────────────────────────────────
+      setBackupState({ step: 'Building import files…', progress: 83, done: false });
+
+      // CLIENTS_IMPORT.csv — drop directly into Underwriting → Import CSV
+      masterZip.file('CLIENTS_IMPORT.csv', buildClientsImportCsv(clients));
+
+      // QUOTATIONS_DATA.xlsx — full quotations summary with responses
+      try {
+        const qBuf = await buildQuotationsWorkbook(quotes, ExcelJS);
+        masterZip.file('QUOTATIONS_DATA.xlsx', qBuf);
+      } catch { /* skip */ }
+
+      // README so anyone opening the ZIP understands the structure
+      masterZip.file('README.txt', [
+        'CEILAO INSURANCE BROKERS — FULL DATA BACKUP',
+        `Date: ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}`,
+        '',
+        'FOLDER STRUCTURE',
+        '────────────────',
+        'CLIENTS_IMPORT.csv      → Upload to Underwriting → Import CSV to restore all client records',
+        'QUOTATIONS_DATA.xlsx    → Full quotations summary including all insurer responses',
+        'clients/{FileNo}_{Name}/',
+        '  info.xlsx             → Detailed client record (formatted)',
+        '  policyholder.pdf      → Original documents in their original format',
+        '  proposal_form.pdf',
+        '  quotation.pdf',
+        '  cr_copy.pdf / .jpg',
+        '  schedule.pdf',
+        '  invoice.pdf',
+        '  payment_receipt.pdf',
+        '  nic_br.pdf / .jpg',
+        '  document_links.txt    → Cloudinary URLs if binary download was blocked',
+        'quotations/{Reference}/',
+        '  quote_data.json       → Complete quote + all insurer responses',
+        '  response_{Insurer}.pdf → Insurer-submitted quote documents',
+        'bulk_documents/         → All documents flat-named for bulk re-upload',
+        '  {FileNo}_{Name}_{doctype}.{ext}',
+        '',
+        'RECOVERY STEPS',
+        '──────────────',
+        '1. Client data:  Underwriting → Import CSV → upload CLIENTS_IMPORT.csv',
+        '2. Documents:    Upload files from each client folder to Cloudinary,',
+        '                 then paste the new URLs back into each client record.',
+        '3. Quotations:   Use QUOTATIONS_DATA.xlsx for reference.',
+      ].join('\n'));
+
+      // ── 5. Generate final ZIP ─────────────────────────────────────────────
+      setBackupState({ step: 'Compressing backup…', progress: 87, done: false });
 
       const blob = await masterZip.generateAsync(
         { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
-        (meta) => setBackupState(s => ({ ...s, progress: 92 + Math.round(meta.percent * 0.08) }))
+        meta => setBackupState(s => ({ ...s, progress: 87 + Math.round(meta.percent * 0.12) }))
       );
 
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       saveAs(blob, `ceilao_backup_${dateStr}.zip`);
-      setBackupState({ step: `Backup complete! ${total} client${total !== 1 ? 's' : ''} exported.`, progress: 100, done: true });
+      setBackupState({
+        step: `Backup complete! ${clients.length} clients · ${quotes.length} quotations`,
+        progress: 100,
+        done: true,
+      });
 
     } catch (err) {
       setBackupState({ step: `Error: ${err.message}`, progress: 0, done: true });
@@ -692,15 +882,15 @@ const AdminPanel = () => {
                 <Box>
                   <Typography sx={{ fontWeight: 700, fontSize: 15, mb: 0.5 }}>Full Data Backup</Typography>
                   <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 1.5, lineHeight: 1.6 }}>
-                    Downloads a ZIP file containing one folder per client (named by File Number).
-                    Each folder contains an <strong>Excel sheet</strong> with all text data and a
-                    <strong> documents ZIP</strong> with uploaded files.
+                    Downloads a complete ZIP — clients, quotations and all documents in their original format, plus a ready-to-import CSV to restore everything.
                   </Typography>
                   <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap">
                     {[
-                      '📁 {FileNo}_{Name}/ per client',
-                      '📊 {FileNo}_info.xlsx — all fields',
-                      '🗂 {FileNo}_documents.zip — PDFs & files',
+                      '📄 CLIENTS_IMPORT.csv — direct re-import',
+                      '📊 QUOTATIONS_DATA.xlsx — all quotes',
+                      '📁 clients/ — docs in original format',
+                      '📁 quotations/ — responses + docs',
+                      '📁 bulk_documents/ — all files flat',
                     ].map(t => (
                       <Chip key={t} label={t} size="small"
                         sx={{ bgcolor: 'rgba(255,90,90,0.07)', color: '#FF5A5A', fontWeight: 600, fontSize: 11 }} />
