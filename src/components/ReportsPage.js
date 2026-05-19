@@ -435,17 +435,18 @@ function ReportChart({ chartCfg, data, innerRef, onRemove, onUpdate }) {
               <RTooltip formatter={v=>fmtNum(v)}/><Legend/>
             </PieChart>
           ):type==='line'?(
-            <LineChart data={chartData} margin={{left:10,right:10}}>
+            <LineChart data={chartData} margin={{left:20,right:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)"/>
-              <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>fmtNum(v)}/>
-              <RTooltip formatter={v=>fmtNum(v)}/>
+              <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>fmtNum(v)} label={{value:label,angle:-90,position:'insideLeft',style:{fontSize:10,fill:'#9CA3AF'},offset:-5}}/>
+              <RTooltip formatter={(v,_)=>[fmtNum(v),label]}/>
               <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.5} dot={{r:4}}/>
             </LineChart>
           ):(
-            <BarChart data={chartData} margin={{left:10,right:10}}>
+            <BarChart data={chartData} margin={{left:20,right:10,bottom:20}}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)"/>
-              <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>fmtNum(v)}/>
-              <RTooltip formatter={v=>fmtNum(v)}/>
+              <XAxis dataKey="name" tick={{fontSize:10}} angle={chartData.length>6?-25:0} textAnchor={chartData.length>6?'end':'middle'} interval={0}/>
+              <YAxis tick={{fontSize:10}} tickFormatter={v=>fmtNum(v)} label={{value:label,angle:-90,position:'insideLeft',style:{fontSize:10,fill:'#9CA3AF'},offset:-5}}/>
+              <RTooltip formatter={(v,_)=>[fmtNum(v),label]}/>
               <Bar dataKey="value" radius={[6,6,0,0]}>{chartData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
             </BarChart>
           )}
@@ -610,39 +611,41 @@ const ReportsPage = () => {
     return page;
   },[results,viewMode,rPage,grandTotalRow]);
 
-  // Charts data — handles all view modes correctly
+  // Charts data — resolves correct aggregated key per view mode
   const chartsData = useMemo(()=>{
     if (!results||!charts.length) return {};
     const dataRows = results.filter(r=>!r._type||r._type==='data');
     return charts.reduce((acc,ch)=>{
-      // Strip any aggregation suffix so we always work with the raw field name
       const rawField = ch.field.replace(/_(sum|count|avg|min|max)$/,'');
+      // Find what aggregation op was configured for this field
+      const aggOp = ch.aggOp || aggregations.find(a=>a.field===rawField)?.op || 'sum';
+      const aggKey = `${rawField}_${aggOp}`; // the key that exists in aggregated/subtotal rows
       let data = [];
 
       if (viewMode==='aggregated') {
-        // Aggregated rows already have _sum/_count keys — try both
         const src = results.filter(r=>!r._type);
         data = src.slice(0,15).map(r=>({
           name: String(r[groupBy]||r[selFields[0]]||'').slice(0,22),
-          value: parseNum(r[ch.field]??r[rawField]),
+          value: parseNum(r[aggKey]??r[rawField]),
         }));
       } else if (viewMode==='subtotals') {
-        // Subtotal rows carry the aggregated values
         const src = results.filter(r=>r._type==='subtotal');
         data = src.slice(0,15).map(r=>({
           name: String(r[groupBy]||'').slice(0,22),
-          value: parseNum(r[ch.field]??r[rawField]),
+          value: parseNum(r[aggKey]??r[rawField]),
         }));
       } else {
-        // Flat mode: aggregate on-the-fly
+        // Flat mode: group + aggregate on-the-fly
         if (groupBy) {
           const groups = {};
           for (const row of dataRows) {
             const k = String(row[groupBy]||'(None)').slice(0,22);
-            if (!groups[k]) groups[k]=0;
-            groups[k] += parseNum(row[rawField]);
+            if (!groups[k]) groups[k]=[];
+            groups[k].push(parseNum(row[rawField]));
           }
-          data = Object.entries(groups).sort(([,a],[,b])=>b-a).slice(0,15).map(([name,value])=>({name,value}));
+          data = Object.entries(groups)
+            .map(([name,vals])=>({ name, value: computeAgg(aggOp,vals) }))
+            .sort((a,b)=>b.value-a.value).slice(0,15);
         } else {
           data = dataRows.slice(0,15).map(r=>({
             name: String(r[selFields[0]]||'').slice(0,22),
@@ -892,7 +895,10 @@ const ReportsPage = () => {
                       </Stack>
                       <Stack spacing={0.8}>
                         <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Type</InputLabel><Select label="Type" value={ch.type} onChange={e=>updateChart(ch.id,{type:e.target.value})}>{['bar','pie','line'].map(t=><MenuItem key={t} value={t} sx={{fontSize:12}}>{t.charAt(0).toUpperCase()+t.slice(1)}</MenuItem>)}</Select></FormControl>
-                        <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Field</InputLabel><Select label="Field" value={ch.field.replace(/_(sum|count|avg|min|max)$/,'')} onChange={e=>updateChart(ch.id,{field:e.target.value})}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                        <Stack direction="row" spacing={0.5}>
+                          <FormControl size="small" sx={{flex:1}}><InputLabel sx={{fontSize:11}}>Y-Axis Field</InputLabel><Select label="Y-Axis Field" value={ch.field.replace(/_(sum|count|avg|min|max)$/,'')} onChange={e=>updateChart(ch.id,{field:e.target.value})}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                          <FormControl size="small" sx={{width:80}}><InputLabel sx={{fontSize:11}}>Op</InputLabel><Select label="Op" value={ch.aggOp||aggregations.find(a=>a.field===ch.field.replace(/_(sum|count|avg|min|max)$/,''))?.op||'sum'} onChange={e=>updateChart(ch.id,{aggOp:e.target.value})}>{NUMBER_OPS.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
+                        </Stack>
                       </Stack>
                     </Box>
                   ))}
