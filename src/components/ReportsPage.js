@@ -907,12 +907,30 @@ const ReportsPage = () => {
 
                 {/* View Mode */}
                 <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>View Mode</Typography>
-                <ToggleButtonGroup value={viewMode} exclusive onChange={(_,v)=>{ if(v) setViewMode(v); }} size="small" fullWidth sx={{mb:2.5}}>
-                  <ToggleButton value="flat"       sx={{fontSize:10,textTransform:'none',fontWeight:600}}><ViewListIcon sx={{fontSize:14,mr:0.5}}/>Flat</ToggleButton>
-                  <ToggleButton value="subtotals"  sx={{fontSize:10,textTransform:'none',fontWeight:600}}><FunctionsIcon sx={{fontSize:14,mr:0.5}}/>Subtotals</ToggleButton>
-                  <ToggleButton value="aggregated" sx={{fontSize:10,textTransform:'none',fontWeight:600}}><TableChartOutlinedIcon sx={{fontSize:14,mr:0.5}}/>Grouped</ToggleButton>
-                  <ToggleButton value="pivot"      sx={{fontSize:10,textTransform:'none',fontWeight:600}}><GridOnIcon sx={{fontSize:14,mr:0.5}}/>Pivot</ToggleButton>
-                </ToggleButtonGroup>
+                <Stack spacing={0.8} sx={{mb:2.5}}>
+                  {[
+                    { value:'flat',       icon:<ViewListIcon sx={{fontSize:15}}/>, label:'Individual Records', desc:'Every row shown separately. No grouping.' },
+                    { value:'subtotals',  icon:<FunctionsIcon sx={{fontSize:15}}/>, label:'Individual + Subtotals', desc:'Every row shown, PLUS a subtotal row after each group and a grand total at the bottom.' },
+                    { value:'aggregated', icon:<TableChartOutlinedIcon sx={{fontSize:15}}/>, label:'Grouped Summary', desc:'One summary row per group showing sums/counts only.' },
+                    { value:'pivot',      icon:<GridOnIcon sx={{fontSize:15}}/>, label:'Pivot Table', desc:'Cross-tab: row field × column field → aggregated value.' },
+                  ].map(m=>(
+                    <Box key={m.value} onClick={()=>setViewMode(m.value)} sx={{
+                      p:1.2, borderRadius:'8px', cursor:'pointer',
+                      border:`1.5px solid ${viewMode===m.value?'#6366f1':'rgba(0,0,0,0.08)'}`,
+                      bgcolor: viewMode===m.value?'rgba(99,102,241,0.06)':'transparent',
+                      transition:'all 0.15s',
+                      '&:hover':{ borderColor:'#6366f1', bgcolor:'rgba(99,102,241,0.04)' },
+                    }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Box sx={{color: viewMode===m.value?'#6366f1':'#9CA3AF'}}>{m.icon}</Box>
+                        <Box>
+                          <Typography sx={{fontSize:12,fontWeight:700,color: viewMode===m.value?'#6366f1':'#374151'}}>{m.label}</Typography>
+                          <Typography sx={{fontSize:10.5,color:'#9CA3AF',lineHeight:1.4}}>{m.desc}</Typography>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
 
                 {/* Group By (flat/subtotals/aggregated) */}
                 {viewMode!=='pivot'&&(
@@ -927,22 +945,41 @@ const ReportsPage = () => {
                   </>
                 )}
 
-                {/* Aggregations (subtotals/aggregated) */}
+                {/* Aggregations */}
                 {(viewMode==='subtotals'||viewMode==='aggregated')&&groupBy&&(
                   <>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{mb:1}}>
-                      <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8}}>Aggregations</Typography>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{mb:0.5}}>
+                      <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8}}>
+                        Summary Columns
+                      </Typography>
                       <IconButton size="small" onClick={()=>setAggregations(p=>[...p,{field:sourceFields.find(f=>f.type==='number')?.key||'',op:'sum'}])} sx={{color:'#FF5A5A'}}><AddIcon fontSize="small"/></IconButton>
                     </Stack>
+                    <Typography sx={{fontSize:11,color:'#9CA3AF',mb:1,lineHeight:1.5}}>
+                      These add calculated columns to each group
+                      {viewMode==='subtotals'?' (shown in the subtotal rows, not on individual records).':'.'}
+                      {' '}Individual record values are shown as-is from "Fields to Show" above.
+                    </Typography>
                     <Stack spacing={1} sx={{mb:2.5}}>
                       {aggregations.map((agg,i)=>(
                         <Stack key={i} direction="row" spacing={0.5} alignItems="center">
-                          <FormControl size="small" sx={{flex:1}}><Select value={agg.field} onChange={e=>setAggregations(p=>p.map((a,idx)=>idx===i?{...a,field:e.target.value}:a))}>{sourceFields.map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
-                          <FormControl size="small" sx={{width:80}}><Select value={agg.op} onChange={e=>setAggregations(p=>p.map((a,idx)=>idx===i?{...a,op:e.target.value}:a))}>{NUMBER_OPS.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
+                          <FormControl size="small" sx={{flex:1}}>
+                            <Select value={agg.field} onChange={e=>setAggregations(p=>p.map((a,idx)=>idx===i?{...a,field:e.target.value}:a))}>
+                              {sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}
+                            </Select>
+                          </FormControl>
+                          <FormControl size="small" sx={{width:90}}>
+                            <Select value={agg.op} onChange={e=>setAggregations(p=>p.map((a,idx)=>idx===i?{...a,op:e.target.value}:a))}>
+                              <MenuItem value="sum"   sx={{fontSize:12}}>Sum (total)</MenuItem>
+                              <MenuItem value="count" sx={{fontSize:12}}>Count (# records)</MenuItem>
+                              <MenuItem value="avg"   sx={{fontSize:12}}>Average</MenuItem>
+                              <MenuItem value="min"   sx={{fontSize:12}}>Minimum</MenuItem>
+                              <MenuItem value="max"   sx={{fontSize:12}}>Maximum</MenuItem>
+                            </Select>
+                          </FormControl>
                           <IconButton size="small" onClick={()=>setAggregations(p=>p.filter((_,idx)=>idx!==i))} sx={{color:'#9CA3AF',flexShrink:0}}><DeleteOutlineIcon fontSize="small"/></IconButton>
                         </Stack>
                       ))}
-                      {!aggregations.length&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>Click + to add</Typography>}
+                      {!aggregations.length&&<Typography sx={{fontSize:12,color:'#9CA3AF'}}>Click + to add a summary column</Typography>}
                     </Stack>
                   </>
                 )}
