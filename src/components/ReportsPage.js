@@ -5,6 +5,7 @@ import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import ExcelJS from 'exceljs';
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer
@@ -401,6 +402,128 @@ function exportCSV(columns, rows, reportName) {
   saveAs(blob,`${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
+/* ── Excel export — charts as embedded images + styled data table ─────────── */
+async function exportExcel(columns, rows, reportName, chartEls=[]) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Ceilao Insurance Brokers';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('Report', { pageSetup: { orientation: 'landscape', fitToPage: true } });
+  const dateStr = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  const dataRows = rows.filter(r=>!r._type||r._type==='data');
+
+  // ── Header rows ──
+  ws.mergeCells('A1:' + String.fromCharCode(64 + Math.min(columns.length, 26)) + '1');
+  const h1 = ws.getCell('A1');
+  h1.value = 'CEILAO INSURANCE BROKERS (PVT) LTD';
+  h1.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A1A2E' } };
+  h1.font  = { bold:true, size:14, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
+  h1.alignment = { horizontal:'center', vertical:'middle' };
+  ws.getRow(1).height = 26;
+
+  ws.mergeCells('A2:' + String.fromCharCode(64 + Math.min(columns.length, 26)) + '2');
+  const h2 = ws.getCell('A2');
+  h2.value = reportName;
+  h2.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFF5A5A' } };
+  h2.font  = { bold:true, size:12, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
+  h2.alignment = { horizontal:'center', vertical:'middle' };
+  ws.getRow(2).height = 22;
+
+  ws.mergeCells('A3:' + String.fromCharCode(64 + Math.min(columns.length, 26)) + '3');
+  const h3 = ws.getCell('A3');
+  h3.value = `Generated: ${dateStr}  |  ${dataRows.length} records`;
+  h3.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFF8F5' } };
+  h3.font  = { size:9, color:{ argb:'FF9CA3AF' }, name:'Calibri' };
+  h3.alignment = { horizontal:'center' };
+  ws.getRow(3).height = 14;
+  ws.getRow(4).height = 8; // spacer
+
+  let currentRow = 5;
+
+  // ── Summary totals ──
+  const numCols = columns.filter(c=>c.type==='number');
+  if (numCols.length) {
+    numCols.forEach((c, i) => {
+      const col = String.fromCharCode(65 + i * 2);
+      const total = dataRows.reduce((a,r)=>a+parseNum(r[c.key]),0);
+      ws.mergeCells(`${col}${currentRow}:${String.fromCharCode(65+i*2+1)}${currentRow}`);
+      const labelCell = ws.getCell(`${col}${currentRow}`);
+      labelCell.value = c.label;
+      labelCell.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFF5A5A' } };
+      labelCell.font  = { bold:true, size:9, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
+      labelCell.alignment = { horizontal:'center' };
+      const valCell = ws.getCell(`${col}${currentRow+1}`);
+      valCell.value = total;
+      valCell.numFmt = '#,##0.00';
+      valCell.font   = { bold:true, size:12, color:{ argb:'FFFF5A5A' }, name:'Calibri' };
+      valCell.alignment = { horizontal:'center' };
+    });
+    currentRow += 3;
+  }
+
+  // ── Embed chart images ──
+  for (const chartEl of chartEls.filter(Boolean)) {
+    try {
+      const canvas = await html2canvas(chartEl, { scale:2, backgroundColor:'#ffffff', logging:false });
+      const imgData = canvas.toDataURL('image/png').split(',')[1];
+      const imgId = wb.addImage({ base64: imgData, extension: 'png' });
+      const colW = 600; const rowH = 200;
+      ws.addImage(imgId, {
+        tl: { col: 0, row: currentRow - 1 },
+        ext: { width: colW, height: rowH },
+      });
+      currentRow += Math.ceil(rowH / 20) + 1;
+    } catch { /* skip failed charts */ }
+  }
+
+  // ── Column headers ──
+  ws.getRow(currentRow).height = 20;
+  columns.forEach((c, i) => {
+    const cell = ws.getCell(currentRow, i + 1);
+    cell.value = c.label;
+    cell.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A1A2E' } };
+    cell.font  = { bold:true, size:10, color:{ argb:'FFFF8B5A' }, name:'Calibri' };
+    cell.alignment = { horizontal: c.type==='number'?'right':'left', vertical:'middle' };
+  });
+  currentRow++;
+
+  // ── Data rows ──
+  rows.forEach((row, ri) => {
+    const isSub = row._type==='subtotal';
+    const isGT  = row._type==='grandtotal';
+    const bg = isGT ? 'FF1A1A2E' : isSub ? 'FFE8E8FF' : ri%2===0 ? 'FFFFF8F5' : 'FFFFFFFF';
+    const textArgb = isGT ? 'FFFFFFFF' : isSub ? 'FF4338CA' : 'FF1A1A2E';
+
+    columns.forEach((c, i) => {
+      const cell = ws.getCell(currentRow, i + 1);
+      const v = row[c.key];
+      if (c.type === 'number') {
+        cell.value = v!==null&&v!==undefined ? parseNum(v) : null;
+        cell.numFmt = '#,##0.00';
+        cell.alignment = { horizontal:'right' };
+      } else if (c.type === 'date') {
+        cell.value = fmtDate(v);
+      } else {
+        const prefix = isSub&&i===0?'↳ Subtotal: ':isGT&&i===0?'GRAND TOTAL → ':'';
+        cell.value = prefix+(v??'');
+      }
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:bg } };
+      cell.font = { size:9.5, bold:isSub||isGT, color:{ argb:textArgb }, name:'Calibri' };
+      cell.border = { bottom:{ style:'hair', color:{ argb:'FFFFD4C0' } } };
+    });
+    currentRow++;
+  });
+
+  // Column widths
+  columns.forEach((c, i) => {
+    ws.getColumn(i + 1).width = c.type==='number' ? 16 : c.type==='date' ? 14 : 22;
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
 /* ── Chart component ─────────────────────────────────────────────────────── */
 function ReportChart({ chartCfg, data, innerRef, onRemove, onUpdate }) {
   const { type, field, label } = chartCfg;
@@ -700,6 +823,9 @@ const ReportsPage = () => {
             <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon/>}
               onClick={()=>exportCSV(displayCols,results,saveName||'Report')}
               sx={{fontSize:12,borderColor:'rgba(16,185,129,0.35)',color:'#059669'}}>Export CSV</Button>
+            <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon/>}
+              onClick={()=>exportExcel(displayCols,results,saveName||'Report',allChartEls())}
+              sx={{fontSize:12,borderColor:'rgba(99,102,241,0.35)',color:'#6366f1'}}>Export Excel</Button>
             <Button size="small" variant="contained" startIcon={<SaveOutlinedIcon/>} onClick={()=>setSaveOpen(true)} sx={{fontSize:12}}>Save Template</Button>
           </>}
         </Stack>
