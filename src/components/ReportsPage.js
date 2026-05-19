@@ -587,23 +587,70 @@ const ReportsPage = () => {
     return selFields.map(k=>sourceFields.find(f=>f.key===k)).filter(Boolean);
   },[results,viewMode,groupBy,aggregations,selFields,sourceFields]);
 
+  // Grand total row appended to flat/aggregated views
+  const grandTotalRow = useMemo(()=>{
+    if (!results||!displayCols.some(c=>c.type==='number')) return null;
+    const dataRows = results.filter(r=>!r._type||r._type==='data');
+    if (!dataRows.length) return null;
+    const row = { _type:'grandtotal' };
+    displayCols.forEach(c=>{
+      if (c.type==='number') row[c.key]=dataRows.reduce((a,r)=>a+parseNum(r[c.key]),0);
+    });
+    if (displayCols[0]) row[displayCols[0].key]='GRAND TOTAL';
+    return row;
+  },[results,displayCols]);
+
   const pagedResults = useMemo(()=>{
     if (!results) return [];
-    if (viewMode==='subtotals') return results; // no pagination for subtotals — shows full structure
-    return results.slice((rPage-1)*R_PER_PAGE,rPage*R_PER_PAGE);
-  },[results,viewMode,rPage]);
+    if (viewMode==='subtotals') return results; // no pagination for subtotals
+    const page = results.slice((rPage-1)*R_PER_PAGE,rPage*R_PER_PAGE);
+    // Append grand total on the last page (or always in aggregated/flat)
+    const isLastPage = rPage*R_PER_PAGE>=results.length;
+    if (grandTotalRow&&(isLastPage||viewMode==='aggregated')) return [...page,grandTotalRow];
+    return page;
+  },[results,viewMode,rPage,grandTotalRow]);
 
-  // Charts data
+  // Charts data — handles all view modes correctly
   const chartsData = useMemo(()=>{
     if (!results||!charts.length) return {};
-    const src = viewMode==='aggregated'||viewMode==='subtotals'
-      ? results.filter(r=>!r._type||r._type==='subtotal')
-      : results.filter(r=>!r._type||r._type==='data');
+    const dataRows = results.filter(r=>!r._type||r._type==='data');
     return charts.reduce((acc,ch)=>{
-      acc[ch.id]=src.slice(0,15).map(r=>({
-        name:String(r[groupBy]||r[selFields[0]]||'').slice(0,22),
-        value:parseNum(r[ch.field]),
-      })).filter(d=>d.value>0||d.name);
+      // Strip any aggregation suffix so we always work with the raw field name
+      const rawField = ch.field.replace(/_(sum|count|avg|min|max)$/,'');
+      let data = [];
+
+      if (viewMode==='aggregated') {
+        // Aggregated rows already have _sum/_count keys — try both
+        const src = results.filter(r=>!r._type);
+        data = src.slice(0,15).map(r=>({
+          name: String(r[groupBy]||r[selFields[0]]||'').slice(0,22),
+          value: parseNum(r[ch.field]??r[rawField]),
+        }));
+      } else if (viewMode==='subtotals') {
+        // Subtotal rows carry the aggregated values
+        const src = results.filter(r=>r._type==='subtotal');
+        data = src.slice(0,15).map(r=>({
+          name: String(r[groupBy]||'').slice(0,22),
+          value: parseNum(r[ch.field]??r[rawField]),
+        }));
+      } else {
+        // Flat mode: aggregate on-the-fly
+        if (groupBy) {
+          const groups = {};
+          for (const row of dataRows) {
+            const k = String(row[groupBy]||'(None)').slice(0,22);
+            if (!groups[k]) groups[k]=0;
+            groups[k] += parseNum(row[rawField]);
+          }
+          data = Object.entries(groups).sort(([,a],[,b])=>b-a).slice(0,15).map(([name,value])=>({name,value}));
+        } else {
+          data = dataRows.slice(0,15).map(r=>({
+            name: String(r[selFields[0]]||'').slice(0,22),
+            value: parseNum(r[rawField]),
+          }));
+        }
+      }
+      acc[ch.id] = data.filter(d=>d.value>0||d.name);
       return acc;
     },{});
   },[results,charts,groupBy,selFields,viewMode]);
@@ -817,7 +864,7 @@ const ReportsPage = () => {
                       </Stack>
                       <Stack spacing={0.8}>
                         <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Type</InputLabel><Select label="Type" value={ch.type} onChange={e=>updateChart(ch.id,{type:e.target.value})}>{['bar','pie','line'].map(t=><MenuItem key={t} value={t} sx={{fontSize:12}}>{t.charAt(0).toUpperCase()+t.slice(1)}</MenuItem>)}</Select></FormControl>
-                        <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Field</InputLabel><Select label="Field" value={ch.field} onChange={e=>updateChart(ch.id,{field:e.target.value})}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={groupBy?`${f.key}_sum`:f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
+                        <FormControl size="small" fullWidth><InputLabel sx={{fontSize:11}}>Field</InputLabel><Select label="Field" value={ch.field.replace(/_(sum|count|avg|min|max)$/,'')} onChange={e=>updateChart(ch.id,{field:e.target.value})}>{sourceFields.filter(f=>f.type==='number').map(f=><MenuItem key={f.key} value={f.key} sx={{fontSize:12}}>{f.label}</MenuItem>)}</Select></FormControl>
                       </Stack>
                     </Box>
                   ))}
