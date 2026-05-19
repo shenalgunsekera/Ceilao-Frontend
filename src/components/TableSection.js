@@ -160,6 +160,8 @@ const TableSection = () => {
   const [page,         setPage]         = useState(1);
   const [rowsPerPage,  setRowsPerPage]  = useState(15);
   const [filterType,   setFilterType]   = useState('all');
+  const [filterYear,   setFilterYear]   = useState('all');
+  const [filterMonth,  setFilterMonth]  = useState('all');
 
   // ── Document import state ─────────────────────────────────────────────
   const [docImportOpen,     setDocImportOpen]     = useState(false);
@@ -278,11 +280,32 @@ const TableSection = () => {
     } catch { /* ignore malformed param */ }
   }, [location.search]);
 
-  /* stats */
+  /* Available years derived from actual client data */
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    clients.forEach(c => {
+      const d = c.created_at?.toDate ? c.created_at.toDate() : c.created_at ? new Date(c.created_at) : null;
+      if (d && !isNaN(d)) years.add(d.getFullYear());
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [clients]);
+
   /* filter + search */
   const filtered = useMemo(() => {
     let list = clients;
     if (filterType !== 'all') list = list.filter(c => c.customer_type === filterType);
+
+    // Date Added filters
+    if (filterYear !== 'all' || filterMonth !== 'all') {
+      list = list.filter(c => {
+        const d = c.created_at?.toDate ? c.created_at.toDate() : c.created_at ? new Date(c.created_at) : null;
+        if (!d || isNaN(d)) return false;
+        if (filterYear  !== 'all' && d.getFullYear()  !== Number(filterYear))  return false;
+        if (filterMonth !== 'all' && d.getMonth()     !== Number(filterMonth)) return false;
+        return true;
+      });
+    }
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(c =>
@@ -294,7 +317,7 @@ const TableSection = () => {
       );
     }
     return list;
-  }, [clients, filterType, searchQuery]);
+  }, [clients, filterType, filterYear, filterMonth, searchQuery]);
 
   /* paginate */
   const pageCount    = Math.ceil(filtered.length / rowsPerPage);
@@ -341,12 +364,14 @@ const TableSection = () => {
       'basic_premium','srcc_premium','tc_premium','net_premium','stamp_duty',
       'admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
       'commission_type','commission_basic','commission_srcc','commission_tc','sales_rep_id',
+      'date_added', // optional — preserves original date on restore (YYYY-MM-DD)
     ];
     const example = {
       customer_type:'Individual', product:'Comprehensive', insurance_provider:'Ceylinco',
       client_name:'John Doe', mobile_no:'0771234567', policy_no:'POL123456',
       policy_period_from:'2025-01-01', policy_period_to:'2026-01-01',
       net_premium:'58000', total_invoice:'64600',
+      date_added: new Date().toISOString().slice(0,10),
     };
     const csv = Papa.unparse([allFields, allFields.map(h => example[h] ?? '')]);
     const a = Object.assign(document.createElement('a'), {
@@ -379,7 +404,10 @@ const TableSection = () => {
           const ref = doc(collection(db, 'clients'));
           const clean = {};
           Object.entries(row).forEach(([k, v]) => { if (v !== '' && v != null) clean[k] = v; });
-          batch.set(ref, { ...clean, created_at: new Date(), is_active: true });
+          // Honour date_added if provided (preserves original date on backup restore)
+          const dateAdded = clean.date_added ? new Date(clean.date_added) : new Date();
+          delete clean.date_added;
+          batch.set(ref, { ...clean, created_at: isNaN(dateAdded) ? new Date() : dateAdded, is_active: true });
           imported++;
         }
         try {
@@ -405,26 +433,53 @@ const TableSection = () => {
         display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2,
         alignItems: 'center', justifyContent: 'space-between',
       }}>
-        {/* filter chips */}
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          {['all','Individual','Company'].map(t => (
-            <Chip
-              key={t}
-              label={t === 'all' ? 'All' : t}
-              clickable
-              onClick={() => { setFilterType(t); setPage(1); }}
-              sx={{
-                fontWeight: 600, fontSize: 12,
-                background: filterType === t
-                  ? 'linear-gradient(135deg,#FF5A5A,#FF8B5A)'
-                  : 'rgba(255,90,90,0.07)',
-                color: filterType === t ? '#fff' : '#FF5A5A',
-                border: filterType === t ? 'none' : '1px solid rgba(255,90,90,0.20)',
-                transition: 'all 0.2s ease',
-                '&:hover': { opacity: 0.88 },
-              }}
-            />
-          ))}
+        {/* filter chips + date filters */}
+        <Stack spacing={1}>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {['all','Individual','Company'].map(t => (
+              <Chip
+                key={t}
+                label={t === 'all' ? 'All' : t}
+                clickable
+                onClick={() => { setFilterType(t); setPage(1); }}
+                sx={{
+                  fontWeight: 600, fontSize: 12,
+                  background: filterType === t
+                    ? 'linear-gradient(135deg,#FF5A5A,#FF8B5A)'
+                    : 'rgba(255,90,90,0.07)',
+                  color: filterType === t ? '#fff' : '#FF5A5A',
+                  border: filterType === t ? 'none' : '1px solid rgba(255,90,90,0.20)',
+                  transition: 'all 0.2s ease',
+                  '&:hover': { opacity: 0.88 },
+                }}
+              />
+            ))}
+          </Stack>
+
+          {/* Date Added filter row */}
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', fontWeight: 600 }}>Date Added:</Typography>
+            <Select size="small" value={filterYear} onChange={e => { setFilterYear(e.target.value); setPage(1); }}
+              sx={{ fontSize: 12, height: 30, minWidth: 90, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,139,90,0.25)' } }}>
+              <MenuItem value="all" sx={{ fontSize: 12 }}>All Years</MenuItem>
+              {availableYears.map(y => <MenuItem key={y} value={y} sx={{ fontSize: 12 }}>{y}</MenuItem>)}
+            </Select>
+            <Select size="small" value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setPage(1); }}
+              sx={{ fontSize: 12, height: 30, minWidth: 110, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,139,90,0.25)' } }}>
+              <MenuItem value="all" sx={{ fontSize: 12 }}>All Months</MenuItem>
+              {['January','February','March','April','May','June','July','August','September','October','November','December']
+                .map((m, i) => <MenuItem key={i} value={i} sx={{ fontSize: 12 }}>{m}</MenuItem>)}
+            </Select>
+            {(filterYear !== 'all' || filterMonth !== 'all') && (
+              <Chip label="Clear" size="small" clickable onClick={() => { setFilterYear('all'); setFilterMonth('all'); setPage(1); }}
+                sx={{ fontSize: 11, height: 24, bgcolor: 'rgba(239,68,68,0.08)', color: '#ef4444' }} />
+            )}
+            {(filterYear !== 'all' || filterMonth !== 'all') && (
+              <Typography sx={{ fontSize: 11.5, color: '#6B7280' }}>
+                {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+              </Typography>
+            )}
+          </Stack>
         </Stack>
 
         {/* action buttons */}

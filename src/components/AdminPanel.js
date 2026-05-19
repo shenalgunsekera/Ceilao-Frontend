@@ -266,6 +266,7 @@ const CLIENT_IMPORT_COLS = [
   'basic_premium','srcc_premium','tc_premium','net_premium','stamp_duty',
   'admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
   'commission_type','commission_basic','commission_srcc','commission_tc','sales_rep_id',
+  'date_added', // preserves original created_at on restore
 ];
 
 /* Strip Cloudinary transformation params so PDFs/images download correctly.
@@ -363,14 +364,17 @@ function buildQuotationsImportCsv(quotes) {
 /* Build the root CLIENTS_IMPORT.csv — ready for direct re-import */
 function buildClientsImportCsv(clients) {
   const header = CLIENT_IMPORT_COLS.join(',');
-  const rows = clients.map(c =>
-    CLIENT_IMPORT_COLS.map(col => {
-      const v = c[col] ?? '';
-      // Quote values that contain commas or quotes
+  const rows = clients.map(c => {
+    // Resolve created_at Firestore timestamp → ISO date string for date_added column
+    const createdDate = c.created_at?.toDate ? c.created_at.toDate() : c.created_at ? new Date(c.created_at) : null;
+    const dateAdded = createdDate && !isNaN(createdDate) ? createdDate.toISOString().slice(0, 10) : '';
+
+    return CLIENT_IMPORT_COLS.map(col => {
+      const v = col === 'date_added' ? dateAdded : (c[col] ?? '');
       const s = String(v).replace(/"/g, '""');
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
-    }).join(',')
-  );
+    }).join(',');
+  });
   return [header, ...rows].join('\r\n');
 }
 

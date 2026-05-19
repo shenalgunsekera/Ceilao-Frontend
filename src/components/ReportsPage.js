@@ -92,6 +92,7 @@ const CLIENT_FIELDS = [
   { key: 'admin_fees',         label: 'Admin Fees',         type: 'number'  },
   { key: 'vat_fee',            label: 'VAT',                type: 'number'  },
   { key: 'status',             label: 'Status',             type: 'string'  },
+  { key: 'created_at',         label: 'Date Added',         type: 'date'    },
 ];
 
 const CLAIM_FIELDS = [
@@ -110,7 +111,7 @@ const NUMBER_OPS  = ['sum','avg','min','max','count'];
 const FILTER_OPS  = {
   string: ['equals','contains','starts with','not equals'],
   number: ['=','>','<','>=','<='],
-  date:   ['after','before','between'],
+  date:   ['after','before','between'], // between uses "YYYY-MM-DD|YYYY-MM-DD"
 };
 
 /* ── Built-in templates ──────────────────────────────────────────────────── */
@@ -223,8 +224,14 @@ function applyFilters(rows, filters) {
       } else if (field.type === 'date') {
         const d = rawVal?.toDate ? rawVal.toDate() : new Date(rawVal);
         if (isNaN(d)) return false;
-        if (f.op === 'after'  && f.value && d <= new Date(f.value)) return false;
-        if (f.op === 'before' && f.value && d >= new Date(f.value)) return false;
+        if (f.op === 'after'   && f.value && d <= new Date(f.value)) return false;
+        if (f.op === 'before'  && f.value && d >= new Date(f.value)) return false;
+        if (f.op === 'between' && f.value) {
+          const [from, to] = f.value.split('|');
+          const start = new Date(from); start.setHours(0,0,0,0);
+          const end   = new Date(to);   end.setHours(23,59,59,999);
+          if (d < start || d > end) return false;
+        }
       }
     }
     return true;
@@ -642,6 +649,37 @@ const ReportsPage = () => {
                     </Stack>
                   </>
                 )}
+
+                {/* Quick Date Presets */}
+                <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1 }}>
+                  Quick Date Filter
+                </Typography>
+                <Stack direction="row" spacing={0.7} flexWrap="wrap" sx={{ mb: 2.5 }}>
+                  {[
+                    { label: 'This Month',  getFilter: () => { const n=new Date(); return { field:'created_at', op:'between', value: `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01|${new Date(n.getFullYear(),n.getMonth()+1,0).toISOString().slice(0,10)}` }; } },
+                    { label: 'Last Month',  getFilter: () => { const n=new Date(); const m=new Date(n.getFullYear(),n.getMonth()-1,1); return { field:'created_at', op:'between', value: `${m.toISOString().slice(0,10)}|${new Date(n.getFullYear(),n.getMonth(),0).toISOString().slice(0,10)}` }; } },
+                    { label: 'This Year',   getFilter: () => { const y=new Date().getFullYear(); return { field:'created_at', op:'between', value:`${y}-01-01|${y}-12-31` }; } },
+                    { label: 'Last Year',   getFilter: () => { const y=new Date().getFullYear()-1; return { field:'created_at', op:'between', value:`${y}-01-01|${y}-12-31` }; } },
+                  ].map(({ label, getFilter }) => (
+                    <Chip key={label} label={label} size="small" clickable
+                      onClick={() => {
+                        const f = getFilter();
+                        setFilters(p => {
+                          const without = p.filter(x => x.field !== 'created_at');
+                          return [...without, f];
+                        });
+                      }}
+                      sx={{ fontSize: 11, height: 24, fontWeight: 600,
+                            bgcolor: 'rgba(99,102,241,0.08)', color: '#6366f1',
+                            border: '1px solid rgba(99,102,241,0.20)',
+                            '&:hover': { bgcolor: 'rgba(99,102,241,0.15)' } }} />
+                  ))}
+                  {filters.some(f => f.field === 'created_at') && (
+                    <Chip label="Clear date" size="small" clickable
+                      onClick={() => setFilters(p => p.filter(f => f.field !== 'created_at'))}
+                      sx={{ fontSize: 11, height: 24, bgcolor: 'rgba(239,68,68,0.07)', color: '#ef4444' }} />
+                  )}
+                </Stack>
 
                 {/* Filters */}
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
