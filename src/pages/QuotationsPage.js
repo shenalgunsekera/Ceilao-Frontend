@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Papa from 'papaparse';
 import {
   collection, addDoc, getDocs, query, orderBy, onSnapshot,
-  doc, updateDoc, deleteDoc, serverTimestamp
+  doc, updateDoc, deleteDoc, serverTimestamp, writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
@@ -1904,21 +1905,60 @@ const QuotationsPage = () => {
     setDeleting(false);
   };
 
-  /* ── Restore quotations from backup JSON ──────────────────────────────── */
+  /* ── Restore quotations — accepts JSON files OR a single CSV ───────────── */
   const handleRestoreFilesSelect = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (!files.length) return;
-    const items = await Promise.all(files.map(async f => {
-      try {
-        const text = await f.text();
-        const data = JSON.parse(text);
-        if (!data.reference) return { file: f, valid: false, error: 'Missing reference field' };
-        return { file: f, valid: true, data, status: 'pending' };
-      } catch {
-        return { file: f, valid: false, error: 'Invalid JSON' };
+
+    let items = [];
+
+    for (const f of files) {
+      if (f.name.endsWith('.csv')) {
+        // Parse the QUOTATIONS_IMPORT.csv — produces one item per row
+        await new Promise(resolve => {
+          Papa.parse(f, {
+            header: true, skipEmptyLines: true,
+            complete: ({ data }) => {
+              data.forEach(row => {
+                if (!row.reference) return;
+                items.push({
+                  file: { name: row.reference }, // use reference as display name
+                  valid: true,
+                  data: {
+                    reference:          row.reference || '',
+                    product_key:        row.product_key || '',
+                    main_class:         row.main_class || '',
+                    client_name:        row.client_name || '',
+                    client_mobile:      row.client_mobile || '',
+                    status:             row.status || 'sent',
+                    customer_selection: row.customer_selection || '',
+                    responses:          [],
+                  },
+                  status: 'pending',
+                  sourceType: 'csv',
+                });
+              });
+              resolve();
+            },
+            error: () => {
+              items.push({ file: f, valid: false, error: 'CSV parse failed' });
+              resolve();
+            },
+          });
+        });
+      } else if (f.name.endsWith('.json')) {
+        try {
+          const text = await f.text();
+          const data = JSON.parse(text);
+          if (!data.reference) { items.push({ file: f, valid: false, error: 'Missing reference field' }); continue; }
+          items.push({ file: f, valid: true, data, status: 'pending', sourceType: 'json' });
+        } catch {
+          items.push({ file: f, valid: false, error: 'Invalid JSON' });
+        }
       }
-    }));
+    }
+
     setRestoreItems(items);
     setRestoreDone(false);
     setRestoreOpen(true);
@@ -1927,11 +1967,26 @@ const QuotationsPage = () => {
   const runRestore = async () => {
     const toRestore = restoreItems.filter(x => x.valid && x.status !== 'done');
     setRestoreRunning(true);
+
+    // Fetch existing quotes once for matching
+    const existingSnap = await getDocs(collection(db, 'quotes'));
+    const existingMap = {};
+    existingSnap.docs.forEach(d => { existingMap[d.data().reference] = d.id; });
+
     const updated = [...restoreItems];
-    for (const item of toRestore) {
-      const idx = updated.findIndex(x => x.file.name === item.file.name);
-      try {
-        const existing = quotes.find(q => q.reference === item.data.reference);
+    let created = 0; let updated_count = 0;
+
+    // Process in batches of 400 (Firestore batch limit is 500)
+    const BATCH_SIZE = 400;
+    for (let i = 0; i < toRestore.length; i += BATCH_SIZE) {
+      const chunk = toRestore.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      const chunkIndices = [];
+
+      for (const item of chunk) {
+        const idx = updated.findIndex(x =>
+          x.file.name === item.file.name && x.data?.reference === item.data?.reference
+        );
         const payload = {
           reference:          item.data.reference || '',
           product_key:        item.data.product_key || '',
@@ -1941,23 +1996,42 @@ const QuotationsPage = () => {
           status:             item.data.status || 'sent',
           customer_selection: item.data.customer_selection || '',
           responses:          item.data.responses || [],
+          // Ensure restored quotes appear in the Sent tab
+          sent_to: item.data.sent_to?.length ? item.data.sent_to : ['restored'],
         };
-        if (existing) {
-          await updateDoc(doc(db, 'quotes', existing.id), payload);
-          updated[idx] = { ...updated[idx], status: 'done', action: 'updated' };
+        const existingId = existingMap[item.data.reference];
+        if (existingId) {
+          batch.update(doc(db, 'quotes', existingId), payload);
+          chunkIndices.push({ idx, action: 'updated' });
+          updated_count++;
         } else {
-          await addDoc(collection(db, 'quotes'), { ...payload, created_at: serverTimestamp() });
-          updated[idx] = { ...updated[idx], status: 'done', action: 'created' };
+          const newRef = doc(collection(db, 'quotes'));
+          batch.set(newRef, { ...payload, created_at: serverTimestamp() });
+          chunkIndices.push({ idx, action: 'created' });
+          created++;
         }
+      }
+
+      try {
+        await batch.commit();
+        chunkIndices.forEach(({ idx, action }) => {
+          if (idx !== -1) updated[idx] = { ...updated[idx], status: 'done', action };
+        });
       } catch (err) {
-        updated[idx] = { ...updated[idx], status: 'error', error: err.message };
+        chunkIndices.forEach(({ idx }) => {
+          if (idx !== -1) updated[idx] = { ...updated[idx], status: 'error', error: err.message };
+        });
       }
       setRestoreItems([...updated]);
     }
+
     setRestoreRunning(false);
     setRestoreDone(true);
-    const ok = updated.filter(x => x.status === 'done').length;
-    setToast({ open: true, msg: `${ok} quotation${ok !== 1 ? 's' : ''} restored successfully`, severity: 'success' });
+    setToast({
+      open: true,
+      msg: `${created} created · ${updated_count} updated`,
+      severity: 'success',
+    });
   };
 
   const tabQuotes = [sentQuotes, receivedQuotes, compareQuotes];
@@ -2006,7 +2080,7 @@ const QuotationsPage = () => {
                     '&:hover': { borderColor: '#6366f1', bgcolor: 'rgba(99,102,241,0.06)' } }}>
               Restore Backup
             </Button>
-            <input id="quote-restore-input" type="file" multiple accept=".json" style={{ display: 'none' }}
+            <input id="quote-restore-input" type="file" multiple accept=".json,.csv" style={{ display: 'none' }}
               onChange={handleRestoreFilesSelect} />
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
               try {
@@ -2405,9 +2479,16 @@ const QuotationsPage = () => {
             </Typography>
           </DialogTitle>
           <DialogContent sx={{ pt: 1 }}>
-            <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 2 }}>
-              Select the <strong>quote_data.json</strong> files from your backup folder. Existing quotes with the same reference will be updated; new ones will be created.
+            <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 1 }}>
+              Select <strong>QUOTATIONS_IMPORT.csv</strong> for bulk restore (all quotes in one file), or select individual <strong>quote_data.json</strong> files for full restore with responses. Existing quotes update; new ones are created.
             </Typography>
+            {restoreItems.filter(x => x.valid).length > 0 && (
+              <Box sx={{ p: 1.5, mb: 1.5, borderRadius: '8px', bgcolor: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.15)' }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#6366f1' }}>
+                  {restoreItems.filter(x => x.valid).length} quotes ready to restore in one batch
+                </Typography>
+              </Box>
+            )}
             <Stack spacing={0.8}>
               {restoreItems.map((item, i) => (
                 <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.2,

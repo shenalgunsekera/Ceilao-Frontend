@@ -284,13 +284,16 @@ function stripCloudinaryTransforms(url) {
   return url; // no version segment — return as-is
 }
 
-/* Fetch one URL and return ArrayBuffer, or null on failure */
+/* Fetch one URL and return ArrayBuffer, or null on failure.
+   Plain fetch (no explicit mode/cache) mirrors how openFile() works —
+   adding cache:'no-cache' triggers a CORS preflight that Cloudinary blocks. */
 async function fetchFile(url) {
+  if (!url) return null;
   const clean = stripCloudinaryTransforms(url);
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 30_000);
-    const resp = await fetch(clean, { mode: 'cors', cache: 'no-cache', signal: ctrl.signal });
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 45_000);
+    const resp  = await fetch(clean, { signal: ctrl.signal });
     clearTimeout(timer);
     if (!resp.ok) return null;
     const buf = await resp.arrayBuffer();
@@ -336,6 +339,25 @@ async function fetchClientDocs(client) {
   }
 
   return { files, urlLines };
+}
+
+/* QUOTATIONS_IMPORT.csv columns — matches the restore CSV parser */
+const QUOTE_IMPORT_COLS = [
+  'reference','product_key','main_class','client_name','client_mobile',
+  'status','customer_selection',
+];
+
+/* Build QUOTATIONS_IMPORT.csv — each row = one quote (no responses) */
+function buildQuotationsImportCsv(quotes) {
+  const header = QUOTE_IMPORT_COLS.join(',');
+  const rows = quotes.map(q =>
+    QUOTE_IMPORT_COLS.map(col => {
+      const v = q[col] ?? '';
+      const s = String(v).replace(/"/g, '""');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+    }).join(',')
+  );
+  return [header, ...rows].join('\r\n');
 }
 
 /* Build the root CLIENTS_IMPORT.csv — ready for direct re-import */
@@ -686,6 +708,9 @@ const AdminPanel = () => {
       // CLIENTS_IMPORT.csv — drop directly into Underwriting → Import CSV
       masterZip.file('CLIENTS_IMPORT.csv', buildClientsImportCsv(clients));
 
+      // QUOTATIONS_IMPORT.csv — drop into Quotations → Restore Backup (CSV)
+      masterZip.file('QUOTATIONS_IMPORT.csv', buildQuotationsImportCsv(quotes));
+
       // QUOTATIONS_DATA.xlsx — full quotations summary with responses
       try {
         const qBuf = await buildQuotationsWorkbook(quotes, ExcelJS);
@@ -700,6 +725,7 @@ const AdminPanel = () => {
         'FOLDER STRUCTURE',
         '────────────────',
         'CLIENTS_IMPORT.csv      → Upload to Underwriting → Import CSV to restore all client records',
+        'QUOTATIONS_IMPORT.csv   → Upload to Quotations → Restore Backup (CSV) to restore all quotes',
         'QUOTATIONS_DATA.xlsx    → Full quotations summary including all insurer responses',
         'clients/{FileNo}_{Name}/',
         '  info.xlsx             → Detailed client record (formatted)',
@@ -720,7 +746,9 @@ const AdminPanel = () => {
         '',
         'RECOVERY STEPS',
         '──────────────',
-        '1. Client data:  Underwriting → Import CSV → upload CLIENTS_IMPORT.csv',
+        '1. Client data:   Underwriting → Import CSV → upload CLIENTS_IMPORT.csv',
+        '2. Quotations:   Quotations → Restore Backup → upload QUOTATIONS_IMPORT.csv',
+        '   (for full response data upload the quote_data.json files instead)',
         '2. Documents:    Upload files from each client folder to Cloudinary,',
         '                 then paste the new URLs back into each client record.',
         '3. Quotations:   Use QUOTATIONS_DATA.xlsx for reference.',
