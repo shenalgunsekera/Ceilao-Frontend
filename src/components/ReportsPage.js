@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { collection, getDocs, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer
@@ -271,57 +272,121 @@ function sortRows(rows, sortBy, sortDir) {
   });
 }
 
-/* ── PDF export ──────────────────────────────────────────────────────────── */
-async function exportPDF(columns, rows, reportName) {
-  const pdf = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', unit: 'mm' });
+/* ── PDF export — includes chart screenshot if chartEl provided ──────────── */
+async function exportPDF(columns, rows, reportName, chartEl) {
+  const landscape = columns.length > 6;
+  const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm' });
   const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const dateStr = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
 
-  // Header bar
+  // ── Header gradient block
   pdf.setFillColor(255, 90, 90);
-  pdf.rect(0, 0, pageW, 22, 'F');
-  pdf.setTextColor(255,255,255);
-  pdf.setFontSize(14); pdf.setFont('helvetica','bold');
-  pdf.text('Ceilao Insurance Brokers', pageW / 2, 10, { align: 'center' });
-  pdf.setFontSize(9); pdf.setFont('helvetica','normal');
-  pdf.text(reportName, pageW / 2, 16, { align: 'center' });
+  pdf.rect(0, 0, pageW, 26, 'F');
+  pdf.setFillColor(26, 26, 46);
+  pdf.rect(0, 26, pageW, 10, 'F');
 
-  // Date
-  pdf.setTextColor(100,100,100); pdf.setFontSize(8);
-  pdf.text(`Generated: ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}`, pageW - 10, 28, { align: 'right' });
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(15); pdf.setFont('helvetica', 'bold');
+  pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', pageW / 2, 11, { align: 'center' });
+  pdf.setFontSize(10); pdf.setFont('helvetica', 'normal');
+  pdf.text(reportName, pageW / 2, 20, { align: 'center' });
+  pdf.setFontSize(8.5);
+  pdf.text(`Generated: ${dateStr}  ·  ${rows.length} record${rows.length !== 1 ? 's' : ''}`, pageW / 2, 32, { align: 'center' });
 
+  let currentY = 42;
+
+  // ── Summary stats row
+  const numCols = columns.filter(c => c.type === 'number').slice(0, 4);
+  if (numCols.length) {
+    const boxW = (pageW - 20) / numCols.length;
+    numCols.forEach((c, i) => {
+      const total = rows.reduce((a, r) => a + parseNum(r[c.key]), 0);
+      const x = 10 + i * boxW;
+      pdf.setFillColor(255, 248, 245);
+      pdf.roundedRect(x, currentY, boxW - 3, 18, 2, 2, 'F');
+      pdf.setDrawColor(255, 139, 90); pdf.setLineWidth(0.3);
+      pdf.roundedRect(x, currentY, boxW - 3, 18, 2, 2, 'S');
+      pdf.setTextColor(255, 90, 90); pdf.setFontSize(12); pdf.setFont('helvetica', 'bold');
+      pdf.text(fmtNum(total), x + (boxW-3)/2, currentY + 10, { align: 'center' });
+      pdf.setTextColor(107, 114, 128); pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal');
+      pdf.text(c.label, x + (boxW-3)/2, currentY + 16, { align: 'center' });
+    });
+    currentY += 24;
+  }
+
+  // ── Chart image (capture the Recharts container)
+  if (chartEl) {
+    try {
+      const canvas = await html2canvas(chartEl, { scale: 2, backgroundColor: '#ffffff', logging: false });
+      const imgData = canvas.toDataURL('image/png');
+      const chartH = Math.min(65, (canvas.height / canvas.width) * (pageW - 20));
+      pdf.addImage(imgData, 'PNG', 10, currentY, pageW - 20, chartH);
+      currentY += chartH + 6;
+    } catch { /* skip chart if capture fails */ }
+  }
+
+  // ── Data table
   autoTable(pdf, {
-    startY: 32,
+    startY: currentY,
     head: [columns.map(c => c.label)],
     body: rows.map(r => columns.map(c => {
       const v = r[c.key];
       if (v === null || v === undefined) return '—';
-      if (c.type === 'date') return fmtDate(v);
+      if (c.type === 'date')   return fmtDate(v);
       if (c.type === 'number') return fmtNum(v);
       return String(v);
     })),
-    headStyles: { fillColor: [26,26,46], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    alternateRowStyles: { fillColor: [255,248,245] },
-    styles: { fontSize: 8, cellPadding: 2.5 },
-    didDrawPage: (data) => {
-      pdf.setFontSize(7); pdf.setTextColor(150,150,150);
-      pdf.text(`Page ${pdf.getNumberOfPages()}`, pageW/2, pdf.internal.pageSize.getHeight()-5, { align:'center' });
+    headStyles: { fillColor: [26, 26, 46], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, cellPadding: 3 },
+    alternateRowStyles: { fillColor: [255, 248, 245] },
+    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [26, 26, 46] },
+    columnStyles: columns.reduce((acc, c, i) => {
+      if (c.type === 'number') acc[i] = { halign: 'right' };
+      return acc;
+    }, {}),
+    didDrawPage: () => {
+      // Footer on every page
+      pdf.setFontSize(7); pdf.setTextColor(180, 180, 180);
+      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd — Confidential', 10, pageH - 6);
+      pdf.text(`Page ${pdf.getNumberOfPages()}`, pageW - 10, pageH - 6, { align: 'right' });
     },
   });
 
   pdf.save(`${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
-/* ── CSV export ──────────────────────────────────────────────────────────── */
+/* ── CSV export — clean, properly quoted, with summary header ────────────── */
 function exportCSV(columns, rows, reportName) {
-  const header = columns.map(c => `"${c.label}"`).join(',');
-  const body = rows.map(r => columns.map(c => {
-    const v = r[c.key];
-    if (v === null || v === undefined) return '';
-    if (c.type === 'date') return fmtDate(v);
-    if (c.type === 'number') return parseNum(v);
-    return `"${String(v).replace(/"/g,'""')}"`;
-  }).join(','));
-  const blob = new Blob([[header,...body].join('\r\n')], { type: 'text/csv' });
+  const dateStr = new Date().toLocaleDateString('en-GB');
+  const lines = [
+    // Report header block
+    `"${reportName}"`,
+    `"Generated by Ceilao Insurance Brokers","${dateStr}"`,
+    `"Total records","${rows.length}"`,
+    '',
+    // Summary totals for number columns
+    ...(() => {
+      const numCols = columns.filter(c => c.type === 'number');
+      if (!numCols.length) return [];
+      return [
+        '"— SUMMARY TOTALS —"',
+        numCols.map(c => `"${c.label}"`).join(','),
+        numCols.map(c => parseNum(rows.reduce((a, r) => a + parseNum(r[c.key]), 0))).join(','),
+        '',
+      ];
+    })(),
+    // Column headers
+    columns.map(c => `"${c.label}"`).join(','),
+    // Data rows
+    ...rows.map(r => columns.map(c => {
+      const v = r[c.key];
+      if (v === null || v === undefined || v === '') return '';
+      if (c.type === 'date')   return `"${fmtDate(v)}"`;
+      if (c.type === 'number') return parseNum(v);
+      return `"${String(v).replace(/"/g, '""')}"`;
+    }).join(',')),
+  ];
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   saveAs(blob, `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
@@ -364,6 +429,7 @@ const ReportsPage = () => {
 
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
   const showToast = (msg, severity = 'success') => setToast({ open: true, msg, severity });
+  const chartRef = useRef(null); // ref to chart container for PDF screenshot
 
   // Load data once
   const loadData = useCallback(async () => {
@@ -516,7 +582,7 @@ const ReportsPage = () => {
           {results && (
             <>
               <Button size="small" variant="outlined" startIcon={<PictureAsPdfOutlinedIcon />}
-                onClick={() => exportPDF(displayCols, results, saveName || 'Report')}
+                onClick={() => exportPDF(displayCols, results, saveName || 'Report', chartRef.current)}
                 sx={{ fontSize: 12, borderColor: 'rgba(239,68,68,0.35)', color: '#ef4444' }}>
                 Export PDF
               </Button>
@@ -811,7 +877,7 @@ const ReportsPage = () => {
                 {/* Chart */}
                 {chartField && chartData.length > 0 && (
                   <Card sx={{ border: '1px solid rgba(255,139,90,0.12)', mb: 2 }}>
-                    <CardContent sx={{ p: 2.5 }}>
+                    <CardContent ref={chartRef} sx={{ p: 2.5 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                         <ChartIcon sx={{ color: '#6366f1', fontSize: 20 }} />
                         <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Chart</Typography>
