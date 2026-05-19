@@ -29,7 +29,6 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Pagination from '@mui/material/Pagination';
@@ -552,7 +551,6 @@ const ReportsPage = () => {
     if (tpl.id==='expiry_report') {
       const now=new Date(); now.setHours(0,0,0,0);
       const end=new Date(now); end.setDate(end.getDate()+90);
-      const f=applyFilters(clients,[{field:'policy_period_to',op:'between',value:null}]);
       const ex=clients.filter(r=>{const v=r.policy_period_to;const d=v?.toDate?v.toDate():new Date(v);return !isNaN(d)&&d>=now&&d<=end;});
       setResults(sortRows(ex,'policy_period_to','asc'));
     }

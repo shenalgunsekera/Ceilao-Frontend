@@ -121,6 +121,7 @@ export const textFields = [
   { label:'Commission TC',       name:'commission_tc',         section:'Commission', type:'number' },
   { label:'Sales Rep ID',        name:'sales_rep_id',          section:'Other' },
   { label:'Policies',            name:'policies',              section:'Other',     type:'number' },
+  { label:'Date Added',          name:'date_added',            section:'Other',     date:true },
 ];
 
 const sections = ['General Info','Address','Contact','Proofs','Policy Details','Financials','Commission','Other'];
@@ -242,12 +243,11 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   const [fields, setFields] = useState(() => {
     const obj = {};
     textFields.forEach(f => {
+      if (f.date) return; // date fields are handled by the `dates` state, not `fields`
       const raw = initialData[f.name];
       if (raw === undefined || raw === null || raw === '') {
         obj[f.name] = '';
       } else if (f.dropdown && dropdowns[f.name]) {
-        // If value doesn't match any dropdown option, use as-is (shown as free text hint)
-        // or fall back to the last option ("Other") so the field isn't blank
         obj[f.name] = dropdowns[f.name].includes(String(raw))
           ? String(raw)
           : (dropdowns[f.name].includes('Other') ? 'Other' : '');
@@ -261,6 +261,12 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   const [dates, setDates]   = useState({
     policy_period_from: initialData.policy_period_from ? new Date(initialData.policy_period_from) : null,
     policy_period_to:   initialData.policy_period_to   ? new Date(initialData.policy_period_to)   : null,
+    // date_added maps to created_at — pre-populate from existing record on edit
+    date_added: initialData.created_at?.toDate
+      ? initialData.created_at.toDate()
+      : initialData.created_at
+      ? new Date(initialData.created_at)
+      : null,
   });
   const [docs,     setDocs]     = useState({});
   const [progress, setProgress] = useState({});
@@ -305,14 +311,22 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       }
 
       const payload = { ...fields, ...docUrls };
+      // date_added is a virtual field — remove it from payload and use it for created_at
+      delete payload.date_added;
+      const dateAdded = dates.date_added && !isNaN(dates.date_added) ? dates.date_added : null;
 
       if (isEdit && initialData.id) {
         const ref = doc(db, 'clients', initialData.id);
-        await updateDoc(ref, { ...payload, updated_at: serverTimestamp() });
+        await updateDoc(ref, {
+          ...payload,
+          updated_at: serverTimestamp(),
+          // Only update created_at if the user explicitly changed the Date Added field
+          ...(dateAdded ? { created_at: dateAdded } : {}),
+        });
       } else {
         await addDoc(collection(db, 'clients'), {
           ...payload,
-          created_at:        serverTimestamp(),
+          created_at:        dateAdded || serverTimestamp(),
           is_active:         true,
           status:            isPrivileged ? 'approved' : 'pending',
           submitted_by:      user?.uid || '',
