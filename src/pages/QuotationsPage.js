@@ -1610,7 +1610,11 @@ const QuotationsPage = () => {
   const [valOpen,        setValOpen]        = useState(false);
   const [insurerCatTab,  setInsurerCatTab]  = useState('all');
   const [insurerSearch,  setInsurerSearch]  = useState('');
-  const [draftBanner,    setDraftBanner]    = useState(null); // { product, formValues, savedAt }
+  const [draftBanner,    setDraftBanner]    = useState(null);
+  const [restoreOpen,    setRestoreOpen]    = useState(false);
+  const [restoreItems,   setRestoreItems]   = useState([]);
+  const [restoreRunning, setRestoreRunning] = useState(false);
+  const [restoreDone,    setRestoreDone]    = useState(false);
   const [hasDraft,       setHasDraft]       = useState(() => {
     try { const s = localStorage.getItem(DRAFT_KEY); return !!(s && Object.keys(JSON.parse(s).formValues || {}).length > 0); }
     catch (_) { return false; }
@@ -1900,6 +1904,62 @@ const QuotationsPage = () => {
     setDeleting(false);
   };
 
+  /* ── Restore quotations from backup JSON ──────────────────────────────── */
+  const handleRestoreFilesSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    const items = await Promise.all(files.map(async f => {
+      try {
+        const text = await f.text();
+        const data = JSON.parse(text);
+        if (!data.reference) return { file: f, valid: false, error: 'Missing reference field' };
+        return { file: f, valid: true, data, status: 'pending' };
+      } catch {
+        return { file: f, valid: false, error: 'Invalid JSON' };
+      }
+    }));
+    setRestoreItems(items);
+    setRestoreDone(false);
+    setRestoreOpen(true);
+  };
+
+  const runRestore = async () => {
+    const toRestore = restoreItems.filter(x => x.valid && x.status !== 'done');
+    setRestoreRunning(true);
+    const updated = [...restoreItems];
+    for (const item of toRestore) {
+      const idx = updated.findIndex(x => x.file.name === item.file.name);
+      try {
+        const existing = quotes.find(q => q.reference === item.data.reference);
+        const payload = {
+          reference:          item.data.reference || '',
+          product_key:        item.data.product_key || '',
+          main_class:         item.data.main_class || '',
+          client_name:        item.data.client_name || '',
+          client_mobile:      item.data.client_mobile || '',
+          status:             item.data.status || 'sent',
+          customer_selection: item.data.customer_selection || '',
+          responses:          item.data.responses || [],
+        };
+        if (existing) {
+          await updateDoc(doc(db, 'quotes', existing.id), payload);
+          updated[idx] = { ...updated[idx], status: 'done', action: 'updated' };
+        } else {
+          await addDoc(collection(db, 'quotes'), { ...payload, created_at: serverTimestamp() });
+          updated[idx] = { ...updated[idx], status: 'done', action: 'created' };
+        }
+      } catch (err) {
+        updated[idx] = { ...updated[idx], status: 'error', error: err.message };
+      }
+      setRestoreItems([...updated]);
+    }
+    setRestoreRunning(false);
+    setRestoreDone(true);
+    const ok = updated.filter(x => x.status === 'done').length;
+    setToast({ open: true, msg: `${ok} quotation${ok !== 1 ? 's' : ''} restored successfully`, severity: 'success' });
+  };
+
   const tabQuotes = [sentQuotes, receivedQuotes, compareQuotes];
 
   return (
@@ -1940,6 +2000,14 @@ const QuotationsPage = () => {
                 icon={<span style={{ fontSize: 14, marginLeft: 6 }}>💾</span>}
               />
             )}
+            <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />}
+              onClick={() => document.getElementById('quote-restore-input').click()}
+              sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1',
+                    '&:hover': { borderColor: '#6366f1', bgcolor: 'rgba(99,102,241,0.06)' } }}>
+              Restore Backup
+            </Button>
+            <input id="quote-restore-input" type="file" multiple accept=".json" style={{ display: 'none' }}
+              onChange={handleRestoreFilesSelect} />
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
               try {
                 const saved = localStorage.getItem(DRAFT_KEY);
@@ -2325,6 +2393,63 @@ const QuotationsPage = () => {
         <Snackbar open={toast.open} autoHideDuration={5000} onClose={() => setToast(t => ({ ...t, open: false }))}>
           <Alert severity={toast.severity} variant="filled">{toast.msg}</Alert>
         </Snackbar>
+
+        {/* ── Restore Quotations Dialog ── */}
+        <Dialog open={restoreOpen} onClose={() => !restoreRunning && setRestoreOpen(false)} maxWidth="sm" fullWidth
+          PaperProps={{ sx: { borderRadius: '16px' } }}>
+          <DialogTitle sx={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FileDownloadOutlinedIcon sx={{ color: '#6366f1' }} />
+            Restore Quotations from Backup
+            <Typography component="span" sx={{ fontSize: 12, color: '#9CA3AF', ml: 'auto', fontWeight: 400 }}>
+              {restoreItems.filter(x => x.valid).length} valid · {restoreItems.filter(x => !x.valid).length} invalid
+            </Typography>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1 }}>
+            <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 2 }}>
+              Select the <strong>quote_data.json</strong> files from your backup folder. Existing quotes with the same reference will be updated; new ones will be created.
+            </Typography>
+            <Stack spacing={0.8}>
+              {restoreItems.map((item, i) => (
+                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.2,
+                                   bgcolor: item.valid ? 'rgba(99,102,241,0.04)' : 'rgba(239,68,68,0.04)',
+                                   border: `1px solid ${item.valid ? 'rgba(99,102,241,0.15)' : 'rgba(239,68,68,0.15)'}`,
+                                   borderRadius: '8px' }}>
+                  {item.status === 'done'
+                    ? <CheckCircleOutlineIcon sx={{ fontSize: 16, color: '#059669', flexShrink: 0 }} />
+                    : item.status === 'error' || !item.valid
+                    ? <span style={{ fontSize: 14, flexShrink: 0 }}>✗</span>
+                    : <span style={{ fontSize: 14, flexShrink: 0 }}>📄</span>}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.valid ? item.data.reference : item.file.name}
+                    </Typography>
+                    <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>
+                      {item.valid
+                        ? `${item.data.product_key || ''} · ${item.data.client_name || ''} · ${(item.data.responses || []).length} responses`
+                        : item.error}
+                      {item.action && <span style={{ color: '#059669', marginLeft: 6 }}>✓ {item.action}</span>}
+                      {item.status === 'error' && <span style={{ color: '#dc2626', marginLeft: 6 }}>Failed: {item.error}</span>}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <Button onClick={() => setRestoreOpen(false)} disabled={restoreRunning} variant="outlined"
+              sx={{ borderColor: '#e0e0e0', color: '#6B7280', fontSize: 13 }}>
+              {restoreDone ? 'Close' : 'Cancel'}
+            </Button>
+            {!restoreDone && (
+              <Button variant="contained" onClick={runRestore}
+                disabled={restoreRunning || restoreItems.filter(x => x.valid).length === 0}
+                sx={{ fontSize: 13, background: 'linear-gradient(135deg,#6366f1,#818cf8)' }}>
+                {restoreRunning ? 'Restoring…' : `Restore ${restoreItems.filter(x => x.valid).length} Quotes`}
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+
       </Box>
     </LocalizationProvider>
   );
