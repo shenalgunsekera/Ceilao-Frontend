@@ -43,7 +43,7 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import { LocalizationProvider } from '@mui/x-date-pickers';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -833,9 +833,37 @@ const ReportsPage = () => {
                           <FormControl size="small" sx={{flex:1}}><Select value={f.field} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{field:e.target.value,op:'equals',value:''}:ff))}>{sourceFields.map(sf=><MenuItem key={sf.key} value={sf.key} sx={{fontSize:12}}>{sf.label}</MenuItem>)}</Select></FormControl>
                           <IconButton size="small" onClick={()=>setFilters(p=>p.filter((_,idx)=>idx!==i))} sx={{color:'#9CA3AF'}}><DeleteOutlineIcon fontSize="small"/></IconButton>
                         </Stack>
-                        <Stack direction="row" spacing={0.5}>
-                          <FormControl size="small" sx={{width:110}}><Select value={f.op} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,op:e.target.value}:ff))}>{ops.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
-                          <TextField size="small" value={f.value} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,value:e.target.value}:ff))} placeholder={fd?.type==='date'?'YYYY-MM-DD':'Value'} sx={{flex:1,'& input':{fontSize:12}}}/>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                          <FormControl size="small" sx={{width:110,flexShrink:0}}><Select value={f.op} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,op:e.target.value,value:''}:ff))}>{ops.map(op=><MenuItem key={op} value={op} sx={{fontSize:12}}>{op}</MenuItem>)}</Select></FormControl>
+                          {fd?.type==='date' ? (
+                            f.op==='between' ? (
+                              <Stack direction="row" spacing={0.5} sx={{flex:1}} flexWrap="wrap">
+                                <DatePicker
+                                  label="From" value={f.value?.split('|')[0]?new Date(f.value.split('|')[0]):null}
+                                  onChange={val=>{
+                                    const to=f.value?.split('|')[1]||'';
+                                    const from=val?val.toISOString().slice(0,10):'';
+                                    setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,value:`${from}|${to}`}:ff));
+                                  }}
+                                  slotProps={{textField:{size:'small',sx:{flex:1,minWidth:130,'& input':{fontSize:12}}}}}/>
+                                <DatePicker
+                                  label="To" value={f.value?.split('|')[1]?new Date(f.value.split('|')[1]):null}
+                                  onChange={val=>{
+                                    const from=f.value?.split('|')[0]||'';
+                                    const to=val?val.toISOString().slice(0,10):'';
+                                    setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,value:`${from}|${to}`}:ff));
+                                  }}
+                                  slotProps={{textField:{size:'small',sx:{flex:1,minWidth:130,'& input':{fontSize:12}}}}}/>
+                              </Stack>
+                            ) : (
+                              <DatePicker
+                                value={f.value?new Date(f.value):null}
+                                onChange={val=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,value:val?val.toISOString().slice(0,10):''}:ff))}
+                                slotProps={{textField:{size:'small',sx:{flex:1,'& input':{fontSize:12}}}}}/>
+                            )
+                          ) : (
+                            <TextField size="small" value={f.value} onChange={e=>setFilters(p=>p.map((ff,idx)=>idx===i?{...ff,value:e.target.value}:ff))} placeholder="Value" sx={{flex:1,'& input':{fontSize:12}}}/>
+                          )}
                         </Stack>
                       </Box>
                     );
