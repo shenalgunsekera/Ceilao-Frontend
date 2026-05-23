@@ -56,6 +56,9 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import DevicesOtherIcon from '@mui/icons-material/DevicesOther';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 /* ── colour maps ─────────────────────────────────────────────────────────── */
 const PRIORITY_COLORS = {
@@ -547,6 +550,13 @@ const AdminPanel = () => {
   const [createAccOpen, setCreateAccOpen] = useState(false);
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
 
+  // Work hours state
+  const [workSessions,  setWorkSessions]  = useState([]);
+  const [workLoading,   setWorkLoading]   = useState(false);
+  const [workDateFrom,  setWorkDateFrom]  = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,10); });
+  const [workDateTo,    setWorkDateTo]    = useState(() => new Date().toISOString().slice(0,10));
+  const [workEmployee,  setWorkEmployee]  = useState('all');
+
   const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin';
   const isAdmin   = userProfile?.role === 'admin';
   const isPrivileged = isManager;
@@ -565,6 +575,117 @@ const AdminPanel = () => {
     } catch { /* ignore */ }
     setTicketLoad(false);
   }, []);
+
+  const loadWorkSessions = useCallback(async () => {
+    setWorkLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'work_sessions'), orderBy('clock_in', 'desc')));
+      setWorkSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch { /* ignore */ }
+    setWorkLoading(false);
+  }, []);
+
+  const exportWorkHoursExcel = async (rows) => {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Ceilao Insurance Brokers';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Work Hours', { pageSetup: { orientation: 'landscape' } });
+    const dateStr = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+
+    // Header
+    ws.mergeCells('A1:G1');
+    const h1 = ws.getCell('A1');
+    h1.value = 'CEILAO INSURANCE BROKERS (PVT) LTD'; h1.font = { bold:true, size:14, color:{argb:'FFFFFFFF'}, name:'Calibri' };
+    h1.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1A1A2E'} }; h1.alignment = { horizontal:'center', vertical:'middle' };
+    ws.getRow(1).height = 26;
+
+    ws.mergeCells('A2:G2');
+    const h2 = ws.getCell('A2');
+    h2.value = 'Employee Work Hours Report'; h2.font = { bold:true, size:12, color:{argb:'FFFFFFFF'}, name:'Calibri' };
+    h2.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFF5A5A'} }; h2.alignment = { horizontal:'center', vertical:'middle' };
+    ws.getRow(2).height = 22;
+
+    ws.mergeCells('A3:G3');
+    const h3 = ws.getCell('A3');
+    h3.value = `Generated: ${dateStr}  |  ${rows.length} sessions`; h3.font = { size:9, color:{argb:'FF9CA3AF'}, name:'Calibri' };
+    h3.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFFF8F5'} }; h3.alignment = { horizontal:'center' };
+    ws.getRow(3).height = 14;
+    ws.getRow(4).height = 8;
+
+    // Summary per employee
+    const empTotals = {};
+    rows.forEach(r => {
+      const k = r.user_name || r.user_email || r.user_id;
+      if (!empTotals[k]) empTotals[k] = { sessions: 0, minutes: 0 };
+      empTotals[k].sessions++;
+      empTotals[k].minutes += r.duration_minutes || 0;
+    });
+    let sr = 5;
+    ws.mergeCells(`A${sr}:G${sr}`);
+    const sh = ws.getCell(`A${sr}`);
+    sh.value = 'SUMMARY BY EMPLOYEE'; sh.font = { bold:true, size:10, color:{argb:'FFFF8B5A'}, name:'Calibri' };
+    sh.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1A1A2E'} }; sh.alignment = { horizontal:'center' };
+    ws.getRow(sr).height = 18; sr++;
+
+    ['Employee','Sessions','Total Hours','Avg Hours/Session'].forEach((label, i) => {
+      const cell = ws.getCell(sr, i + 1);
+      cell.value = label; cell.font = { bold:true, size:10, color:{argb:'FFFFFFFF'}, name:'Calibri' };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF374151'} }; cell.alignment = { horizontal: i > 0 ? 'right' : 'left', vertical:'middle' };
+    });
+    ws.getRow(sr).height = 18; sr++;
+
+    Object.entries(empTotals).forEach(([emp, data], ri) => {
+      const bg = ri % 2 === 0 ? 'FFFFF8F5' : 'FFFFFFFF';
+      const hours = (data.minutes / 60).toFixed(2);
+      const avg   = (data.minutes / data.sessions / 60).toFixed(2);
+      [emp, data.sessions, hours, avg].forEach((v, i) => {
+        const cell = ws.getCell(sr, i + 1);
+        cell.value = typeof v === 'string' ? v : Number(v);
+        if (i > 0) { cell.numFmt = i === 1 ? '0' : '0.00'; cell.alignment = { horizontal:'right' }; }
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        cell.font = { size:10, name:'Calibri' };
+        cell.border = { bottom:{ style:'hair', color:{argb:'FFFFD4C0'} } };
+      });
+      sr++;
+    });
+    sr++; // spacer
+
+    // Detail headers
+    const detailHeaders = ['Employee','Email','Date','Clock In','Clock Out','Duration (hrs)','Notes'];
+    detailHeaders.forEach((label, i) => {
+      const cell = ws.getCell(sr, i + 1);
+      cell.value = label; cell.font = { bold:true, size:10, color:{argb:'FFFF8B5A'}, name:'Calibri' };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1A1A2E'} }; cell.alignment = { horizontal: i >= 3 ? 'center' : 'left', vertical:'middle' };
+    });
+    ws.getRow(sr).height = 20; sr++;
+
+    // Detail rows
+    rows.forEach((r, ri) => {
+      const bg = ri % 2 === 0 ? 'FFFFF8F5' : 'FFFFFFFF';
+      const ci = r.clock_in?.toDate ? r.clock_in.toDate() : null;
+      const co = r.clock_out?.toDate ? r.clock_out.toDate() : null;
+      const fmtTime = (d) => d ? d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '—';
+      const hrs = r.duration_minutes != null ? (r.duration_minutes / 60).toFixed(2) : '—';
+      [r.user_name||'—', r.user_email||'—', r.date||'—', fmtTime(ci), fmtTime(co), hrs, r.notes||''].forEach((v, i) => {
+        const cell = ws.getCell(sr, i + 1);
+        cell.value = v;
+        if (i >= 3 && i <= 5) cell.alignment = { horizontal:'center' };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        cell.font = { size:9.5, name:'Calibri', color:{argb:'FF1A1A2E'} };
+        if (!co && i === 4) cell.font = { ...cell.font, color:{argb:'FFf59e0b'}, bold:true };
+        cell.border = { bottom:{ style:'hair', color:{argb:'FFFFD4C0'} } };
+      });
+      ws.getRow(sr).height = 17; sr++;
+    });
+
+    // Column widths
+    [28, 28, 12, 12, 12, 16, 30].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    ws.views = [{ state:'frozen', ySplit: sr - rows.length - 1 }];
+
+    const buf = await wb.xlsx.writeBuffer();
+    saveAs(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `work_hours_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
 
   const loadReditRequests = useCallback(async () => {
     setReditLoading(true);
@@ -589,6 +710,7 @@ const AdminPanel = () => {
 
   useEffect(() => { loadTickets(); }, [loadTickets]);
   useEffect(() => { if (tab === 6) loadReditRequests(); }, [tab, loadReditRequests]);
+  useEffect(() => { if (tab === 8) loadWorkSessions(); }, [tab, loadWorkSessions]);
 
   const saveTicket = async (id, updates) => {
     await updateDoc(doc(db, 'tickets', id), updates);
@@ -682,7 +804,7 @@ const AdminPanel = () => {
           done: false,
         });
 
-        // Quote data as JSON (preserves full structure including all responses)
+        // Quote data as JSON — full structure including form values and all responses
         folder.file('quote_data.json', JSON.stringify({
           reference:          q.reference,
           product_key:        q.product_key,
@@ -692,6 +814,7 @@ const AdminPanel = () => {
           status:             q.status,
           customer_selection: q.customer_selection,
           created_at:         q.created_at?.toDate?.()?.toISOString() || '',
+          values:             q.values || {},
           responses:          q.responses || [],
         }, null, 2));
 
@@ -703,6 +826,20 @@ const AdminPanel = () => {
             const co = (r.company_name || 'insurer').replace(/[^a-zA-Z0-9_-]/g, '_');
             folder.file(`response_${co}.${extFromUrl(r.doc_url)}`, buf);
             bulkFolder.file(`${ref}_response_${co}.${extFromUrl(r.doc_url)}`, buf);
+          }
+        }
+
+        // Download quotation form documents (vehicle images, risk photos, etc.)
+        const formValues = q.values || {};
+        for (const [key, val] of Object.entries(formValues)) {
+          if (!key.startsWith('doc_') || !val || typeof val !== 'string') continue;
+          if (!val.startsWith('http')) continue;
+          const buf = await fetchFile(val);
+          if (buf) {
+            const docLabel = key.replace(/^doc_/, '').replace(/_url$/, '');
+            const filename = `form_${docLabel}.${extFromUrl(val)}`;
+            folder.file(filename, buf);
+            bulkFolder.file(`${ref}_${filename}`, buf);
           }
         }
       }
@@ -742,21 +879,21 @@ const AdminPanel = () => {
         '  invoice.pdf',
         '  payment_receipt.pdf',
         '  nic_br.pdf / .jpg',
-        '  document_links.txt    → Cloudinary URLs if binary download was blocked',
         'quotations/{Reference}/',
-        '  quote_data.json       → Complete quote + all insurer responses',
+        '  quote_data.json       → Complete quote including form values, doc URLs, and all insurer responses',
         '  response_{Insurer}.pdf → Insurer-submitted quote documents',
-        'bulk_documents/         → All documents flat-named for bulk re-upload',
+        '  form_{doctype}.pdf/.jpg → Quotation form documents (vehicle images, risk photos, etc.)',
+        'bulk_documents/         → All documents flat-named for easy bulk access',
         '  {FileNo}_{Name}_{doctype}.{ext}',
         '',
         'RECOVERY STEPS',
         '──────────────',
-        '1. Client data:   Underwriting → Import CSV → upload CLIENTS_IMPORT.csv',
-        '2. Quotations:   Quotations → Restore Backup → upload QUOTATIONS_IMPORT.csv',
-        '   (for full response data upload the quote_data.json files instead)',
-        '2. Documents:    Upload files from each client folder to Cloudinary,',
-        '                 then paste the new URLs back into each client record.',
-        '3. Quotations:   Use QUOTATIONS_DATA.xlsx for reference.',
+        '1. Client data:    Underwriting → Import CSV → upload CLIENTS_IMPORT.csv',
+        '2. Quotations:     Quotations → Restore Backup → upload QUOTATIONS_IMPORT.csv',
+        '   (for full response data use the quote_data.json files)',
+        '3. Documents:      Already downloaded in each folder. Re-upload to Firebase Storage',
+        '                   and update the URLs in each client/quote record if needed.',
+        '4. Reference:      Use QUOTATIONS_DATA.xlsx for a full formatted quotations summary.',
       ].join('\n'));
 
       // ── 5. Generate final ZIP ─────────────────────────────────────────────
@@ -805,6 +942,7 @@ const AdminPanel = () => {
         <Tab icon={<EditOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start"
           label={`Re-edit Requests${reditRequests.filter(r => r.status === 'pending').length ? ` (${reditRequests.filter(r => r.status === 'pending').length})` : ''}`} />
         <Tab icon={<DevicesOtherIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Devices" />
+        <Tab icon={<AccessTimeIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Work Hours" />
       </Tabs>
 
       {/* ── TICKETS TAB ── */}
@@ -1071,6 +1209,114 @@ const AdminPanel = () => {
           <DevicesManager />
         </Box>
       )}
+
+      {/* ── WORK HOURS TAB ── */}
+      {tab === 8 && (() => {
+        const filtered = workSessions.filter(s => {
+          const inRange = (!workDateFrom || s.date >= workDateFrom) && (!workDateTo || s.date <= workDateTo);
+          const byEmp   = workEmployee === 'all' || (s.user_name || s.user_email) === workEmployee;
+          return inRange && byEmp;
+        });
+        const employees = [...new Set(workSessions.map(s => s.user_name || s.user_email || s.user_id))].sort();
+        const totalMins = filtered.reduce((a, s) => a + (s.duration_minutes || 0), 0);
+        const openSessions = filtered.filter(s => !s.clock_out).length;
+
+        return (
+          <Box>
+            <Stack direction={{ xs:'column', sm:'row' }} justifyContent="space-between" alignItems={{ sm:'center' }} sx={{ mb: 3 }}>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>Employee Work Hours</Typography>
+                <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>Track daily clock-in / clock-out for all staff</Typography>
+              </Box>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" variant="outlined" startIcon={<RefreshIcon sx={{ fontSize: 15 }} />}
+                  onClick={loadWorkSessions} disabled={workLoading}
+                  sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.35)', color: '#FF8B5A' }}>
+                  {workLoading ? 'Loading…' : 'Refresh'}
+                </Button>
+                <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon sx={{ fontSize: 15 }} />}
+                  onClick={() => exportWorkHoursExcel(filtered)}
+                  sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1' }}>
+                  Export Excel
+                </Button>
+              </Stack>
+            </Stack>
+
+            {/* Filters */}
+            <Stack direction={{ xs:'column', sm:'row' }} spacing={1.5} sx={{ mb: 2.5 }}>
+              <TextField type="date" size="small" label="From" value={workDateFrom} onChange={e => setWorkDateFrom(e.target.value)}
+                InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }} />
+              <TextField type="date" size="small" label="To" value={workDateTo} onChange={e => setWorkDateTo(e.target.value)}
+                InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }} />
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel sx={{ fontSize: 13 }}>Employee</InputLabel>
+                <Select label="Employee" value={workEmployee} onChange={e => setWorkEmployee(e.target.value)} sx={{ fontSize: 13 }}>
+                  <MenuItem value="all">All Employees</MenuItem>
+                  {employees.map(e => <MenuItem key={e} value={e} sx={{ fontSize: 13 }}>{e}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Stack>
+
+            {/* Summary stats */}
+            <Stack direction={{ xs:'column', sm:'row' }} spacing={1.5} sx={{ mb: 2.5 }}>
+              {[
+                { label: 'Total Sessions', val: filtered.length, color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
+                { label: 'Total Hours', val: `${(totalMins / 60).toFixed(1)} hrs`, color: '#FF5A5A', bg: 'rgba(255,90,90,0.07)' },
+                { label: 'Avg Hours/Session', val: filtered.length ? `${(totalMins / filtered.length / 60).toFixed(1)} hrs` : '—', color: '#10B981', bg: 'rgba(16,185,129,0.07)' },
+                { label: 'Currently Clocked In', val: openSessions, color: '#f59e0b', bg: 'rgba(245,158,11,0.07)' },
+              ].map((s, i) => (
+                <Box key={i} sx={{ p: 1.5, borderRadius: '10px', bgcolor: s.bg, border: `1px solid ${s.bg}`, minWidth: 130 }}>
+                  <Typography sx={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.val}</Typography>
+                  <Typography sx={{ fontSize: 11, color: '#6B7280' }}>{s.label}</Typography>
+                </Box>
+              ))}
+            </Stack>
+
+            {/* Table */}
+            <Card sx={{ border: '1px solid rgba(255,139,90,0.12)', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#1A1A2E' }}>
+                    {['Employee', 'Email', 'Date', 'Clock In', 'Clock Out', 'Duration', 'Notes'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', color: '#FF8B5A', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap', fontSize: 12 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 && !workLoading && (
+                    <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#9CA3AF' }}>No sessions found for the selected filters.</td></tr>
+                  )}
+                  {workLoading && (
+                    <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#9CA3AF' }}>Loading…</td></tr>
+                  )}
+                  {filtered.map((s, i) => {
+                    const ci = s.clock_in?.toDate ? s.clock_in.toDate() : null;
+                    const co = s.clock_out?.toDate ? s.clock_out.toDate() : null;
+                    const fmtT = d => d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—';
+                    const dur  = s.duration_minutes != null ? `${Math.floor(s.duration_minutes / 60)}h ${s.duration_minutes % 60}m` : null;
+                    const active = !co;
+                    return (
+                      <tr key={s.id} style={{ background: i % 2 === 0 ? '#FFF8F5' : '#fff' }}>
+                        <td style={{ padding: '9px 14px', fontWeight: 600 }}>{s.user_name || '—'}</td>
+                        <td style={{ padding: '9px 14px', color: '#6B7280', fontSize: 12 }}>{s.user_email || '—'}</td>
+                        <td style={{ padding: '9px 14px', whiteSpace: 'nowrap' }}>{s.date || '—'}</td>
+                        <td style={{ padding: '9px 14px', whiteSpace: 'nowrap' }}>{fmtT(ci)}</td>
+                        <td style={{ padding: '9px 14px', whiteSpace: 'nowrap', color: active ? '#f59e0b' : 'inherit', fontWeight: active ? 700 : 400 }}>
+                          {active ? 'Active ⏱' : fmtT(co)}
+                        </td>
+                        <td style={{ padding: '9px 14px', whiteSpace: 'nowrap', fontWeight: 600, color: active ? '#f59e0b' : '#1A1A2E' }}>
+                          {active ? 'In progress' : (dur || '—')}
+                        </td>
+                        <td style={{ padding: '9px 14px', color: '#9CA3AF', fontSize: 12 }}>{s.notes || ''}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Card>
+          </Box>
+        );
+      })()}
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(t => ({ ...t, open: false }))}>
         <Alert severity={toast.severity} variant="filled" sx={{ width: '100%' }}>{toast.msg}</Alert>

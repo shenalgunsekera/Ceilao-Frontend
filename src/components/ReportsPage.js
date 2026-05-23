@@ -400,126 +400,252 @@ function exportCSV(columns, rows, reportName) {
   saveAs(blob,`${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
-/* ── Excel export — charts as embedded images + styled data table ─────────── */
+/* ── Capture a Recharts SVG element as a base64 PNG for embedding ─────────── */
+async function captureChartPng(el) {
+  if (!el) return null;
+  // Prefer SVG serialization — more reliable than html2canvas for SVG-based charts
+  const svg = el.querySelector('svg');
+  if (svg) {
+    try {
+      const rect   = svg.getBoundingClientRect();
+      const clone  = svg.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width',  rect.width  || 600);
+      clone.setAttribute('height', rect.height || 240);
+      // Inline background so chart looks correct on white sheet
+      clone.style.background = '#ffffff';
+      const svgStr = new XMLSerializer().serializeToString(clone);
+      const svgBlob = new Blob([svgStr], { type:'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = 2;
+          const canvas = document.createElement('canvas');
+          canvas.width  = (rect.width  || 600) * scale;
+          canvas.height = (rect.height || 240) * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, rect.width || 600, rect.height || 240);
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL('image/png').split(',')[1]);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+        img.src = url;
+      });
+    } catch { /* fall through to html2canvas */ }
+  }
+  // Fallback: html2canvas with foreignObjectRendering
+  try {
+    const canvas = await html2canvas(el, { scale:2, backgroundColor:'#ffffff', logging:false, useCORS:true });
+    return canvas.toDataURL('image/png').split(',')[1];
+  } catch { return null; }
+}
+
+/* ── Excel export — two sheets: Charts+Summary / Data ────────────────────── */
 async function exportExcel(columns, rows, reportName, chartEls=[]) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Ceilao Insurance Brokers';
-  wb.created = new Date();
+  wb.creator  = 'Ceilao Insurance Brokers';
+  wb.created  = new Date();
+  const dateStr   = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  const dataRows  = rows.filter(r=>!r._type||r._type==='data');
+  const numCols   = columns.filter(c=>c.type==='number');
+  const maxColIdx = Math.min(columns.length, 26);
 
-  const ws = wb.addWorksheet('Report', { pageSetup: { orientation: 'landscape', fitToPage: true } });
-  const dateStr = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
-  const dataRows = rows.filter(r=>!r._type||r._type==='data');
+  /* ────────────────────────────────────────────────────────────
+     SHEET 1 — Summary (branding + stat boxes + chart images)
+  ──────────────────────────────────────────────────────────── */
+  const wsSummary = wb.addWorksheet('Summary', { pageSetup:{ orientation:'landscape', fitToPage:true } });
 
-  // ── Header rows ──
-  ws.mergeCells('A1:' + String.fromCharCode(64 + Math.min(columns.length, 26)) + '1');
-  const h1 = ws.getCell('A1');
-  h1.value = 'CEILAO INSURANCE BROKERS (PVT) LTD';
-  h1.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A1A2E' } };
-  h1.font  = { bold:true, size:14, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
-  h1.alignment = { horizontal:'center', vertical:'middle' };
-  ws.getRow(1).height = 26;
+  const setCell = (ws, row, col, value, opts={}) => {
+    const cell = ws.getCell(row, col);
+    cell.value = value;
+    if (opts.fill)      cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb: opts.fill } };
+    if (opts.font)      cell.font      = { name:'Calibri', ...opts.font };
+    if (opts.align)     cell.alignment = opts.align;
+    if (opts.numFmt)    cell.numFmt    = opts.numFmt;
+    if (opts.border)    cell.border    = opts.border;
+    return cell;
+  };
 
-  ws.mergeCells('A2:' + String.fromCharCode(64 + Math.min(columns.length, 26)) + '2');
-  const h2 = ws.getCell('A2');
-  h2.value = reportName;
-  h2.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFF5A5A' } };
-  h2.font  = { bold:true, size:12, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
-  h2.alignment = { horizontal:'center', vertical:'middle' };
-  ws.getRow(2).height = 22;
+  const spanCols = Math.max(maxColIdx, 8);
 
-  ws.mergeCells('A3:' + String.fromCharCode(64 + Math.min(columns.length, 26)) + '3');
-  const h3 = ws.getCell('A3');
-  h3.value = `Generated: ${dateStr}  |  ${dataRows.length} records`;
-  h3.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFF8F5' } };
-  h3.font  = { size:9, color:{ argb:'FF9CA3AF' }, name:'Calibri' };
-  h3.alignment = { horizontal:'center' };
-  ws.getRow(3).height = 14;
-  ws.getRow(4).height = 8; // spacer
+  // Row 1 — company name
+  wsSummary.mergeCells(1, 1, 1, spanCols);
+  setCell(wsSummary, 1, 1, 'CEILAO INSURANCE BROKERS (PVT) LTD',
+    { fill:'FF1A1A2E', font:{ bold:true, size:16, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
+  wsSummary.getRow(1).height = 32;
 
-  let currentRow = 5;
+  // Row 2 — report name
+  wsSummary.mergeCells(2, 1, 2, spanCols);
+  setCell(wsSummary, 2, 1, reportName,
+    { fill:'FFFF5A5A', font:{ bold:true, size:13, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
+  wsSummary.getRow(2).height = 24;
 
-  // ── Summary totals ──
-  const numCols = columns.filter(c=>c.type==='number');
+  // Row 3 — metadata
+  wsSummary.mergeCells(3, 1, 3, spanCols);
+  setCell(wsSummary, 3, 1, `Generated: ${dateStr}   ·   ${dataRows.length} records`,
+    { fill:'FFFFF8F5', font:{ size:9, color:{argb:'FF9CA3AF'} }, align:{ horizontal:'center' } });
+  wsSummary.getRow(3).height = 14;
+  wsSummary.getRow(4).height = 10;
+
+  let sumRow = 5;
+
+  // Stat boxes — one per numeric column
   if (numCols.length) {
-    numCols.forEach((c, i) => {
-      const col = String.fromCharCode(65 + i * 2);
-      const total = dataRows.reduce((a,r)=>a+parseNum(r[c.key]),0);
-      ws.mergeCells(`${col}${currentRow}:${String.fromCharCode(65+i*2+1)}${currentRow}`);
-      const labelCell = ws.getCell(`${col}${currentRow}`);
-      labelCell.value = c.label;
-      labelCell.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFF5A5A' } };
-      labelCell.font  = { bold:true, size:9, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
-      labelCell.alignment = { horizontal:'center' };
-      const valCell = ws.getCell(`${col}${currentRow+1}`);
-      valCell.value = total;
-      valCell.numFmt = '#,##0.00';
-      valCell.font   = { bold:true, size:12, color:{ argb:'FFFF5A5A' }, name:'Calibri' };
-      valCell.alignment = { horizontal:'center' };
+    const boxCols = Math.min(numCols.length, 6);
+    numCols.slice(0, boxCols).forEach((c, i) => {
+      const total = dataRows.reduce((a, r) => a + parseNum(r[c.key]), 0);
+      const col1  = i * 2 + 1;
+      const col2  = col1 + 1;
+
+      wsSummary.mergeCells(sumRow, col1, sumRow, col2);
+      setCell(wsSummary, sumRow, col1, c.label,
+        { fill:'FF1A1A2E', font:{ bold:true, size:9, color:{argb:'FFFF8B5A'} }, align:{ horizontal:'center', vertical:'middle' } });
+      wsSummary.getRow(sumRow).height = 18;
+
+      wsSummary.mergeCells(sumRow+1, col1, sumRow+1, col2);
+      setCell(wsSummary, sumRow+1, col1, total,
+        { fill:'FFFFF8F5', font:{ bold:true, size:14, color:{argb:'FFFF5A5A'} }, align:{ horizontal:'center', vertical:'middle' }, numFmt:'#,##0.00',
+          border:{ left:{style:'thin',color:{argb:'FFFFD4C0'}}, right:{style:'thin',color:{argb:'FFFFD4C0'}}, bottom:{style:'thin',color:{argb:'FFFFD4C0'}} } });
+      wsSummary.getRow(sumRow+1).height = 28;
     });
-    currentRow += 3;
+    sumRow += 3;
+    wsSummary.getRow(sumRow).height = 10;
+    sumRow++;
   }
 
-  // ── Embed chart images ──
+  // Capture and embed each chart image
+  let chartCount = 0;
   for (const chartEl of chartEls.filter(Boolean)) {
-    try {
-      const canvas = await html2canvas(chartEl, { scale:2, backgroundColor:'#ffffff', logging:false });
-      const imgData = canvas.toDataURL('image/png').split(',')[1];
-      const imgId = wb.addImage({ base64: imgData, extension: 'png' });
-      const colW = 600; const rowH = 200;
-      ws.addImage(imgId, {
-        tl: { col: 0, row: currentRow - 1 },
-        ext: { width: colW, height: rowH },
-      });
-      currentRow += Math.ceil(rowH / 20) + 1;
-    } catch { /* skip failed charts */ }
+    const b64 = await captureChartPng(chartEl);
+    if (!b64) continue;
+    const imgId = wb.addImage({ base64: b64, extension:'png' });
+    const pxW = 760, pxH = 260;
+    wsSummary.addImage(imgId, {
+      tl:  { col:0, row: sumRow - 1 },
+      ext: { width: pxW, height: pxH },
+      editAs: 'oneCell',
+    });
+    const rowsNeeded = Math.ceil(pxH / 18) + 1;
+    for (let r = sumRow; r < sumRow + rowsNeeded; r++) wsSummary.getRow(r).height = 18;
+    sumRow += rowsNeeded;
+    chartCount++;
   }
 
-  // ── Column headers ──
-  ws.getRow(currentRow).height = 20;
+  if (chartCount === 0 && chartEls.length > 0) {
+    // Charts were configured but couldn't be captured — note it
+    wsSummary.mergeCells(sumRow, 1, sumRow, spanCols);
+    setCell(wsSummary, sumRow, 1, '(Charts could not be captured — view them in the browser Report Builder)',
+      { font:{ italic:true, size:9, color:{argb:'FF9CA3AF'} }, align:{ horizontal:'center' } });
+    sumRow++;
+  }
+
+  wsSummary.getColumn(1).width = 28;
+  for (let i = 2; i <= spanCols; i++) wsSummary.getColumn(i).width = 18;
+
+  /* ────────────────────────────────────────────────────────────
+     SHEET 2 — Data (full table, freeze header, auto-filter)
+  ──────────────────────────────────────────────────────────── */
+  const wsData = wb.addWorksheet('Data', { pageSetup:{ orientation:'landscape', fitToPage:true } });
+
+  // Sheet header rows
+  wsData.mergeCells(1, 1, 1, maxColIdx);
+  setCell(wsData, 1, 1, `${reportName} — Full Data`,
+    { fill:'FF1A1A2E', font:{ bold:true, size:13, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
+  wsData.getRow(1).height = 24;
+
+  wsData.mergeCells(2, 1, 2, maxColIdx);
+  setCell(wsData, 2, 1, `${dateStr}   ·   ${dataRows.length} records`,
+    { fill:'FFFF5A5A', font:{ size:9, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center' } });
+  wsData.getRow(2).height = 14;
+  wsData.getRow(3).height = 8;
+
+  const headerRow = 4;
+  wsData.getRow(headerRow).height = 22;
   columns.forEach((c, i) => {
-    const cell = ws.getCell(currentRow, i + 1);
+    const cell = wsData.getCell(headerRow, i + 1);
     cell.value = c.label;
     cell.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A1A2E' } };
     cell.font  = { bold:true, size:10, color:{ argb:'FFFF8B5A' }, name:'Calibri' };
-    cell.alignment = { horizontal: c.type==='number'?'right':'left', vertical:'middle' };
+    cell.alignment = { horizontal: c.type==='number' ? 'right' : 'left', vertical:'middle' };
+    cell.border = {
+      top:    { style:'medium', color:{ argb:'FFFF5A5A' } },
+      bottom: { style:'medium', color:{ argb:'FFFF5A5A' } },
+    };
   });
-  currentRow++;
 
-  // ── Data rows ──
-  rows.forEach((row, ri) => {
-    const isSub = row._type==='subtotal';
-    const isGT  = row._type==='grandtotal';
-    const bg = isGT ? 'FF1A1A2E' : isSub ? 'FFE8E8FF' : ri%2===0 ? 'FFFFF8F5' : 'FFFFFFFF';
-    const textArgb = isGT ? 'FFFFFFFF' : isSub ? 'FF4338CA' : 'FF1A1A2E';
+  // Freeze header rows and enable auto-filter
+  wsData.views = [{ state:'frozen', ySplit: headerRow }];
+  wsData.autoFilter = {
+    from: { row: headerRow, column: 1 },
+    to:   { row: headerRow, column: columns.length },
+  };
+
+  // Data rows
+  let dataRowNum = headerRow + 1;
+  rows.forEach((row) => {
+    const isSub = row._type === 'subtotal';
+    const isGT  = row._type === 'grandtotal';
+    const bgArgb    = isGT ? 'FF1A1A2E' : isSub ? 'FFE8E8FF' : dataRowNum % 2 === 0 ? 'FFFFF8F5' : 'FFFFFFFF';
+    const textArgb  = isGT ? 'FFFFFFFF' : isSub ? 'FF4338CA' : 'FF374151';
+    wsData.getRow(dataRowNum).height = 17;
 
     columns.forEach((c, i) => {
-      const cell = ws.getCell(currentRow, i + 1);
+      const cell = wsData.getCell(dataRowNum, i + 1);
       const v = row[c.key];
+
       if (c.type === 'number') {
-        cell.value = v!==null&&v!==undefined ? parseNum(v) : null;
+        cell.value  = (v !== null && v !== undefined) ? parseNum(v) : null;
         cell.numFmt = '#,##0.00';
         cell.alignment = { horizontal:'right' };
       } else if (c.type === 'date') {
         cell.value = fmtDate(v);
+        cell.alignment = { horizontal:'center' };
       } else {
-        const prefix = isSub&&i===0?'↳ Subtotal: ':isGT&&i===0?'GRAND TOTAL → ':'';
-        cell.value = prefix+(v??'');
+        const prefix = isSub && i===0 ? '↳ ' : isGT && i===0 ? '▸ GRAND TOTAL  ' : '';
+        cell.value = prefix + (v ?? '');
       }
-      cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:bg } };
-      cell.font = { size:9.5, bold:isSub||isGT, color:{ argb:textArgb }, name:'Calibri' };
+      cell.fill   = { type:'pattern', pattern:'solid', fgColor:{ argb: bgArgb } };
+      cell.font   = { size:9.5, bold: isSub || isGT, color:{ argb: textArgb }, name:'Calibri' };
       cell.border = { bottom:{ style:'hair', color:{ argb:'FFFFD4C0' } } };
     });
-    currentRow++;
+    dataRowNum++;
   });
 
-  // Column widths
+  // Grand total row at bottom (separate from inline grand total)
+  if (numCols.length && dataRows.length) {
+    wsData.getRow(dataRowNum).height = 20;
+    columns.forEach((c, i) => {
+      const cell = wsData.getCell(dataRowNum, i + 1);
+      if (c.type === 'number') {
+        cell.value  = dataRows.reduce((a, r) => a + parseNum(r[c.key]), 0);
+        cell.numFmt = '#,##0.00';
+        cell.alignment = { horizontal:'right' };
+      } else if (i === 0) {
+        cell.value = 'TOTAL';
+      }
+      cell.fill   = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFF5A5A' } };
+      cell.font   = { bold:true, size:10, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
+    });
+  }
+
+  // Smart column widths — based on label + type
   columns.forEach((c, i) => {
-    ws.getColumn(i + 1).width = c.type==='number' ? 16 : c.type==='date' ? 14 : 22;
+    const labelLen = c.label.length;
+    const baseWidth = c.type==='number' ? Math.max(labelLen + 4, 16)
+                    : c.type==='date'   ? Math.max(labelLen + 2, 14)
+                    : Math.max(labelLen + 6, 22);
+    wsData.getColumn(i + 1).width = Math.min(baseWidth, 40);
   });
 
   const buf = await wb.xlsx.writeBuffer();
-  saveAs(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  saveAs(
+    new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`
+  );
 }
 
 /* ── Chart component ─────────────────────────────────────────────────────── */

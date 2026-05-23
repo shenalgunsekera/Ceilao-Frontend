@@ -213,7 +213,7 @@ export default function DevicesManager() {
         updated_by:    user?.email || '',
         updated_at:    serverTimestamp(),
       }, { merge: true });
-    } catch (e) { console.error(e); }
+    } catch (_) { }
     setTogglingLock(false);
     setConfirmLockdown(false);
   };

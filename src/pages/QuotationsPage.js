@@ -1617,7 +1617,7 @@ const QuotationsPage = () => {
   const [restoreRunning, setRestoreRunning] = useState(false);
   const [restoreDone,    setRestoreDone]    = useState(false);
   const [hasDraft,       setHasDraft]       = useState(() => {
-    try { const s = localStorage.getItem(DRAFT_KEY); return !!(s && Object.keys(JSON.parse(s).formValues || {}).length > 0); }
+    try { const s = sessionStorage.getItem(DRAFT_KEY); return !!(s && Object.keys(JSON.parse(s).formValues || {}).length > 0); }
     catch (_) { return false; }
   });
   const draftTimerRef  = useRef(null);
@@ -1629,7 +1629,7 @@ const QuotationsPage = () => {
   const flushDraftSave = useCallback(() => {
     if (Object.keys(formValuesRef.current).length === 0) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ product: productRef.current, formValues: formValuesRef.current, savedAt: new Date().toISOString() }));
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ product: productRef.current, formValues: formValuesRef.current, savedAt: new Date().toISOString() }));
       setHasDraft(true);
     } catch (_) {}
   }, []);
@@ -1641,7 +1641,7 @@ const QuotationsPage = () => {
     clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ product, formValues, savedAt: new Date().toISOString() }));
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ product, formValues, savedAt: new Date().toISOString() }));
         setHasDraft(true);
       } catch (_) {}
     }, 800);
@@ -1726,7 +1726,7 @@ const QuotationsPage = () => {
       setFormValues({});
       setDraftBanner(null);
       setHasDraft(false);
-      try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch (_) {}
     } catch (err) {
       setToast({ open: true, msg: err.message, severity: 'error' });
     }
@@ -2055,7 +2055,7 @@ const QuotationsPage = () => {
                 size="small"
                 onClick={() => {
                   try {
-                    const saved = localStorage.getItem(DRAFT_KEY);
+                    const saved = sessionStorage.getItem(DRAFT_KEY);
                     if (saved) {
                       const parsed = JSON.parse(saved);
                       setDraftBanner(parsed);
@@ -2084,7 +2084,7 @@ const QuotationsPage = () => {
               onChange={handleRestoreFilesSelect} />
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
               try {
-                const saved = localStorage.getItem(DRAFT_KEY);
+                const saved = sessionStorage.getItem(DRAFT_KEY);
                 if (saved) {
                   const parsed = JSON.parse(saved);
                   if (parsed && Object.keys(parsed.formValues || {}).length > 0) {
@@ -2240,7 +2240,7 @@ const QuotationsPage = () => {
                         setDraftBanner(null);
                         setFormValues({});
                         setHasDraft(false);
-                        try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+                        try { sessionStorage.removeItem(DRAFT_KEY); } catch (_) {}
                       }}>
                       Start Fresh
                     </Button>

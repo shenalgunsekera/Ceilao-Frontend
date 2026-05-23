@@ -288,7 +288,7 @@ function RequireAuth({ children }) {
             approved:   snap.exists() ? snap.data().approved : false,
             blocked:    snap.exists() ? snap.data().blocked  : false,
           }, { merge: true });
-        } catch (e) { console.error('Device register failed:', e); }
+        } catch (_) { }
       })();
 
       let sessionData  = null;
