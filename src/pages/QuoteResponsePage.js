@@ -258,25 +258,31 @@ const QuoteResponsePage = () => {
     (Number(form.vat_amount)    || 0) +
     (Number(form.other_premium) || 0);
 
-  const REQUIRED_FIELDS = [
-    { key: 'basic_premium',   label: 'Basic Premium',         num: true  },
-    { key: 'srcc_premium',    label: 'SRCC Premium',          num: true  },
-    { key: 'tc_premium',      label: 'TC Premium',            num: true  },
-    { key: 'admin_fee',       label: 'Admin Fee',             num: true  },
-    { key: 'vat_amount',      label: 'VAT',                   num: true  },
-    { key: 'commission_type', label: 'Commission Type',       num: false },
-    { key: 'deductible',      label: 'Deductibles',           num: false },
-    { key: 'validity_days',   label: 'Quote Validity (days)', num: true  },
-  ];
-
   const validateInsurer = () => {
     const errs = {};
     const missing = [];
     const invalid = [];
-    REQUIRED_FIELDS.forEach(({ key, label, num }) => {
-      const val = form[key]?.toString().trim() || '';
-      if (!val) { errs[key] = 'Required'; missing.push(label); return; }
-      if (num && isNaN(Number(val))) { errs[key] = 'Must be a number'; invalid.push(`${label} — must be a valid number`); }
+    if (!form.commission_type?.trim()) {
+      errs.commission_type = 'Required';
+      missing.push('Commission Type');
+    }
+    if (!fileUrl) {
+      missing.push('Quote Document (file upload required)');
+    }
+    // Validate any numeric fields that were filled in
+    [
+      { key: 'basic_premium', label: 'Basic Premium' },
+      { key: 'srcc_premium',  label: 'SRCC Premium'  },
+      { key: 'tc_premium',    label: 'TC Premium'     },
+      { key: 'admin_fee',     label: 'Admin Fee'      },
+      { key: 'vat_amount',    label: 'VAT'            },
+      { key: 'validity_days', label: 'Quote Validity' },
+    ].forEach(({ key, label }) => {
+      const val = form[key]?.toString().trim();
+      if (val && isNaN(Number(val))) {
+        errs[key] = 'Must be a number';
+        invalid.push(`${label} — must be a valid number`);
+      }
     });
     return { errs, missing, invalid };
   };
@@ -288,7 +294,7 @@ const QuoteResponsePage = () => {
 
   const handleSubmit = async () => {
     const { errs, missing, invalid } = validateInsurer();
-    if (Object.keys(errs).length > 0) {
+    if (Object.keys(errs).length > 0 || missing.length > 0) {
       setFieldErrors(errs);
       setValIssues({ missing, invalid });
       setValOpen(true);

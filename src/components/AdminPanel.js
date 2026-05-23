@@ -926,6 +926,8 @@ const AdminPanel = () => {
 
       <Tabs
         value={tab} onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
         sx={{
           mb: 3, borderBottom: '1px solid rgba(255,139,90,0.12)',
           '& .MuiTab-root': { fontSize: 13, fontWeight: 600, textTransform: 'none', color: '#9CA3AF' },

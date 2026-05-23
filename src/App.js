@@ -12,7 +12,7 @@ import Typography from '@mui/material/Typography';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, limit, query, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, limit, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getOrCreateDeviceId, collectDeviceInfo, fetchLocationInfo } from './utils/deviceFingerprint';
 import { DEFAULT_MODULE_ACCESS } from './config/products';
@@ -401,6 +401,9 @@ function App() {
   const [loading,     setLoading]     = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Tracks the active work session across login/logout
+  const workSessionRef = useRef(null); // { id, clockInTs, userId }
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -410,8 +413,10 @@ function App() {
         setUser(firebaseUser);
         const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
 
+        let profile;
         if (snap.exists()) {
-          setUserProfile(snap.data());
+          profile = snap.data();
+          setUserProfile(profile);
         } else {
           // No Firestore profile — auto-create one.
           // First account ever in the system becomes admin; all others get employee.
@@ -422,7 +427,7 @@ function App() {
           } catch (_) {
             // Employees can't list users collection — default to employee
           }
-          const profile = {
+          profile = {
             full_name:  firebaseUser.displayName || firebaseUser.email.split('@')[0],
             email:      firebaseUser.email,
             role,
@@ -431,14 +436,54 @@ function App() {
           await setDoc(doc(db, 'users', firebaseUser.uid), profile);
           setUserProfile(profile);
         }
+
+        // ── Auto open work session ────────────────────────────────────────────
+        if (!workSessionRef.current || workSessionRef.current.userId !== firebaseUser.uid) {
+          const today = new Date().toISOString().slice(0, 10);
+          try {
+            const existing = await getDocs(query(
+              collection(db, 'work_sessions'),
+              where('user_id',   '==', firebaseUser.uid),
+              where('date',      '==', today),
+              where('clock_out', '==', null),
+            ));
+            if (!existing.empty) {
+              const d = existing.docs[0];
+              const ts = d.data().clock_in?.toDate?.()?.getTime() || Date.now();
+              workSessionRef.current = { id: d.id, clockInTs: ts, userId: firebaseUser.uid };
+            } else {
+              const ref = await addDoc(collection(db, 'work_sessions'), {
+                user_id:          firebaseUser.uid,
+                user_email:       firebaseUser.email || '',
+                user_name:        profile?.full_name || firebaseUser.email?.split('@')[0] || '',
+                date:             today,
+                clock_in:         serverTimestamp(),
+                clock_out:        null,
+                duration_minutes: null,
+                notes:            '',
+              });
+              workSessionRef.current = { id: ref.id, clockInTs: Date.now(), userId: firebaseUser.uid };
+            }
+          } catch (_) {}
+        }
       } else {
+        // ── Auto close work session on logout ─────────────────────────────────
+        const session = workSessionRef.current;
+        if (session) {
+          const mins = Math.round((Date.now() - session.clockInTs) / 60000);
+          updateDoc(doc(db, 'work_sessions', session.id), {
+            clock_out:        Timestamp.now(),
+            duration_minutes: mins,
+          }).catch(() => {});
+          workSessionRef.current = null;
+        }
         setUser(null);
         setUserProfile(null);
       }
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Module access — one subscription for the whole app ──────────────────────
   const [moduleAccess, setModuleAccess] = useState(DEFAULT_MODULE_ACCESS);
