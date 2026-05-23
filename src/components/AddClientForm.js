@@ -301,7 +301,8 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       for (const df of docFields) {
         const file = docs[df.doc];
         if (file) {
-          const folder = `ceilao/clients/docs`;
+          const safeName = (fields.client_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+          const folder = `ceilao/clients/${safeName}/docs`;
           const url = await uploadToCloudinary(file, folder, (pct) => {
             setProgress(p => ({ ...p, [df.doc]: pct }));
           });

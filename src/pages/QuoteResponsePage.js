@@ -242,7 +242,7 @@ const QuoteResponsePage = () => {
     setFileName(file.name);
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'ceilao/quote-responses', pct => setUploadPct(pct));
+      const url = await uploadToCloudinary(file, `ceilao/quote-responses/${qid}`, pct => setUploadPct(pct));
       setFileUrl(url);
     } catch (err) {
       setError(err.message);
