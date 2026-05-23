@@ -16,6 +16,7 @@ const ComparisonPdfPage = () => {
   const [status,   setStatus]  = useState('loading'); // loading | ready | error
   const [error,    setError]   = useState('');
   const [quote,    setQuote]   = useState(null);
+  const [productDef, setProductDef] = useState(null);
 
   useEffect(() => {
     if (!qid) { setError('Invalid link — missing quote ID.'); setStatus('error'); return; }
@@ -25,7 +26,17 @@ const ComparisonPdfPage = () => {
         getDoc(doc(db, 'quotes', qid))
           .then(snap => {
             if (!snap.exists()) { setError('Quote not found.'); setStatus('error'); return; }
-            setQuote({ id: snap.id, ...snap.data() });
+            const data = snap.data();
+            setQuote({ id: snap.id, ...data });
+            // Resolve product definition (static or custom)
+            const pKey = data.product_key;
+            if (PRODUCTS[pKey]) {
+              setProductDef(PRODUCTS[pKey]);
+            } else if (pKey) {
+              getDoc(doc(db, 'products', pKey))
+                .then(ps => { if (ps.exists()) setProductDef(ps.data()); })
+                .catch(() => {});
+            }
             setStatus('ready');
           })
           .catch(() => { setError('Failed to load quote.'); setStatus('error'); });
@@ -38,7 +49,7 @@ const ComparisonPdfPage = () => {
       const { default: jsPDF }     = await import('jspdf');
       const { default: autoTable } = await import('jspdf-autotable');
 
-      const product   = quote.product_key ? PRODUCTS[quote.product_key] : null;
+      const product   = productDef || null;
       const responses = (quote.responses || []);
       const today     = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 

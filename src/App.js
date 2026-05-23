@@ -15,7 +15,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, limit, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getOrCreateDeviceId, collectDeviceInfo, fetchLocationInfo } from './utils/deviceFingerprint';
-import { DEFAULT_MODULE_ACCESS } from './config/products';
+import { PRODUCTS, DEFAULT_MODULE_ACCESS } from './config/products';
 import { lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -485,6 +485,23 @@ function App() {
     return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Custom products — merged with static definitions ────────────────────────
+  const [customProducts, setCustomProducts] = useState({});
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(
+      collection(db, 'products'),
+      snap => {
+        const map = {};
+        snap.docs.forEach(d => { map[d.id] = d.data(); });
+        setCustomProducts(map);
+      },
+      () => {}
+    );
+  }, [user]);
+
+  const allProducts = useMemo(() => ({ ...PRODUCTS, ...customProducts }), [customProducts]);
+
   // ── Module access — one subscription for the whole app ──────────────────────
   const [moduleAccess, setModuleAccess] = useState(DEFAULT_MODULE_ACCESS);
   useEffect(() => {
@@ -502,8 +519,8 @@ function App() {
   }, [moduleAccess, userProfile]);
 
   const authValue = useMemo(
-    () => ({ user, userProfile, loading, setUser, setUserProfile, searchQuery, setSearchQuery, moduleAccess, hasAccess }),
-    [user, userProfile, loading, searchQuery, moduleAccess, hasAccess]
+    () => ({ user, userProfile, loading, setUser, setUserProfile, searchQuery, setSearchQuery, moduleAccess, hasAccess, allProducts }),
+    [user, userProfile, loading, searchQuery, moduleAccess, hasAccess, allProducts]
   );
 
   return (

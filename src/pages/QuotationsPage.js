@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
-import { PRODUCTS, PRODUCT_LIST } from '../config/products';
+import { PRODUCTS as STATIC_PRODUCTS } from '../config/products';
 import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
 import { uploadToCloudinary, openFile } from '../cloudinary';
@@ -70,8 +70,8 @@ if (EMAILJS_KEY) emailjs.init({ publicKey: EMAILJS_KEY });
 const DRAFT_KEY = 'ceilao_draft_quote';
 
 /* ── form validation ─────────────────────────────────────────────────────── */
-function validateForm(product, values) {
-  const def = PRODUCTS[product];
+function validateForm(product, values, allProducts = STATIC_PRODUCTS) {
+  const def = allProducts[product];
   const errors  = {};
   const missing = [];
   const invalid = [];
@@ -110,8 +110,8 @@ function validateForm(product, values) {
 }
 
 /* ── generate reference number ────────────────────────────────────────────── */
-function genRef(productKey, customerName) {
-  const prefix = PRODUCTS[productKey]?.prefix || 'QT';
+function genRef(productKey, customerName, allProducts = STATIC_PRODUCTS) {
+  const prefix = allProducts[productKey]?.prefix || 'QT';
   const d = new Date();
   const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   const uid = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -120,9 +120,9 @@ function genRef(productKey, customerName) {
 }
 
 /* ── dynamic product form ─────────────────────────────────────────────────── */
-function ProductForm({ product, values, onChange, errors = {} }) {
+function ProductForm({ product, values, onChange, errors = {}, allProducts = STATIC_PRODUCTS }) {
   const [fileUploading, setFileUploading] = useState({});
-  const def = PRODUCTS[product];
+  const def = allProducts[product];
   if (!def) return null;
 
   // Group fields by section
@@ -322,7 +322,7 @@ function ProductForm({ product, values, onChange, errors = {} }) {
                 if (!file) return;
                 setFileUploading(prev => ({ ...prev, [f.name]: true }));
                 try {
-                  const prefix = PRODUCTS[product]?.prefix || 'QT';
+                  const prefix = allProducts[product]?.prefix || 'QT';
                   const safeName = (values.proposer_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
                   const uploadedUrl = await uploadToCloudinary(file, `ceilao/quotation-docs/${prefix}-${safeName}`, undefined, f.label);
                   onChange(f.name, uploadedUrl);
@@ -394,9 +394,9 @@ function ProductForm({ product, values, onChange, errors = {} }) {
 }
 
 /* ── quote row ─────────────────────────────────────────────────────────────── */
-function QuoteRow({ quote, onSelect, tab, onDelete }) {
+function QuoteRow({ quote, onSelect, tab, onDelete, allProducts = STATIC_PRODUCTS }) {
   const [open, setOpen] = useState(false);
-  const product = PRODUCTS[quote.product_key];
+  const product = allProducts[quote.product_key];
   const sentCount = quote.sent_to?.length || 0;
   const respondedCount = quote.responses?.length || 0;
 
@@ -553,8 +553,8 @@ function QuoteRow({ quote, onSelect, tab, onDelete }) {
 }
 
 /* ── comparison view ──────────────────────────────────────────────────────── */
-function ComparisonView({ quote, onBack, onConfirm }) {
-  const product   = PRODUCTS[quote?.product_key];
+function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCTS }) {
+  const product   = allProducts[quote?.product_key];
   const responses = quote?.responses || [];
   const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno');
   const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
@@ -1584,7 +1584,12 @@ function ComparisonView({ quote, onBack, onConfirm }) {
 
 /* ── main page ────────────────────────────────────────────────────────────── */
 const QuotationsPage = () => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, allProducts: ctxProducts } = useAuth();
+  const allP = ctxProducts || STATIC_PRODUCTS;
+  const productList = useMemo(
+    () => Object.entries(allP).map(([key, val]) => ({ key, ...val })),
+    [allP],
+  );
   const [tab,           setTab]           = useState(0);
   const [qPage,         setQPage]         = useState(1);
   const Q_PER_PAGE = 15;
@@ -1685,7 +1690,7 @@ const QuotationsPage = () => {
   }, []);
 
   const handleCreateQuote = async () => {
-    const { errors, missing, invalid } = validateForm(product, formValues);
+    const { errors, missing, invalid } = validateForm(product, formValues, allP);
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setValIssues({ missing, invalid });
@@ -1696,12 +1701,12 @@ const QuotationsPage = () => {
 
     setSaving(true);
     try {
-      const customerName = formValues[PRODUCTS[product]?.customerNameField || ''] || '';
-      const reference = genRef(product, customerName);
+      const customerName = formValues[allP[product]?.customerNameField || ''] || '';
+      const reference = genRef(product, customerName, allP);
       const ref = await addDoc(collection(db, 'quotes'), {
         reference,
         product_key:     product,
-        product_label:   PRODUCTS[product].label,
+        product_label:   allP[product]?.label || product,
         form_data:       formValues,
         status:          'draft',
         sent_to:         [],
@@ -1714,7 +1719,7 @@ const QuotationsPage = () => {
       // Optimistic update — add draft to local state immediately
       setQuotes(prev => [{
         id: ref.id, reference, product_key: product,
-        product_label: PRODUCTS[product].label,
+        product_label: allP[product]?.label || product,
         form_data: formValues, status: 'draft',
         sent_to: [], responses: [],
         created_by_name: userProfile?.full_name || '',
@@ -1744,8 +1749,8 @@ const QuotationsPage = () => {
         sentTo.push({ company_id: co.id, company_name: co.name, company_email: co.email, sent_at: new Date().toISOString(), responded: false });
 
         if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY && co.email) {
-          const productLabel = PRODUCTS[pendingQuote.product_key]?.label || pendingQuote.product_key;
-          const productFields = PRODUCTS[pendingQuote.product_key]?.fields || [];
+          const productLabel = allP[pendingQuote.product_key]?.label || pendingQuote.product_key;
+          const productFields = allP[pendingQuote.product_key]?.fields || [];
           const formData      = pendingQuote.form_data || {};
           const noFields      = new Set(
             productFields.filter(f => f.type === 'yesno' && formData[f.name] === 'No').map(f => f.name)
@@ -2136,7 +2141,7 @@ const QuotationsPage = () => {
             <InputLabel>Product Type</InputLabel>
             <Select value={filterProduct} label="Product Type" onChange={e => setFilterProduct(e.target.value)}>
               <MenuItem value="all">All Products</MenuItem>
-              {PRODUCT_LIST.map(p => <MenuItem key={p.key} value={p.key}>{p.icon} {p.label}</MenuItem>)}
+              {productList.map(p => <MenuItem key={p.key} value={p.key}>{p.icon} {p.label}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 140 }}>
@@ -2157,7 +2162,7 @@ const QuotationsPage = () => {
 
         {/* Compare view */}
         {compareQuote ? (
-          <ComparisonView quote={compareQuote} onBack={() => setCompareQuote(null)} onConfirm={handleConfirmQuote} />
+          <ComparisonView quote={compareQuote} onBack={() => setCompareQuote(null)} onConfirm={handleConfirmQuote} allProducts={allP} />
         ) : (
           <>
             <Tabs value={tab} onChange={(_, v) => { setTab(v); setQPage(1); }} sx={{
@@ -2186,7 +2191,8 @@ const QuotationsPage = () => {
                   <QuoteRow key={q.id} quote={q}
                     tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
                     onSelect={setCompareQuote}
-                    onDelete={q => setDeleteTarget(q)} />
+                    onDelete={q => setDeleteTarget(q)}
+                    allProducts={allP} />
                 ))}
                 {tabQuotes[tab].length > Q_PER_PAGE && (
                   <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', pt:2.5, flexWrap:'wrap', gap:1 }}>
@@ -2220,7 +2226,7 @@ const QuotationsPage = () => {
                   <Box>
                     <Typography sx={{ fontWeight: 700, fontSize: 13, color: '#1e40af' }}>Unsaved draft found</Typography>
                     <Typography sx={{ fontSize: 12, color: '#3b82f6' }}>
-                      {PRODUCTS[draftBanner.product]?.label || draftBanner.product} · saved {new Date(draftBanner.savedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {allP[draftBanner.product]?.label || draftBanner.product} · saved {new Date(draftBanner.savedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </Typography>
                   </Box>
                   <Stack direction="row" spacing={1}>
@@ -2250,7 +2256,7 @@ const QuotationsPage = () => {
             )}
             {/* Product selector */}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
-              {PRODUCT_LIST.map(p => (
+              {productList.map(p => (
                 <Chip key={p.key} label={`${p.icon} ${p.label}`} clickable
                   onClick={() => { setProduct(p.key); setFieldErrors({}); }}
                   sx={{
@@ -2264,7 +2270,7 @@ const QuotationsPage = () => {
               ))}
             </Box>
 
-            <ProductForm product={product} values={formValues} onChange={setField} errors={fieldErrors} />
+            <ProductForm product={product} values={formValues} onChange={setField} errors={fieldErrors} allProducts={allP} />
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(255,139,90,0.10)' }}>
             <Button onClick={() => { flushDraftSave(); setNewQuoteOpen(false); }} variant="outlined"

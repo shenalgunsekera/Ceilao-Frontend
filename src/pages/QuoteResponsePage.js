@@ -155,6 +155,7 @@ const QuoteResponsePage = () => {
   const [showReditForm,   setShowReditForm]   = useState(false);
   const [reditReason,     setReditReason]     = useState('');
   const [reditSending,    setReditSending]    = useState(false);
+  const [productDef,      setProductDef]      = useState(null);
 
   useEffect(() => {
     if (!qid) { setError('Invalid link — missing quote ID.'); setLoading(false); return; }
@@ -192,7 +193,17 @@ const QuoteResponsePage = () => {
                 }).catch(() => {});
               }
             }
-            setQuote({ id: snap.id, ...data });
+            const qData = { id: snap.id, ...data };
+            setQuote(qData);
+            // Resolve product definition (static or custom)
+            const pKey = data.product_key;
+            if (PRODUCTS[pKey]) {
+              setProductDef(PRODUCTS[pKey]);
+            } else if (pKey) {
+              getDoc(doc(db, 'products', pKey))
+                .then(ps => { if (ps.exists()) setProductDef(ps.data()); })
+                .catch(() => {});
+            }
           })
           .catch(() => setError('Failed to load quote. Please check your link.'))
           .finally(() => setLoading(false));
@@ -403,7 +414,7 @@ const QuoteResponsePage = () => {
       margin: { left: 14, right: 14 },
     });
 
-    const prod = quote ? PRODUCTS[quote.product_key] : null;
+    const prod = productDef || null;
     const coverEntries = Object.entries(submittedData?.cover_responses || {})
       .filter(([, v]) => v.provided);
     if (coverEntries.length > 0) {
@@ -471,7 +482,7 @@ const QuoteResponsePage = () => {
     setEditing(true);
   };
 
-  const product      = quote ? PRODUCTS[quote.product_key] : null;
+  const product      = productDef || null;
   const infoSections = buildInfoSections(product, quote?.form_data);
   const coverFields  = getYesnoFields(product, 'Covers Required', 'Cover Required');
   const clauseFields = getYesnoFields(product, 'Additional Clauses');

@@ -16,6 +16,7 @@ import InsuranceCompaniesManager from './InsuranceCompaniesManager';
 import ModuleAccessManager from './ModuleAccessManager';
 import DevicesManager from './DevicesManager';
 import UsersManager from './UsersManager';
+import ProductsManager from './ProductsManager';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -57,6 +58,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import DevicesOtherIcon from '@mui/icons-material/DevicesOther';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -945,6 +947,7 @@ const AdminPanel = () => {
           label={`Re-edit Requests${reditRequests.filter(r => r.status === 'pending').length ? ` (${reditRequests.filter(r => r.status === 'pending').length})` : ''}`} />
         <Tab icon={<DevicesOtherIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Devices" />
         <Tab icon={<AccessTimeIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Work Hours" />
+        <Tab icon={<CategoryOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Products" />
       </Tabs>
 
       {/* ── TICKETS TAB ── */}
@@ -1319,6 +1322,9 @@ const AdminPanel = () => {
           </Box>
         );
       })()}
+
+      {/* ── PRODUCTS TAB ── */}
+      {tab === 9 && <ProductsManager />}
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(t => ({ ...t, open: false }))}>
         <Alert severity={toast.severity} variant="filled" sx={{ width: '100%' }}>{toast.msg}</Alert>
