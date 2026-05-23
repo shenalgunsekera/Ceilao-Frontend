@@ -4,13 +4,16 @@ import app from './firebase';
 const storage = getStorage(app);
 const MAX_BYTES = 20 * 1024 * 1024;
 
-export async function uploadFile(file, folder = 'ceilao/docs', onProgress) {
+export async function uploadFile(file, folder = 'ceilao/docs', onProgress, label) {
   if (file.size > MAX_BYTES) {
     throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 20 MB.`);
   }
 
-  const ext      = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'bin';
-  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const ext  = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'bin';
+  const stem = label
+    ? label.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+    : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const filename = `${stem}.${ext}`;
   const fileRef  = ref(storage, `${folder}/${filename}`);
 
   return new Promise((resolve, reject) => {

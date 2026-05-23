@@ -324,7 +324,7 @@ function ProductForm({ product, values, onChange, errors = {} }) {
                 try {
                   const prefix = PRODUCTS[product]?.prefix || 'QT';
                   const safeName = (values.proposer_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-                  const uploadedUrl = await uploadToCloudinary(file, `ceilao/quotation-docs/${prefix}-${safeName}`);
+                  const uploadedUrl = await uploadToCloudinary(file, `ceilao/quotation-docs/${prefix}-${safeName}`, undefined, f.label);
                   onChange(f.name, uploadedUrl);
                   onChange(f.name + '_filename', file.name);
                 } catch { /* silently ignore */ }

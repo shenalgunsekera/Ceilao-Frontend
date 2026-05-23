@@ -305,7 +305,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           const folder = `ceilao/clients/${safeName}/docs`;
           const url = await uploadToCloudinary(file, folder, (pct) => {
             setProgress(p => ({ ...p, [df.doc]: pct }));
-          });
+          }, df.label);
           docUrls[df.doc] = url;
           setUploaded(u => ({ ...u, [df.doc]: true }));
         }
