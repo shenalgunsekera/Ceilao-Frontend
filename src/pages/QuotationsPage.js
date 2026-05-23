@@ -1090,7 +1090,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
         pdf.text(r.company_name, cx + colW / 2, curDocY + 6, { align: 'center', maxWidth: colW });
 
         const imgBoxY = curDocY + 10;
-        const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url) || url.includes('/image/upload/');
+        const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
 
         pdf.setFillColor(245, 247, 250);
         pdf.rect(cx, imgBoxY, colW, imgMaxH, 'F');
@@ -1371,10 +1371,8 @@ function ComparisonView({ quote, onBack, onConfirm }) {
               <TableRow sx={{ bgcolor: 'rgba(99,102,241,0.03)' }}>
                 <TableCell sx={{ fontWeight: 700 }}>Uploaded Quote Document</TableCell>
                 {responses.map(r => {
-                  const isImage = r.quote_file_url && (
-                    r.quote_file_url.includes('/image/upload/') ||
-                    /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(r.quote_file_url)
-                  );
+                  const isImage = r.quote_file_url &&
+                    /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(r.quote_file_url);
                   return (
                     <TableCell key={r.id} align="center">
                       {r.quote_file_url ? (
@@ -1382,7 +1380,7 @@ function ComparisonView({ quote, onBack, onConfirm }) {
                           {isImage ? (
                             <Box component="a" href={r.quote_file_url} onClick={e => { e.preventDefault(); openFile(r.quote_file_url); }} rel="noopener noreferrer">
                               <Box component="img"
-                                src={r.quote_file_url.replace('/upload/', '/upload/q_auto,f_auto/')}
+                                src={r.quote_file_url}
                                 alt={`${r.company_name} quote`}
                                 sx={{
                                   width: '100%', maxWidth: 180, maxHeight: 140,

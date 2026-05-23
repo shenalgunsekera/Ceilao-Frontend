@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -13,8 +14,9 @@ export const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-export const db   = getFirestore(app);
-export const auth = getAuth(app);
+export const db      = getFirestore(app);
+export const auth    = getAuth(app);
+export const storage = getStorage(app);
 export default app;
 
 // Session-only auth — user is logged out when they close the browser tab
