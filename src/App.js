@@ -276,18 +276,22 @@ function RequireAuth({ children }) {
           const ref  = doc(db, 'device_sessions', sessionId);
           const snap = await getDoc(ref);
           const loc  = snap.exists() && snap.data().ip ? null : await fetchLocationInfo();
-          await setDoc(ref, {
+          const safeInfo = {
             device_id:  devId,
             user_id:    user.uid,
             user_email: user.email || '',
             user_name:  userProfileRef.current?.full_name || user.displayName || user.email?.split('@')[0] || '',
             ...deviceInfo,
             ...(loc || {}),
-            last_seen:  serverTimestamp(),
-            first_seen: snap.exists() ? snap.data().first_seen : serverTimestamp(),
-            approved:   snap.exists() ? snap.data().approved : false,
-            blocked:    snap.exists() ? snap.data().blocked  : false,
-          }, { merge: true });
+            last_seen: serverTimestamp(),
+          };
+          if (!snap.exists()) {
+            // First time this device logs in — create with default status fields
+            await setDoc(ref, { ...safeInfo, first_seen: serverTimestamp(), approved: false, blocked: false });
+          } else {
+            // Device already known — only update safe metadata, never touch approved/blocked
+            await updateDoc(ref, safeInfo);
+          }
         } catch (_) { }
       })();
 
