@@ -414,50 +414,6 @@ function exportCSV(columns, rows, reportName) {
   saveAs(blob, `${reportName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
-/* ── Capture a Recharts SVG element as a base64 PNG for embedding ─────────── */
-async function captureChartPng(el) {
-  if (!el) return null;
-  // Prefer SVG serialization — more reliable than html2canvas for SVG-based charts
-  const svg = el.querySelector('svg');
-  if (svg) {
-    try {
-      const rect   = svg.getBoundingClientRect();
-      const clone  = svg.cloneNode(true);
-      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      clone.setAttribute('width',  rect.width  || 600);
-      clone.setAttribute('height', rect.height || 240);
-      // Inline background so chart looks correct on white sheet
-      clone.style.background = '#ffffff';
-      const svgStr = new XMLSerializer().serializeToString(clone);
-      const svgBlob = new Blob([svgStr], { type:'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
-      return await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const scale = 2;
-          const canvas = document.createElement('canvas');
-          canvas.width  = (rect.width  || 600) * scale;
-          canvas.height = (rect.height || 240) * scale;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.scale(scale, scale);
-          ctx.drawImage(img, 0, 0, rect.width || 600, rect.height || 240);
-          URL.revokeObjectURL(url);
-          resolve(canvas.toDataURL('image/png').split(',')[1]);
-        };
-        img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-        img.src = url;
-      });
-    } catch { /* fall through to html2canvas */ }
-  }
-  // Fallback: html2canvas with foreignObjectRendering
-  try {
-    const canvas = await html2canvas(el, { scale:2, backgroundColor:'#ffffff', logging:false, useCORS:true });
-    return canvas.toDataURL('image/png').split(',')[1];
-  } catch { return null; }
-}
-
 /* ── Excel export — native charts via JSZip XML injection ────────────────── */
 async function exportExcel(columns, rows, reportName, chartsWithData = []) {
   const wb = new ExcelJS.Workbook();
@@ -615,7 +571,6 @@ async function exportExcel(columns, rows, reportName, chartsWithData = []) {
   /* ── SHEET 3: ChartData (source for native Excel charts) ────────────────── */
   if (chartsWithData.length > 0) {
     const wsCD = wb.addWorksheet('ChartData');
-    const colLetter = n => String.fromCharCode(64 + n);
     chartsWithData.forEach((ch, ci) => {
       const catCol = ci * 3 + 1;
       const valCol = ci * 3 + 2;
