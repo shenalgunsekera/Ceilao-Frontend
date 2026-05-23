@@ -458,114 +458,83 @@ async function captureChartPng(el) {
   } catch { return null; }
 }
 
-/* ── Excel export — two sheets: Charts+Summary / Data ────────────────────── */
-async function exportExcel(columns, rows, reportName, chartEls=[]) {
+/* ── Excel export — native charts via JSZip XML injection ────────────────── */
+async function exportExcel(columns, rows, reportName, chartsWithData = []) {
   const wb = new ExcelJS.Workbook();
   wb.creator  = 'Ceilao Insurance Brokers';
   wb.created  = new Date();
   const dateStr   = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
-  const dataRows  = rows.filter(r=>!r._type||r._type==='data');
-  const numCols   = columns.filter(c=>c.type==='number');
+  const dataRows  = rows.filter(r => !r._type || r._type === 'data');
+  const numCols   = columns.filter(c => c.type === 'number');
   const maxColIdx = Math.min(columns.length, 26);
 
-  /* ────────────────────────────────────────────────────────────
-     SHEET 1 — Summary (branding + stat boxes + chart images)
-  ──────────────────────────────────────────────────────────── */
-  const wsSummary = wb.addWorksheet('Summary', { pageSetup:{ orientation:'landscape', fitToPage:true } });
-
-  const setCell = (ws, row, col, value, opts={}) => {
+  const setCell = (ws, row, col, value, opts = {}) => {
     const cell = ws.getCell(row, col);
     cell.value = value;
-    if (opts.fill)      cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb: opts.fill } };
-    if (opts.font)      cell.font      = { name:'Calibri', ...opts.font };
-    if (opts.align)     cell.alignment = opts.align;
-    if (opts.numFmt)    cell.numFmt    = opts.numFmt;
-    if (opts.border)    cell.border    = opts.border;
+    if (opts.fill)   cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb: opts.fill } };
+    if (opts.font)   cell.font      = { name:'Calibri', ...opts.font };
+    if (opts.align)  cell.alignment = opts.align;
+    if (opts.numFmt) cell.numFmt    = opts.numFmt;
+    if (opts.border) cell.border    = opts.border;
     return cell;
   };
 
-  const spanCols = Math.max(maxColIdx, 8);
+  /* ── SHEET 1: Summary ───────────────────────────────────────────────────── */
+  const wsSummary = wb.addWorksheet('Summary', { pageSetup:{ orientation:'landscape', fitToPage:true } });
+  const spanCols  = Math.max(maxColIdx, 8);
 
-  // Row 1 — company name
   wsSummary.mergeCells(1, 1, 1, spanCols);
   setCell(wsSummary, 1, 1, 'CEILAO INSURANCE BROKERS (PVT) LTD',
     { fill:'FF1A1A2E', font:{ bold:true, size:16, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
   wsSummary.getRow(1).height = 32;
 
-  // Row 2 — report name
   wsSummary.mergeCells(2, 1, 2, spanCols);
   setCell(wsSummary, 2, 1, reportName,
-    { fill:'FFFF5A5A', font:{ bold:true, size:13, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
+    { fill:'FF2D3748', font:{ bold:true, size:13, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
   wsSummary.getRow(2).height = 24;
 
-  // Row 3 — metadata
   wsSummary.mergeCells(3, 1, 3, spanCols);
   setCell(wsSummary, 3, 1, `Generated: ${dateStr}   ·   ${dataRows.length} records`,
-    { fill:'FFFFF8F5', font:{ size:9, color:{argb:'FF9CA3AF'} }, align:{ horizontal:'center' } });
+    { fill:'FFF8FAFC', font:{ size:9, color:{argb:'FF6B7280'} }, align:{ horizontal:'center' } });
   wsSummary.getRow(3).height = 14;
   wsSummary.getRow(4).height = 10;
 
   let sumRow = 5;
-
-  // Stat boxes — one per numeric column
   if (numCols.length) {
     const boxCols = Math.min(numCols.length, 6);
     numCols.slice(0, boxCols).forEach((c, i) => {
       const total = dataRows.reduce((a, r) => a + parseNum(r[c.key]), 0);
       const col1  = i * 2 + 1;
       const col2  = col1 + 1;
-
       wsSummary.mergeCells(sumRow, col1, sumRow, col2);
       setCell(wsSummary, sumRow, col1, c.label,
-        { fill:'FF1A1A2E', font:{ bold:true, size:9, color:{argb:'FFFF8B5A'} }, align:{ horizontal:'center', vertical:'middle' } });
+        { fill:'FF374151', font:{ bold:true, size:9, color:{argb:'FFFF8B5A'} }, align:{ horizontal:'center', vertical:'middle' } });
       wsSummary.getRow(sumRow).height = 18;
-
-      wsSummary.mergeCells(sumRow+1, col1, sumRow+1, col2);
-      setCell(wsSummary, sumRow+1, col1, total,
-        { fill:'FFFFF8F5', font:{ bold:true, size:14, color:{argb:'FFFF5A5A'} }, align:{ horizontal:'center', vertical:'middle' }, numFmt:'#,##0.00',
-          border:{ left:{style:'thin',color:{argb:'FFFFD4C0'}}, right:{style:'thin',color:{argb:'FFFFD4C0'}}, bottom:{style:'thin',color:{argb:'FFFFD4C0'}} } });
-      wsSummary.getRow(sumRow+1).height = 28;
+      wsSummary.mergeCells(sumRow + 1, col1, sumRow + 1, col2);
+      setCell(wsSummary, sumRow + 1, col1, total,
+        { fill:'FFFFFFFF', font:{ bold:true, size:14, color:{argb:'FF1A1A2E'} }, align:{ horizontal:'center', vertical:'middle' }, numFmt:'#,##0.00',
+          border:{ left:{style:'thin',color:{argb:'FFE5E7EB'}}, right:{style:'thin',color:{argb:'FFE5E7EB'}}, bottom:{style:'medium',color:{argb:'FFFF5A5A'}} } });
+      wsSummary.getRow(sumRow + 1).height = 28;
     });
     sumRow += 3;
     wsSummary.getRow(sumRow).height = 10;
     sumRow++;
   }
 
-  // Capture and embed each chart image
-  let chartCount = 0;
-  for (const chartEl of chartEls.filter(Boolean)) {
-    const b64 = await captureChartPng(chartEl);
-    if (!b64) continue;
-    const imgId = wb.addImage({ base64: b64, extension:'png' });
-    const pxW = 760, pxH = 260;
-    wsSummary.addImage(imgId, {
-      tl:  { col:0, row: sumRow - 1 },
-      ext: { width: pxW, height: pxH },
-      editAs: 'oneCell',
-    });
-    const rowsNeeded = Math.ceil(pxH / 18) + 1;
-    for (let r = sumRow; r < sumRow + rowsNeeded; r++) wsSummary.getRow(r).height = 18;
-    sumRow += rowsNeeded;
-    chartCount++;
-  }
-
-  if (chartCount === 0 && chartEls.length > 0) {
-    // Charts were configured but couldn't be captured — note it
+  if (chartsWithData.length > 0) {
     wsSummary.mergeCells(sumRow, 1, sumRow, spanCols);
-    setCell(wsSummary, sumRow, 1, '(Charts could not be captured — view them in the browser Report Builder)',
-      { font:{ italic:true, size:9, color:{argb:'FF9CA3AF'} }, align:{ horizontal:'center' } });
+    setCell(wsSummary, sumRow, 1, `${chartsWithData.length} chart${chartsWithData.length > 1 ? 's' : ''} embedded below`,
+      { fill:'FFEEF2FF', font:{ italic:true, size:9, color:{argb:'FF4338CA'} }, align:{ horizontal:'center' } });
     sumRow++;
+    for (let i = 0; i < chartsWithData.length * 15; i++) wsSummary.getRow(sumRow + i).height = 16;
   }
 
   wsSummary.getColumn(1).width = 28;
   for (let i = 2; i <= spanCols; i++) wsSummary.getColumn(i).width = 18;
 
-  /* ────────────────────────────────────────────────────────────
-     SHEET 2 — Data (full table, freeze header, auto-filter)
-  ──────────────────────────────────────────────────────────── */
+  /* ── SHEET 2: Data ──────────────────────────────────────────────────────── */
   const wsData = wb.addWorksheet('Data', { pageSetup:{ orientation:'landscape', fitToPage:true } });
 
-  // Sheet header rows
   wsData.mergeCells(1, 1, 1, maxColIdx);
   setCell(wsData, 1, 1, `${reportName} — Full Data`,
     { fill:'FF1A1A2E', font:{ bold:true, size:13, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center', vertical:'middle' } });
@@ -573,7 +542,7 @@ async function exportExcel(columns, rows, reportName, chartEls=[]) {
 
   wsData.mergeCells(2, 1, 2, maxColIdx);
   setCell(wsData, 2, 1, `${dateStr}   ·   ${dataRows.length} records`,
-    { fill:'FFFF5A5A', font:{ size:9, color:{argb:'FFFFFFFF'} }, align:{ horizontal:'center' } });
+    { fill:'FF374151', font:{ size:9, color:{argb:'FFCBD5E1'} }, align:{ horizontal:'center' } });
   wsData.getRow(2).height = 14;
   wsData.getRow(3).height = 8;
 
@@ -584,33 +553,23 @@ async function exportExcel(columns, rows, reportName, chartEls=[]) {
     cell.value = c.label;
     cell.fill  = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A1A2E' } };
     cell.font  = { bold:true, size:10, color:{ argb:'FFFF8B5A' }, name:'Calibri' };
-    cell.alignment = { horizontal: c.type==='number' ? 'right' : 'left', vertical:'middle' };
-    cell.border = {
-      top:    { style:'medium', color:{ argb:'FFFF5A5A' } },
-      bottom: { style:'medium', color:{ argb:'FFFF5A5A' } },
-    };
+    cell.alignment = { horizontal: c.type === 'number' ? 'right' : 'left', vertical:'middle' };
+    cell.border = { bottom:{ style:'medium', color:{ argb:'FFFF5A5A' } } };
   });
 
-  // Freeze header rows and enable auto-filter
   wsData.views = [{ state:'frozen', ySplit: headerRow }];
-  wsData.autoFilter = {
-    from: { row: headerRow, column: 1 },
-    to:   { row: headerRow, column: columns.length },
-  };
+  wsData.autoFilter = { from:{ row:headerRow, column:1 }, to:{ row:headerRow, column:columns.length } };
 
-  // Data rows
   let dataRowNum = headerRow + 1;
   rows.forEach((row) => {
     const isSub = row._type === 'subtotal';
     const isGT  = row._type === 'grandtotal';
-    const bgArgb    = isGT ? 'FF1A1A2E' : isSub ? 'FFE8E8FF' : dataRowNum % 2 === 0 ? 'FFFFF8F5' : 'FFFFFFFF';
-    const textArgb  = isGT ? 'FFFFFFFF' : isSub ? 'FF4338CA' : 'FF374151';
+    const bgArgb   = isGT ? 'FF1A1A2E' : isSub ? 'FFEEF2FF' : dataRowNum % 2 === 0 ? 'FFF9FAFB' : 'FFFFFFFF';
+    const textArgb = isGT ? 'FFFFFFFF' : isSub ? 'FF4338CA' : 'FF374151';
     wsData.getRow(dataRowNum).height = 17;
-
     columns.forEach((c, i) => {
       const cell = wsData.getCell(dataRowNum, i + 1);
       const v = row[c.key];
-
       if (c.type === 'number') {
         cell.value  = (v !== null && v !== undefined) ? parseNum(v) : null;
         cell.numFmt = '#,##0.00';
@@ -619,17 +578,16 @@ async function exportExcel(columns, rows, reportName, chartEls=[]) {
         cell.value = fmtDate(v);
         cell.alignment = { horizontal:'center' };
       } else {
-        const prefix = isSub && i===0 ? '↳ ' : isGT && i===0 ? '▸ GRAND TOTAL  ' : '';
+        const prefix = isSub && i === 0 ? '↳ ' : isGT && i === 0 ? '▸ GRAND TOTAL  ' : '';
         cell.value = prefix + (v ?? '');
       }
       cell.fill   = { type:'pattern', pattern:'solid', fgColor:{ argb: bgArgb } };
       cell.font   = { size:9.5, bold: isSub || isGT, color:{ argb: textArgb }, name:'Calibri' };
-      cell.border = { bottom:{ style:'hair', color:{ argb:'FFFFD4C0' } } };
+      cell.border = { bottom:{ style:'hair', color:{ argb:'FFE5E7EB' } } };
     });
     dataRowNum++;
   });
 
-  // Grand total row at bottom (separate from inline grand total)
   if (numCols.length && dataRows.length) {
     wsData.getRow(dataRowNum).height = 20;
     columns.forEach((c, i) => {
@@ -641,23 +599,152 @@ async function exportExcel(columns, rows, reportName, chartEls=[]) {
       } else if (i === 0) {
         cell.value = 'TOTAL';
       }
-      cell.fill   = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFF5A5A' } };
-      cell.font   = { bold:true, size:10, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A1A2E' } };
+      cell.font = { bold:true, size:10, color:{ argb:'FFFFFFFF' }, name:'Calibri' };
     });
   }
 
-  // Smart column widths — based on label + type
   columns.forEach((c, i) => {
-    const labelLen = c.label.length;
-    const baseWidth = c.type==='number' ? Math.max(labelLen + 4, 16)
-                    : c.type==='date'   ? Math.max(labelLen + 2, 14)
+    const labelLen  = c.label.length;
+    const baseWidth = c.type === 'number' ? Math.max(labelLen + 4, 16)
+                    : c.type === 'date'   ? Math.max(labelLen + 2, 14)
                     : Math.max(labelLen + 6, 22);
     wsData.getColumn(i + 1).width = Math.min(baseWidth, 40);
   });
 
+  /* ── SHEET 3: ChartData (source for native Excel charts) ────────────────── */
+  if (chartsWithData.length > 0) {
+    const wsCD = wb.addWorksheet('ChartData');
+    const colLetter = n => String.fromCharCode(64 + n);
+    chartsWithData.forEach((ch, ci) => {
+      const catCol = ci * 3 + 1;
+      const valCol = ci * 3 + 2;
+      wsCD.getCell(1, catCol).value = 'Category';
+      wsCD.getCell(1, valCol).value = ch.label || 'Value';
+      (ch.data || []).slice(0, 50).forEach((d, di) => {
+        wsCD.getCell(di + 2, catCol).value = String(d.name || '');
+        wsCD.getCell(di + 2, valCol).value = typeof d.value === 'number' ? d.value : 0;
+      });
+    });
+  }
+
   const buf = await wb.xlsx.writeBuffer();
+
+  /* ── Native chart injection via JSZip ───────────────────────────────────── */
+  if (chartsWithData.length === 0) {
+    saveAs(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    return;
+  }
+
+  const { default: JSZip } = await import('jszip');
+  const zip = await JSZip.loadAsync(buf);
+
+  const escX = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const colLetter = n => String.fromCharCode(64 + n);
+
+  const buildChartXml = (chart, ci) => {
+    const { type, label, data } = chart;
+    const pts  = (data || []).slice(0, 50);
+    const n    = pts.length;
+    const catC = colLetter(ci * 3 + 1);
+    const valC = colLetter(ci * 3 + 2);
+    const catR = `ChartData!$${catC}$2:$${catC}$${n + 1}`;
+    const valR = `ChartData!$${valC}$2:$${valC}$${n + 1}`;
+    const ax1  = 1000 + ci * 10 + 1;
+    const ax2  = 1000 + ci * 10 + 2;
+
+    const catPts = pts.map((p,i) => `<c:pt idx="${i}"><c:v>${escX(String(p.name||''))}</c:v></c:pt>`).join('');
+    const valPts = pts.map((p,i) => `<c:pt idx="${i}"><c:v>${Number(p.value)||0}</c:v></c:pt>`).join('');
+
+    const catXml = `<c:cat><c:strRef><c:f>${catR}</c:f><c:strCache><c:ptCount val="${n}"/>${catPts}</c:strCache></c:strRef></c:cat>`;
+    const valXml = `<c:val><c:numRef><c:f>${valR}</c:f><c:numCache><c:formatCode>#,##0</c:formatCode><c:ptCount val="${n}"/>${valPts}</c:numCache></c:numRef></c:val>`;
+
+    const axes = `<c:catAx><c:axId val="${ax1}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:tickLblPos val="nextTo"/><c:crossAx val="${ax2}"/></c:catAx><c:valAx><c:axId val="${ax2}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:numFmt formatCode="#,##0" sourceLinked="0"/><c:tickLblPos val="nextTo"/><c:crossAx val="${ax1}"/></c:valAx>`;
+    const axRefs = `<c:axId val="${ax1}"/><c:axId val="${ax2}"/>`;
+
+    let plotXml;
+    if (type === 'pie') {
+      plotXml = `<c:pieChart><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>${catXml}${valXml}</c:ser><c:firstSliceAng val="0"/></c:pieChart>`;
+    } else if (type === 'line') {
+      plotXml = `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/><c:ser><c:idx val="0"/><c:order val="0"/><c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>${catXml}${valXml}<c:smooth val="0"/></c:ser><c:marker><c:symbol val="none"/></c:marker><c:smooth val="0"/>${axRefs}</c:lineChart>${axes}`;
+    } else {
+      plotXml = `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>${catXml}${valXml}</c:ser>${axRefs}</c:barChart>${axes}`;
+    }
+
+    const titleXml = label
+      ? `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" b="1"/><a:t>${escX(label)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`
+      : `<c:autoTitleDeleted val="1"/>`;
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="0"/>
+  <c:chart>
+    ${titleXml}
+    <c:plotArea><c:layout/>${plotXml}</c:plotArea>
+    <c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>
+    <c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>
+  </c:chart>
+  <c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>
+</c:chartSpace>`;
+  };
+
+  chartsWithData.forEach((ch, i) => {
+    zip.file(`xl/charts/chart${i + 1}.xml`, buildChartXml(ch, i));
+  });
+
+  const CHART_START = sumRow; // 1-indexed ExcelJS row → 0-indexed for drawing
+  const CHART_H = 15;
+  const drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+${chartsWithData.map((_, i) => {
+  const fr = CHART_START + 1 + i * CHART_H; // 0-indexed
+  const tr = fr + CHART_H - 1;
+  return `  <xdr:twoCellAnchor moveWithCells="1" sizeWithCells="1">
+    <xdr:from><xdr:col>0</xdr:col><xdr:colOff>114300</xdr:colOff><xdr:row>${fr}</xdr:row><xdr:rowOff>114300</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>7</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${tr}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:graphicFrame macro="">
+      <xdr:nvGraphicFramePr><xdr:cNvPr id="${i + 2}" name="Chart ${i + 1}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>
+      <xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+      <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rId${i + 1}"/>
+      </a:graphicData></a:graphic>
+    </xdr:graphicFrame>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>`;
+}).join('\n')}
+</xdr:wsDr>`;
+  zip.file('xl/drawings/drawing1.xml', drawingXml);
+
+  zip.file('xl/drawings/_rels/drawing1.xml.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${chartsWithData.map((_, i) => `  <Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${i + 1}.xml"/>`).join('\n')}
+</Relationships>`);
+
+  zip.file('xl/worksheets/_rels/sheet1.xml.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+</Relationships>`);
+
+  const sheet1Raw = await zip.file('xl/worksheets/sheet1.xml').async('string');
+  zip.file('xl/worksheets/sheet1.xml',
+    sheet1Raw.includes('<drawing')
+      ? sheet1Raw
+      : sheet1Raw.replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>'));
+
+  let ct = await zip.file('[Content_Types].xml').async('string');
+  if (!ct.includes('drawing+xml'))
+    ct = ct.replace('</Types>', `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>\n</Types>`);
+  chartsWithData.forEach((_, i) => {
+    const pn = `/xl/charts/chart${i + 1}.xml`;
+    if (!ct.includes(pn))
+      ct = ct.replace('</Types>', `<Override PartName="${pn}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>\n</Types>`);
+  });
+  zip.file('[Content_Types].xml', ct);
+
+  const finalBuf = await zip.generateAsync({ type:'arraybuffer', compression:'DEFLATE' });
   saveAs(
-    new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    new Blob([finalBuf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     `${reportName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`
   );
 }
@@ -990,7 +1077,7 @@ const ReportsPage = () => {
               onClick={()=>exportCSV(displayCols,results,saveName||'Report')}
               sx={{fontSize:12,borderColor:'rgba(16,185,129,0.35)',color:'#059669'}}>Export CSV</Button>
             <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon/>}
-              onClick={()=>exportExcel(displayCols,results,saveName||'Report',allChartEls())}
+              onClick={()=>exportExcel(displayCols,results,saveName||'Report',charts.map(ch=>({type:ch.type,label:ch.label,data:(chartsData[ch.id]||[]).filter(d=>d.name)})))}
               sx={{fontSize:12,borderColor:'rgba(99,102,241,0.35)',color:'#6366f1'}}>Export Excel</Button>
             <Button size="small" variant="contained" startIcon={<SaveOutlinedIcon/>} onClick={()=>setSaveOpen(true)} sx={{fontSize:12}}>Save Template</Button>
           </>}
