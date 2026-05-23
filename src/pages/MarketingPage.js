@@ -161,7 +161,7 @@ const MarketingPage = () => {
       const res = await fetch(`${API_URL}/send-whatsapp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumberId: settings.phoneNumberId, accessToken: settings.accessToken, to: testPhone, message: 'Test message from Ceilao Insurance Brokers ✅' }),
+        body: JSON.stringify({ to: testPhone, message: 'Test message from Ceilao Insurance Brokers ✅' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
@@ -275,10 +275,8 @@ const MarketingPage = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            phoneNumberId: settings.phoneNumberId,
-            accessToken:   settings.accessToken,
-            to:            client.mobile_no,
-            message:       msg,
+            to:      client.mobile_no,
+            message: msg,
           }),
         });
         const data = await res.json();
