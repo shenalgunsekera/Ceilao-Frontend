@@ -12,7 +12,7 @@ import Typography from '@mui/material/Typography';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, limit, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, addDoc, updateDoc, collection, getDocs, limit, query, where, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getOrCreateDeviceId, collectDeviceInfo, fetchLocationInfo } from './utils/deviceFingerprint';
 import { PRODUCTS, DEFAULT_MODULE_ACCESS } from './config/products';
@@ -263,6 +263,7 @@ function RequireAuth({ children }) {
     // cleanup is assigned once the async setup completes;
     // the returned cleanup fn always calls the latest value.
     let cleanup = () => {};
+    let cancelled = false;
 
     (async () => {
       const devId     = await getOrCreateDeviceId();
@@ -295,40 +296,58 @@ function RequireAuth({ children }) {
         } catch (_) { }
       })();
 
-      let sessionData  = null;
-      let settingsData = null;
+      // Server-authoritative initial access check — bypasses stale local cache
+      let initSess = { approved: false, blocked: false };
+      let initSett = { lockdown_mode: false };
+      try {
+        const [sessSnap, settSnap] = await Promise.all([
+          getDocFromServer(doc(db, 'device_sessions', sessionId)),
+          getDocFromServer(doc(db, 'settings', 'device_control')),
+        ]);
+        if (sessSnap.exists()) initSess = sessSnap.data();
+        if (settSnap.exists()) initSett = settSnap.data();
+      } catch (_) {
+        // Offline / unreachable — default to allowing so we don't lock out users
+      }
+      if (cancelled) return;
 
-      const evaluate = () => {
-        if (sessionData === null || settingsData === null) return;
-        if (sessionData.blocked) { signOut(auth); setDeviceState('restricted'); return; }
-        if (settingsData.lockdown_mode && !sessionData.approved) { setDeviceState('restricted'); return; }
-        setDeviceState('allowed');
-      };
+      if (initSess.blocked) { signOut(auth); setDeviceState('restricted'); return; }
 
-      const fallbackTimer = setTimeout(() => {
-        if (sessionData  === null) sessionData  = { approved: false, blocked: false };
-        if (settingsData === null) settingsData = { lockdown_mode: false };
-        evaluate();
-      }, 7000);
+      if (initSett.lockdown_mode && !initSess.approved) {
+        setDeviceState('restricted');
+        // Watch for admin approval so device auto-unlocks without a page refresh
+        const u1 = onSnapshot(doc(db, 'device_sessions', sessionId),
+          snap => {
+            if (cancelled || !snap.exists()) return;
+            const d = snap.data();
+            if (d.blocked) { signOut(auth); setDeviceState('restricted'); return; }
+            if (d.approved) setDeviceState('allowed');
+          }, () => {});
+        const u2 = onSnapshot(doc(db, 'settings', 'device_control'),
+          snap => {
+            if (cancelled) return;
+            if (!snap.exists() || !snap.data().lockdown_mode) setDeviceState('allowed');
+          }, () => {});
+        cleanup = () => { u1(); u2(); };
+        return;
+      }
 
-      const onSessionError  = () => { clearTimeout(fallbackTimer); sessionData  = { approved: false, blocked: false }; evaluate(); };
-      const onSettingsError = () => { clearTimeout(fallbackTimer); settingsData = { lockdown_mode: false };             evaluate(); };
+      setDeviceState('allowed');
 
-      const unsubSession  = onSnapshot(
+      // Monitor for mid-session blocking — skip local cache reads to prevent false blocks
+      const unsub = onSnapshot(
         doc(db, 'device_sessions', sessionId),
-        snap => { clearTimeout(fallbackTimer); sessionData  = snap.exists() ? snap.data() : { approved: false, blocked: false }; evaluate(); },
-        onSessionError,
+        { includeMetadataChanges: true },
+        snap => {
+          if (cancelled || snap.metadata.fromCache) return;
+          if (snap.exists() && snap.data().blocked) { signOut(auth); setDeviceState('restricted'); }
+        },
+        () => {},
       );
-      const unsubSettings = onSnapshot(
-        doc(db, 'settings', 'device_control'),
-        snap => { clearTimeout(fallbackTimer); settingsData = snap.exists() ? snap.data() : { lockdown_mode: false }; evaluate(); },
-        onSettingsError,
-      );
-
-      cleanup = () => { clearTimeout(fallbackTimer); unsubSession(); unsubSettings(); };
+      cleanup = unsub;
     })();
 
-    return () => cleanup();
+    return () => { cancelled = true; cleanup(); };
   }, [userUid, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || deviceState === 'checking') return (
