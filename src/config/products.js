@@ -1520,11 +1520,7 @@ export const PRODUCTS = {
       { name: 'critical_illness_cover', label: 'Critical Illness Cover' },
       { name: 'funeral_expense_cover',  label: 'Funeral Expense Cover' },
     ],
-    comparisonRows: [
-      'Plan 1 Total (LKR)', 'Plan 2 Total (LKR)', 'Plan 3 Total (LKR)',
-      'Plan 4 Total (LKR)', 'Plan 5 Total (LKR)', 'Plan 6 Total (LKR)',
-      'Plan 7 Total (LKR)', 'Grand Total (LKR)', 'Validity (days)', 'Special Conditions',
-    ],
+    comparisonRows: ['Per-Plan Premiums (dynamic)', 'Grand Total (LKR)', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },

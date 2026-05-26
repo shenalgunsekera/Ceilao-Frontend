@@ -607,6 +607,8 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
   const responses = quote?.responses || [];
   const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno');
   const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
+  const isPlansProduct = !!product?.hasPlans;
+  const planCount = isPlansProduct ? Math.max(parseInt(quote?.form_data?.no_of_plans) || 1, 1) : 0;
 
   // ── Broker response-edit state ──────────────────────────────────────────────
   const [editTarget,       setEditTarget]       = useState(null);
@@ -650,21 +652,20 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
       if (snap.exists()) {
         const updated = (snap.data().responses || []).map(r => {
           if (r.company_id !== editTarget.company_id) return r;
-          const bp = Number(editForm.basic_premium) || 0;
-          const sp = Number(editForm.srcc_premium)  || 0;
-          const tc = Number(editForm.tc_premium)    || 0;
-          const af = Number(editForm.admin_fee)     || 0;
-          const vt = Number(editForm.vat_amount)    || 0;
-          const op = Number(editForm.other_premium) || 0;
+          const premiumFields = isPlansProduct
+            ? { plan_premiums: r.plan_premiums, premium: (r.plan_premiums || []).reduce((s, p) => s + (Number(p.total) || 0), 0) }
+            : (() => {
+                const bp = Number(editForm.basic_premium) || 0;
+                const sp = Number(editForm.srcc_premium)  || 0;
+                const tc = Number(editForm.tc_premium)    || 0;
+                const af = Number(editForm.admin_fee)     || 0;
+                const vt = Number(editForm.vat_amount)    || 0;
+                const op = Number(editForm.other_premium) || 0;
+                return { basic_premium: bp, srcc_premium: sp, tc_premium: tc, admin_fee: af, vat_amount: vt, other_premium: op, premium: bp + sp + tc + af + vt + op };
+              })();
           return {
             ...r,
-            basic_premium:    bp,
-            srcc_premium:     sp,
-            tc_premium:       tc,
-            admin_fee:        af,
-            vat_amount:       vt,
-            other_premium:    op,
-            premium:          bp + sp + tc + af + vt + op,
+            ...premiumFields,
             deductible:       editForm.deductible,
             excesses:         editForm.excesses,
             commission_type:  editForm.commission_type,
@@ -695,17 +696,33 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
       const headerCells = responses.map(r => `<th style="background:#FF5A5A;color:#fff;padding:10px 14px;font-size:13px;">${r.company_name}</th>`).join('');
       const fmt = n => n ? Number(n).toLocaleString() : '—';
       // Premium breakdown rows — shown to customer, commission excluded
-      const breakdownRows = [
-        ['Basic Premium (LKR)', r => fmt(r.basic_premium)],
-        ['SRCC (LKR)',          r => fmt(r.srcc_premium)],
-        ['TC (LKR)',            r => fmt(r.tc_premium)],
-        ['Admin Fee (LKR)',     r => fmt(r.admin_fee)],
-        ['VAT (LKR)',           r => fmt(r.vat_amount)],
-        ['Other (LKR)',         r => fmt(r.other_premium)],
-        ['Total Premium (LKR)', r => `<strong style="color:#FF5A5A">${fmt(r.premium)}</strong>`],
-      ].map(([label, getter], i) =>
-        `<tr style="background:${i%2===0?'#FFF8F5':'#fff'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`
-      ).join('');
+      const breakdownRows = isPlansProduct
+        ? (() => {
+            let html = '';
+            for (let pi = 0; pi < planCount; pi++) {
+              html += `<tr><td colspan="${responses.length + 1}" style="background:#0891b2;color:#fff;padding:7px 14px;font-weight:800;font-size:12px;">Plan ${pi + 1}</td></tr>`;
+              [
+                ['Basic Premium (LKR)', r => fmt(r.plan_premiums?.[pi]?.basic)],
+                ['Tax (LKR)',           r => fmt(r.plan_premiums?.[pi]?.tax)],
+                ['Plan Total (LKR)',    r => `<strong style="color:#0891b2">${fmt(r.plan_premiums?.[pi]?.total)}</strong>`],
+              ].forEach(([label, getter], i) => {
+                html += `<tr style="background:${i%2===0?'#F0F9FF':'#fff'}"><td style="padding:8px 14px 8px 22px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`;
+              });
+            }
+            html += `<tr style="background:#E0F2FE"><td style="padding:8px 14px;font-weight:800;color:#0891b2;">Grand Total (LKR)</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;"><strong style="color:#0891b2">${fmt(r.premium)}</strong></td>`).join('')}</tr>`;
+            return html;
+          })()
+        : [
+            ['Basic Premium (LKR)', r => fmt(r.basic_premium)],
+            ['SRCC (LKR)',          r => fmt(r.srcc_premium)],
+            ['TC (LKR)',            r => fmt(r.tc_premium)],
+            ['Admin Fee (LKR)',     r => fmt(r.admin_fee)],
+            ['VAT (LKR)',           r => fmt(r.vat_amount)],
+            ['Other (LKR)',         r => fmt(r.other_premium)],
+            ['Total Premium (LKR)', r => `<strong style="color:#FF5A5A">${fmt(r.premium)}</strong>`],
+          ].map(([label, getter], i) =>
+            `<tr style="background:${i%2===0?'#FFF8F5':'#fff'}"><td style="padding:8px 14px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`
+          ).join('');
       const deductiblesRow = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Deductibles</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.deductible||'—'}</td>`).join('')}</tr>`;
       const excessRow      = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
       const validityRow    = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Validity (days)</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:center;">${r.validity_days||'—'}</td>`).join('')}</tr>`;
@@ -897,15 +914,27 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
 
     // ── Premium Breakdown ──
     addSection('PREMIUM BREAKDOWN');
-    [
-      ['Basic Premium (LKR)',  'basic_premium'],
-      ['SRCC (LKR)',           'srcc_premium'],
-      ['TC (LKR)',             'tc_premium'],
-      ['Admin Fee (LKR)',      'admin_fee'],
-      ['VAT (LKR)',            'vat_amount'],
-      ['Other (LKR)',          'other_premium'],
-    ].forEach(([label, key], i) => addDataRow(label, responses.map(r => r[key] ? Number(r[key]).toLocaleString() : '—'), false, false, i));
-    addDataRow('TOTAL PREMIUM (LKR)', responses.map(r => Number(r.premium || 0).toLocaleString()), true);
+    if (isPlansProduct) {
+      for (let pi = 0; pi < planCount; pi++) {
+        mergedRow(`Plan ${pi + 1}`, '0891b2' /* teal */.padStart(8, 'FF'), WHITE, 9, 16, 'left');
+        [
+          ['Basic Premium (LKR)', r => r.plan_premiums?.[pi]?.basic ? Number(r.plan_premiums[pi].basic).toLocaleString() : '—'],
+          ['Tax (LKR)',           r => r.plan_premiums?.[pi]?.tax   ? Number(r.plan_premiums[pi].tax).toLocaleString()   : '—'],
+          ['Plan Total (LKR)',    r => Number(r.plan_premiums?.[pi]?.total || 0).toLocaleString()],
+        ].forEach(([label, getter], i) => addDataRow(label, responses.map(getter), label.startsWith('Plan Total'), false, i));
+      }
+      addDataRow('GRAND TOTAL (LKR)', responses.map(r => Number(r.premium || 0).toLocaleString()), true);
+    } else {
+      [
+        ['Basic Premium (LKR)',  'basic_premium'],
+        ['SRCC (LKR)',           'srcc_premium'],
+        ['TC (LKR)',             'tc_premium'],
+        ['Admin Fee (LKR)',      'admin_fee'],
+        ['VAT (LKR)',            'vat_amount'],
+        ['Other (LKR)',          'other_premium'],
+      ].forEach(([label, key], i) => addDataRow(label, responses.map(r => r[key] ? Number(r[key]).toLocaleString() : '—'), false, false, i));
+      addDataRow('TOTAL PREMIUM (LKR)', responses.map(r => Number(r.premium || 0).toLocaleString()), true);
+    }
 
     // ── Deductibles & Validity ──
     addSection('DEDUCTIBLES, EXCESSES & VALIDITY');
@@ -1060,12 +1089,30 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
       ...vals.map(v => ({ content: v, styles: { halign: 'center', fontStyle: isTotal ? 'bold' : 'normal', fontSize: isTotal ? 9 : 8.5, fillColor: isTotal ? [255,90,90] : isInternal ? [232,232,255] : i%2===0 ? [255,255,255] : [255,248,245], textColor: isTotal ? [255,255,255] : isInternal ? [67,56,202] : [55,65,81] } })),
     ];
 
+    const premiumPdfRows = isPlansProduct
+      ? (() => {
+          const rows = [];
+          for (let pi = 0; pi < planCount; pi++) {
+            rows.push([{ content: `Plan ${pi + 1}`, colSpan: colCount, styles: { fillColor: [8,145,178], textColor: [255,255,255], fontStyle: 'bold', fontSize: 8, cellPadding: { top: 2, bottom: 2, left: 8, right: 4 } } }]);
+            [
+              ['Basic Premium (LKR)', r => r.plan_premiums?.[pi]?.basic ? `LKR ${Number(r.plan_premiums[pi].basic).toLocaleString()}` : '—'],
+              ['Tax (LKR)',           r => r.plan_premiums?.[pi]?.tax   ? `LKR ${Number(r.plan_premiums[pi].tax).toLocaleString()}`   : '—'],
+              ['Plan Total (LKR)',    r => `LKR ${Number(r.plan_premiums?.[pi]?.total || 0).toLocaleString()}`],
+            ].forEach(([label, getter], i) => rows.push(mkRow(label, responses.map(getter), label.startsWith('Plan Total'), false, i)));
+          }
+          rows.push(mkRow('GRAND TOTAL (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true));
+          return rows;
+        })()
+      : [
+          ...['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount','other_premium'].map((k,i) =>
+            mkRow(['Basic Premium (LKR)','SRCC (LKR)','TC (LKR)','Admin Fee (LKR)','VAT (LKR)','Other (LKR)'][i],
+                  responses.map(r => r[k] ? `LKR ${Number(r[k]).toLocaleString()}` : '—'), false, false, i)),
+          mkRow('TOTAL PREMIUM (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true),
+        ];
+
     const body = [
       mkSectionRow('PREMIUM BREAKDOWN'),
-      ...['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount','other_premium'].map((k,i) =>
-        mkRow(['Basic Premium (LKR)','SRCC (LKR)','TC (LKR)','Admin Fee (LKR)','VAT (LKR)','Other (LKR)'][i],
-              responses.map(r => r[k] ? `LKR ${Number(r[k]).toLocaleString()}` : '—'), false, false, i)),
-      mkRow('TOTAL PREMIUM (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true),
+      ...premiumPdfRows,
 
       mkSectionRow('DEDUCTIBLES, EXCESSES & VALIDITY'),
       mkRow('Deductibles',    responses.map(r => r.deductible   || '—'), false, false, 0),
@@ -1284,31 +1331,79 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
             </TableHead>
             <TableBody>
               {/* Premium breakdown rows */}
-              {[
-                { key: 'basic_premium', label: 'Basic Premium (LKR)' },
-                { key: 'srcc_premium',  label: 'SRCC (LKR)' },
-                { key: 'tc_premium',    label: 'TC (LKR)' },
-                { key: 'admin_fee',     label: 'Admin Fee (LKR)' },
-                { key: 'vat_amount',    label: 'VAT (LKR)' },
-                { key: 'other_premium', label: 'Other (LKR)' },
-              ].map((row, i) => (
-                <TableRow key={row.key} sx={{ bgcolor: i % 2 === 0 ? 'rgba(255,248,245,0.4)' : '#fff' }}>
-                  <TableCell sx={{ fontWeight: 600, color: '#374151', fontSize: 12.5 }}>{row.label}</TableCell>
-                  {responses.map(r => (
-                    <TableCell key={r.id} align="center" sx={{ fontSize: 12.5 }}>
-                      {r[row.key] ? Number(r[row.key]).toLocaleString() : '—'}
+              {isPlansProduct ? (
+                <>
+                  <TableRow>
+                    <TableCell colSpan={responses.length + 1}
+                      sx={{ background: '#0891b2', color: '#fff', fontWeight: 800, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', py: 1.2 }}>
+                      Per-Plan Premiums
                     </TableCell>
+                  </TableRow>
+                  {Array.from({ length: planCount }, (_, pi) => (
+                    <React.Fragment key={pi}>
+                      <TableRow sx={{ bgcolor: 'rgba(8,145,178,0.07)' }}>
+                        <TableCell colSpan={responses.length + 1}
+                          sx={{ fontWeight: 800, color: '#0891b2', fontSize: 12, py: 0.8, pl: 2 }}>
+                          Plan {pi + 1}
+                        </TableCell>
+                      </TableRow>
+                      {[
+                        { key: 'basic', label: 'Basic Premium (LKR)' },
+                        { key: 'tax',   label: 'Tax (LKR)' },
+                        { key: 'total', label: 'Plan Total (LKR)', bold: true },
+                      ].map((row, ri) => (
+                        <TableRow key={row.key} sx={{ bgcolor: ri % 2 === 0 ? '#fff' : 'rgba(8,145,178,0.03)' }}>
+                          <TableCell sx={{ fontWeight: row.bold ? 700 : 500, color: row.bold ? '#0891b2' : '#374151', fontSize: 12.5, pl: 4 }}>
+                            {row.label}
+                          </TableCell>
+                          {responses.map(r => (
+                            <TableCell key={r.id} align="center"
+                              sx={{ fontWeight: row.bold ? 700 : 400, color: row.bold ? '#0891b2' : '#374151', fontSize: 12.5 }}>
+                              {r.plan_premiums?.[pi]?.[row.key] ? Number(r.plan_premiums[pi][row.key]).toLocaleString() : '—'}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
                   ))}
-                </TableRow>
-              ))}
-              <TableRow sx={{ bgcolor: 'rgba(255,90,90,0.06)' }}>
-                <TableCell sx={{ fontWeight: 800, color: '#FF5A5A' }}>Total Premium (LKR)</TableCell>
-                {responses.map(r => (
-                  <TableCell key={r.id} align="center" sx={{ fontWeight: 800, color: '#FF5A5A', fontSize: 15 }}>
-                    {Number(r.premium || 0).toLocaleString()}
-                  </TableCell>
-                ))}
-              </TableRow>
+                  <TableRow sx={{ bgcolor: 'rgba(8,145,178,0.10)' }}>
+                    <TableCell sx={{ fontWeight: 800, color: '#0891b2' }}>Grand Total (LKR)</TableCell>
+                    {responses.map(r => (
+                      <TableCell key={r.id} align="center" sx={{ fontWeight: 800, color: '#0891b2', fontSize: 15 }}>
+                        {Number(r.premium || 0).toLocaleString()}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </>
+              ) : (
+                <>
+                  {[
+                    { key: 'basic_premium', label: 'Basic Premium (LKR)' },
+                    { key: 'srcc_premium',  label: 'SRCC (LKR)' },
+                    { key: 'tc_premium',    label: 'TC (LKR)' },
+                    { key: 'admin_fee',     label: 'Admin Fee (LKR)' },
+                    { key: 'vat_amount',    label: 'VAT (LKR)' },
+                    { key: 'other_premium', label: 'Other (LKR)' },
+                  ].map((row, i) => (
+                    <TableRow key={row.key} sx={{ bgcolor: i % 2 === 0 ? 'rgba(255,248,245,0.4)' : '#fff' }}>
+                      <TableCell sx={{ fontWeight: 600, color: '#374151', fontSize: 12.5 }}>{row.label}</TableCell>
+                      {responses.map(r => (
+                        <TableCell key={r.id} align="center" sx={{ fontSize: 12.5 }}>
+                          {r[row.key] ? Number(r[row.key]).toLocaleString() : '—'}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                  <TableRow sx={{ bgcolor: 'rgba(255,90,90,0.06)' }}>
+                    <TableCell sx={{ fontWeight: 800, color: '#FF5A5A' }}>Total Premium (LKR)</TableCell>
+                    {responses.map(r => (
+                      <TableCell key={r.id} align="center" sx={{ fontWeight: 800, color: '#FF5A5A', fontSize: 15 }}>
+                        {Number(r.premium || 0).toLocaleString()}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </>
+              )}
               {/* Commission — broker internal only */}
               <TableRow sx={{ bgcolor: 'rgba(99,102,241,0.04)' }}>
                 <TableCell sx={{ fontWeight: 600 }}>
