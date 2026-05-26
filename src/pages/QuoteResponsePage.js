@@ -143,6 +143,7 @@ const QuoteResponsePage = () => {
 
   const [coverResponses,  setCoverResponses]  = useState({});
   const [clauseResponses, setClauseResponses] = useState({});
+  const [planPremiums,    setPlanPremiums]    = useState([]);
 
   const [submittedData,  setSubmittedData]  = useState(null);
   const [editing,        setEditing]        = useState(false);
@@ -195,6 +196,11 @@ const QuoteResponsePage = () => {
             }
             const qData = { id: snap.id, ...data };
             setQuote(qData);
+            // Initialise plan premiums for multi-plan products
+            const pc = parseInt(data.form_data?.no_of_plans) || 1;
+            setPlanPremiums(Array.from({ length: Math.min(pc, 7) }, (_, i) => ({
+              plan: i + 1, basic: '', tax_pct: '18', tax: 0, total: 0,
+            })));
             // Resolve product definition (static or custom)
             const pKey = data.product_key;
             if (PRODUCTS[pKey]) {
@@ -315,18 +321,25 @@ const QuoteResponsePage = () => {
     setError('');
     setSaving(true);
     try {
+      const isPlans = !!productDef?.hasPlans;
+      const grandTotal = isPlans
+        ? planPremiums.reduce((s, p) => s + (Number(p.total) || 0), 0)
+        : totalPremium;
+
       const responseId = `${cid}_${Date.now()}`;
       const response = {
         id:              responseId,
         company_id:      cid,
         company_name:    companyName,
-        premium:         totalPremium,
-        basic_premium:   Number(form.basic_premium) || 0,
-        srcc_premium:    Number(form.srcc_premium)  || 0,
-        tc_premium:      Number(form.tc_premium)    || 0,
-        admin_fee:       Number(form.admin_fee)     || 0,
-        vat_amount:      Number(form.vat_amount)    || 0,
-        other_premium:   Number(form.other_premium) || 0,
+        premium:         grandTotal,
+        ...(isPlans ? { plan_premiums: planPremiums } : {
+          basic_premium:   Number(form.basic_premium) || 0,
+          srcc_premium:    Number(form.srcc_premium)  || 0,
+          tc_premium:      Number(form.tc_premium)    || 0,
+          admin_fee:       Number(form.admin_fee)     || 0,
+          vat_amount:      Number(form.vat_amount)    || 0,
+          other_premium:   Number(form.other_premium) || 0,
+        }),
         deductible:      form.deductible,
         excesses:        form.excesses,
         commission_type: form.commission_type,
@@ -477,15 +490,31 @@ const QuoteResponsePage = () => {
       setClauseResponses(submittedData.clause_responses || {});
       setFileUrl(submittedData.quote_file_url || '');
       setFileName('');
+      if (submittedData.plan_premiums?.length) setPlanPremiums(submittedData.plan_premiums);
     }
     setSubmitted(false);
     setEditing(true);
   };
 
   const product      = productDef || null;
+  const isPlansProduct = !!product?.hasPlans;
   const infoSections = buildInfoSections(product, quote?.form_data);
   const coverFields  = getYesnoFields(product, 'Covers Required', 'Cover Required');
   const clauseFields = getYesnoFields(product, 'Additional Clauses');
+
+  const updatePlanPremium = (pi, key, rawVal) => {
+    setPlanPremiums(prev => {
+      const next = prev.map((p, i) => {
+        if (i !== pi) return p;
+        const updated = { ...p, [key]: rawVal };
+        const basic = Number(updated.basic) || 0;
+        const pct   = Number(updated.tax_pct) || 0;
+        const tax   = Math.round(basic * pct / 100);
+        return { ...updated, tax, total: basic + tax };
+      });
+      return next;
+    });
+  };
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -647,7 +676,7 @@ const QuoteResponsePage = () => {
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
                     {sec.fields.map(({ field, value, fileName }) => (
-                      <Box key={field.name} sx={field.type === 'textarea' || field.type === 'multiselect' || field.type === 'file' ? { gridColumn: '1 / -1' } : {}}>
+                      <Box key={field.name} sx={field.type === 'textarea' || field.type === 'multiselect' || field.type === 'file' || field.type === 'plantable' ? { gridColumn: '1 / -1' } : {}}>
                         <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.4, mb: 0.3 }}>
                           {field.label}
                         </Typography>
@@ -656,7 +685,36 @@ const QuoteResponsePage = () => {
                             sx={{ fontSize: 13, color: '#6366f1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 0.5, fontWeight: 500, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
                             📄 {fileName}
                           </Typography>
-                        ) : (
+                        ) : field.type === 'plantable' ? (() => {
+                          let rows = [];
+                          try { rows = JSON.parse(value || '[]'); } catch (_) {}
+                          return (
+                            <Box sx={{ overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                                <thead>
+                                  <tr style={{ background: 'rgba(8,145,178,0.07)' }}>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: '#374151' }}>Plan</th>
+                                    {(field.planFields || []).map(pf => (
+                                      <th key={pf.name} style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: '#374151' }}>{pf.label}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rows.map((row, ri) => (
+                                    <tr key={ri} style={{ borderTop: '1px solid rgba(0,0,0,0.06)', background: ri % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                                      <td style={{ padding: '5px 10px', fontWeight: 700, color: '#0891b2' }}>Plan {ri + 1}</td>
+                                      {(field.planFields || []).map(pf => (
+                                        <td key={pf.name} style={{ padding: '5px 10px', textAlign: 'right', color: '#1A1A2E' }}>
+                                          {row[pf.name] ? `LKR ${Number(row[pf.name]).toLocaleString()}` : '—'}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </Box>
+                          );
+                        })() : (
                           <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, lineHeight: 1.5 }}>{value}</Typography>
                         )}
                       </Box>
@@ -714,40 +772,95 @@ const QuoteResponsePage = () => {
             <Stack spacing={2.5}>
 
               {/* Premium Breakdown */}
-              <Box sx={{
-                p: 2, borderRadius: '12px',
-                border: `1px solid ${['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount'].some(k => fieldErrors[k]) ? 'rgba(239,68,68,0.4)' : 'rgba(255,90,90,0.15)'}`,
-                bgcolor: 'rgba(255,90,90,0.02)',
-              }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
-                  Premium Breakdown
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                  <TextField label="Basic Premium (LKR) *" type="number" size="small" fullWidth
-                    error={!!fieldErrors.basic_premium} helperText={fieldErrors.basic_premium}
-                    value={form.basic_premium} onChange={e => setFE('basic_premium', e.target.value)} />
-                  <TextField label="SRCC (LKR) *" type="number" size="small" fullWidth
-                    error={!!fieldErrors.srcc_premium} helperText={fieldErrors.srcc_premium}
-                    value={form.srcc_premium} onChange={e => setFE('srcc_premium', e.target.value)} />
-                  <TextField label="TC (LKR) *" type="number" size="small" fullWidth
-                    error={!!fieldErrors.tc_premium} helperText={fieldErrors.tc_premium}
-                    value={form.tc_premium} onChange={e => setFE('tc_premium', e.target.value)} />
-                  <TextField label="Admin Fee (LKR) *" type="number" size="small" fullWidth
-                    error={!!fieldErrors.admin_fee} helperText={fieldErrors.admin_fee}
-                    value={form.admin_fee} onChange={e => setFE('admin_fee', e.target.value)} />
-                  <TextField label="VAT (LKR) *" type="number" size="small" fullWidth
-                    error={!!fieldErrors.vat_amount} helperText={fieldErrors.vat_amount}
-                    value={form.vat_amount} onChange={e => setFE('vat_amount', e.target.value)} />
-                  <TextField label="Other (LKR)" type="number" size="small" fullWidth
-                    value={form.other_premium} onChange={e => setFE('other_premium', e.target.value)} />
+              {isPlansProduct ? (
+                /* ── Multi-plan premium table (Group Medical etc.) ── */
+                <Box sx={{ borderRadius: '12px', border: '1px solid rgba(8,145,178,0.2)', overflow: 'hidden' }}>
+                  <Box sx={{ px: 2, py: 1.5, bgcolor: 'rgba(8,145,178,0.06)' }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#0891b2', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                      Premium per Plan
+                    </Typography>
+                  </Box>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(8,145,178,0.05)', borderBottom: '1px solid rgba(8,145,178,0.15)' }}>
+                          {['Field', ...planPremiums.map((_, i) => `Plan ${i + 1}`)].map(h => (
+                            <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { key: 'basic',   label: 'Basic Premium (LKR)' },
+                          { key: 'tax_pct', label: 'Tax (%)' },
+                          { key: 'tax',     label: 'Tax Amount (LKR)', readOnly: true },
+                          { key: 'total',   label: 'Total Premium (LKR)', readOnly: true, bold: true },
+                        ].map(row => (
+                          <tr key={row.key} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', background: row.bold ? 'rgba(8,145,178,0.05)' : '#fff' }}>
+                            <td style={{ padding: '8px 12px', fontSize: 13, fontWeight: row.bold ? 700 : 500, color: row.bold ? '#0891b2' : '#374151', minWidth: 160 }}>{row.label}</td>
+                            {planPremiums.map((p, pi) => (
+                              <td key={pi} style={{ padding: '6px 10px', minWidth: 110 }}>
+                                {row.readOnly ? (
+                                  <Typography sx={{ fontSize: 13.5, fontWeight: row.bold ? 800 : 500, color: row.bold ? '#0891b2' : '#374151', pl: 0.5 }}>
+                                    {Number(p[row.key] || 0).toLocaleString()}
+                                  </Typography>
+                                ) : (
+                                  <TextField size="small" type="number" fullWidth placeholder="0"
+                                    value={p[row.key] || ''}
+                                    onChange={e => updatePlanPremium(pi, row.key, e.target.value)}
+                                    sx={{ '& .MuiInputBase-root': { fontSize: 13 } }} />
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </Box>
+                  <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid rgba(8,145,178,0.2)', bgcolor: 'rgba(8,145,178,0.04)' }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Grand Total (All Plans)</Typography>
+                    <Typography sx={{ fontSize: 17, fontWeight: 800, color: '#0891b2' }}>
+                      LKR {planPremiums.reduce((s, p) => s + (Number(p.total) || 0), 0).toLocaleString()}
+                    </Typography>
+                  </Box>
                 </Box>
-                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: '8px', bgcolor: 'rgba(255,90,90,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Total Premium (LKR)</Typography>
-                  <Typography sx={{ fontSize: 16, fontWeight: 800, color: '#FF5A5A' }}>
-                    {totalPremium > 0 ? totalPremium.toLocaleString() : '—'}
+              ) : (
+                /* ── Standard premium breakdown ── */
+                <Box sx={{
+                  p: 2, borderRadius: '12px',
+                  border: `1px solid ${['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount'].some(k => fieldErrors[k]) ? 'rgba(239,68,68,0.4)' : 'rgba(255,90,90,0.15)'}`,
+                  bgcolor: 'rgba(255,90,90,0.02)',
+                }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#FF5A5A', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1.5 }}>
+                    Premium Breakdown
                   </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                    <TextField label="Basic Premium (LKR) *" type="number" size="small" fullWidth
+                      error={!!fieldErrors.basic_premium} helperText={fieldErrors.basic_premium}
+                      value={form.basic_premium} onChange={e => setFE('basic_premium', e.target.value)} />
+                    <TextField label="SRCC (LKR) *" type="number" size="small" fullWidth
+                      error={!!fieldErrors.srcc_premium} helperText={fieldErrors.srcc_premium}
+                      value={form.srcc_premium} onChange={e => setFE('srcc_premium', e.target.value)} />
+                    <TextField label="TC (LKR) *" type="number" size="small" fullWidth
+                      error={!!fieldErrors.tc_premium} helperText={fieldErrors.tc_premium}
+                      value={form.tc_premium} onChange={e => setFE('tc_premium', e.target.value)} />
+                    <TextField label="Admin Fee (LKR) *" type="number" size="small" fullWidth
+                      error={!!fieldErrors.admin_fee} helperText={fieldErrors.admin_fee}
+                      value={form.admin_fee} onChange={e => setFE('admin_fee', e.target.value)} />
+                    <TextField label="VAT (LKR) *" type="number" size="small" fullWidth
+                      error={!!fieldErrors.vat_amount} helperText={fieldErrors.vat_amount}
+                      value={form.vat_amount} onChange={e => setFE('vat_amount', e.target.value)} />
+                    <TextField label="Other (LKR)" type="number" size="small" fullWidth
+                      value={form.other_premium} onChange={e => setFE('other_premium', e.target.value)} />
+                  </Box>
+                  <Box sx={{ mt: 1.5, p: 1.5, borderRadius: '8px', bgcolor: 'rgba(255,90,90,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Total Premium (LKR)</Typography>
+                    <Typography sx={{ fontSize: 16, fontWeight: 800, color: '#FF5A5A' }}>
+                      {totalPremium > 0 ? totalPremium.toLocaleString() : '—'}
+                    </Typography>
+                  </Box>
                 </Box>
-              </Box>
+              )}
 
               {/* Deductibles & Excesses */}
               <Box sx={{ p: 2, borderRadius: '12px', border: `1px solid ${fieldErrors.deductible ? 'rgba(239,68,68,0.4)' : 'rgba(0,0,0,0.1)'}` }}>

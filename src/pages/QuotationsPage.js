@@ -81,6 +81,7 @@ function validateForm(product, values, allProducts = STATIC_PRODUCTS) {
   def.fields.forEach(f => {
     if (f.autoCalc) return;
     if (f.type === 'file') return;
+    if (f.type === 'plantable') return;
     // skip fields hidden by showIf
     if (f.showIf && values[f.showIf.field] !== f.showIf.value) return;
 
@@ -351,6 +352,54 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
       );
     }
 
+    // Plan cover table (Group Medical and similar multi-plan products)
+    if (f.type === 'plantable') {
+      const planCount = Math.min(Math.max(parseInt(values.no_of_plans) || 1, 1), 7);
+      let planData = [];
+      try { planData = JSON.parse(values[f.name] || '[]'); } catch (_) {}
+      while (planData.length < planCount) planData.push({ plan: planData.length + 1 });
+      planData = planData.slice(0, planCount);
+      const updateCell = (pi, fieldName, val) => {
+        const next = planData.map((r, i) => i === pi ? { ...r, [fieldName]: val } : r);
+        onChange(f.name, JSON.stringify(next));
+      };
+      return (
+        <Box key={f.name} sx={{ gridColumn: '1 / -1' }}>
+          <Box sx={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid rgba(255,90,90,0.15)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,90,90,0.07)' }}>
+                  <th style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, minWidth: 70 }}>Plan</th>
+                  {f.planFields.map(pf => (
+                    <th key={pf.name} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4, minWidth: 160 }}>{pf.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {planData.map((row, pi) => (
+                  <tr key={pi} style={{ background: pi % 2 === 0 ? '#fff' : '#fafafa', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                    <td style={{ padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#FF5A5A' }}>Plan {pi + 1}</td>
+                    {f.planFields.map(pf => (
+                      <td key={pf.name} style={{ padding: '6px 10px' }}>
+                        <TextField
+                          size="small" type="number" fullWidth
+                          placeholder="0"
+                          value={row[pf.name] || ''}
+                          onChange={e => updateCell(pi, pf.name, e.target.value)}
+                          InputProps={{ startAdornment: <Box component="span" sx={{ color: '#9CA3AF', mr: 0.5, fontSize: 11 }}>LKR</Box> }}
+                          sx={{ '& .MuiInputBase-root': { fontSize: 12.5 } }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Box>
+        </Box>
+      );
+    }
+
     // Currency, email, number, text
     return (
       <TextField key={f.name} size="small" fullWidth
@@ -443,13 +492,13 @@ function QuoteRow({ quote, onSelect, tab, onDelete, allProducts = STATIC_PRODUCT
             </Stack>
             <Typography sx={{ fontSize: 11.5, color: '#9CA3AF' }}>
               {created} · By {quote.created_by_name}
-              {tab === 'received' && ` · ${respondedCount}/${sentCount} replied`}
+              {tab === 'received' && ` · ${respondedCount}/${sentCount} received`}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
             {(tab === 'received' || tab === 'sent') && sentCount > 0 && (
               <Chip
-                label={`${respondedCount}/${sentCount} replied`}
+                label={`${respondedCount}/${sentCount} received`}
                 size="small"
                 sx={{
                   bgcolor: respondedCount === sentCount ? 'rgba(16,185,129,0.10)' : 'rgba(245,158,11,0.10)',
