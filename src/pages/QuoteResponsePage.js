@@ -403,18 +403,29 @@ const QuoteResponsePage = () => {
     pdf.setTextColor(255, 255, 255);
     pdf.text(`PRODUCT: ${quote?.product_label || ''}`, 120, 46);
 
-    const premRows = [
-      ['Total Premium (LKR)', Number(submittedData?.premium || 0).toLocaleString()],
-      ['Basic Premium (LKR)', Number(submittedData?.basic_premium || 0).toLocaleString()],
-      ['SRCC (LKR)',          Number(submittedData?.srcc_premium || 0).toLocaleString()],
-      ['TC (LKR)',            Number(submittedData?.tc_premium || 0).toLocaleString()],
-      ['Admin Fee (LKR)',     Number(submittedData?.admin_fee || 0).toLocaleString()],
-      ['VAT (LKR)',           Number(submittedData?.vat_amount || 0).toLocaleString()],
-      ['Deductibles',         submittedData?.deductible || '—'],
-      ['Excesses',            submittedData?.excesses || '—'],
-      ['Quote Validity',      submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
-      ['Notes / Terms',       submittedData?.notes || '—'],
-    ];
+    const premRows = (isPlansProduct
+      ? [
+          ...(submittedData?.plan_premiums || []).flatMap((p, pi) => [
+            [`Plan ${pi + 1} — Basic Premium (LKR)`, Number(p.basic  || 0).toLocaleString()],
+            [`Plan ${pi + 1} — Tax (LKR)`,           Number(p.tax    || 0).toLocaleString()],
+            [`Plan ${pi + 1} — Total (LKR)`,         Number(p.total  || 0).toLocaleString()],
+          ]),
+          ['Grand Total (LKR)', Number(submittedData?.premium || 0).toLocaleString()],
+        ]
+      : [
+          ['Total Premium (LKR)', Number(submittedData?.premium       || 0).toLocaleString()],
+          ['Basic Premium (LKR)', Number(submittedData?.basic_premium || 0).toLocaleString()],
+          ['SRCC (LKR)',          Number(submittedData?.srcc_premium  || 0).toLocaleString()],
+          ['TC (LKR)',            Number(submittedData?.tc_premium    || 0).toLocaleString()],
+          ['Admin Fee (LKR)',     Number(submittedData?.admin_fee     || 0).toLocaleString()],
+          ['VAT (LKR)',           Number(submittedData?.vat_amount    || 0).toLocaleString()],
+        ]
+    ).concat([
+      ['Deductibles',  submittedData?.deductible    || '—'],
+      ['Excesses',     submittedData?.excesses      || '—'],
+      ['Quote Validity', submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
+      ['Notes / Terms',  submittedData?.notes        || '—'],
+    ]);
 
     autoTable(pdf, {
       startY: 56,
@@ -542,18 +553,29 @@ const QuoteResponsePage = () => {
               Submission Summary
             </Typography>
             <Stack spacing={1} sx={{ mb: 2.5 }}>
-              {[
-                ['Total Premium',   `LKR ${Number(submittedData?.premium || 0).toLocaleString()}`],
-                ['Basic Premium',   submittedData?.basic_premium ? `LKR ${Number(submittedData.basic_premium).toLocaleString()}` : '—'],
-                ['SRCC',            submittedData?.srcc_premium  ? `LKR ${Number(submittedData.srcc_premium).toLocaleString()}`  : '—'],
-                ['TC',              submittedData?.tc_premium    ? `LKR ${Number(submittedData.tc_premium).toLocaleString()}`    : '—'],
-                ['Admin Fee',       submittedData?.admin_fee     ? `LKR ${Number(submittedData.admin_fee).toLocaleString()}`     : '—'],
-                ['VAT',             submittedData?.vat_amount    ? `LKR ${Number(submittedData.vat_amount).toLocaleString()}`    : '—'],
-                ['Deductibles',     submittedData?.deductible    || '—'],
-                ['Excesses',        submittedData?.excesses      || '—'],
-                ['Validity',        submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
-                ['Submitted',       new Date(submittedData?.submitted_at || Date.now()).toLocaleString('en-GB')],
-              ].map(([l, v]) => (
+              {(isPlansProduct
+                ? [
+                    ...(submittedData?.plan_premiums || []).flatMap((p, pi) => [
+                      [`Plan ${pi + 1} — Basic`,  p.basic  ? `LKR ${Number(p.basic).toLocaleString()}`  : '—'],
+                      [`Plan ${pi + 1} — Tax`,    p.tax    ? `LKR ${Number(p.tax).toLocaleString()}`    : '—'],
+                      [`Plan ${pi + 1} — Total`,  `LKR ${Number(p.total || 0).toLocaleString()}`],
+                    ]),
+                    ['Grand Total',   `LKR ${Number(submittedData?.premium || 0).toLocaleString()}`],
+                  ]
+                : [
+                    ['Total Premium', `LKR ${Number(submittedData?.premium || 0).toLocaleString()}`],
+                    ['Basic Premium', submittedData?.basic_premium ? `LKR ${Number(submittedData.basic_premium).toLocaleString()}` : '—'],
+                    ['SRCC',         submittedData?.srcc_premium  ? `LKR ${Number(submittedData.srcc_premium).toLocaleString()}`  : '—'],
+                    ['TC',           submittedData?.tc_premium    ? `LKR ${Number(submittedData.tc_premium).toLocaleString()}`    : '—'],
+                    ['Admin Fee',    submittedData?.admin_fee     ? `LKR ${Number(submittedData.admin_fee).toLocaleString()}`     : '—'],
+                    ['VAT',          submittedData?.vat_amount    ? `LKR ${Number(submittedData.vat_amount).toLocaleString()}`    : '—'],
+                  ]
+              ).concat([
+                ['Deductibles', submittedData?.deductible    || '—'],
+                ['Excesses',    submittedData?.excesses      || '—'],
+                ['Validity',    submittedData?.validity_days ? `${submittedData.validity_days} days` : '—'],
+                ['Submitted',   new Date(submittedData?.submitted_at || Date.now()).toLocaleString('en-GB')],
+              ]).map(([l, v]) => (
                 <Box key={l} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.8, borderBottom: '1px solid rgba(255,139,90,0.08)' }}>
                   <Typography sx={{ fontSize: 13, color: '#6B7280' }}>{l}</Typography>
                   <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>{v}</Typography>
