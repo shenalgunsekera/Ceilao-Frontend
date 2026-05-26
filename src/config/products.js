@@ -1538,7 +1538,7 @@ export const PRODUCTS = {
       { name: 'period_from', label: 'From Date', section: 'Period of Insurance', required: true, type: 'date' },
       { name: 'period_to', label: 'To Date', section: 'Period of Insurance', required: true, type: 'date' },
       { name: 'policy_type', label: 'Type of Policy', section: 'Risk Information', type: 'select', options: ['Individual', 'Family', 'Corporate Group'] },
-      { name: 'no_of_plans', label: 'Number of Plans', section: 'Risk Information', required: true, type: 'select', options: ['1','2','3','4','5','6','7'] },
+      { name: 'no_of_plans', label: 'Number of Plans', section: 'Risk Information', required: true, type: 'number' },
       { name: 'currency', label: 'Currency', section: 'Risk Information', type: 'select', options: ['LKR', 'USD', 'Other'] },
       { name: 'persons_covered', label: 'Number of Members Covered', section: 'Risk Information', type: 'number' },
       { name: 'spouse_included', label: 'Spouse Included?', section: 'Risk Information', type: 'yesno' },

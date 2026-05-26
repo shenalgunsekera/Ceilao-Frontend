@@ -354,7 +354,7 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
 
     // Plan cover table (Group Medical and similar multi-plan products)
     if (f.type === 'plantable') {
-      const planCount = Math.min(Math.max(parseInt(values.no_of_plans) || 1, 1), 7);
+      const planCount = Math.max(parseInt(values.no_of_plans) || 1, 1);
       let planData = [];
       try { planData = JSON.parse(values[f.name] || '[]'); } catch (_) {}
       while (planData.length < planCount) planData.push({ plan: planData.length + 1 });

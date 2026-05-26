@@ -198,7 +198,7 @@ const QuoteResponsePage = () => {
             setQuote(qData);
             // Initialise plan premiums for multi-plan products
             const pc = parseInt(data.form_data?.no_of_plans) || 1;
-            setPlanPremiums(Array.from({ length: Math.min(pc, 7) }, (_, i) => ({
+            setPlanPremiums(Array.from({ length: Math.max(pc, 1) }, (_, i) => ({
               plan: i + 1, basic: '', tax_pct: '18', tax: 0, total: 0,
             })));
             // Resolve product definition (static or custom)
