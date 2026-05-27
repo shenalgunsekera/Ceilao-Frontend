@@ -1955,96 +1955,102 @@ const QuotationsPage = () => {
     setToast({ open: true, msg: `${response.company_name} selected. Forwarding to Underwriting…`, severity: 'success' });
     setCompareQuote(null);
     setTimeout(() => {
-      const fd  = quote.form_data || {};
-      const key = quote.product_key || '';
+      const fd         = quote.form_data || {};
+      const productCfg = STATIC_PRODUCTS[quote.product_key || ''];
 
-      // Map product_key → Main Class dropdown value
-      const mainClassMap = { motor:'Motor', fire:'Fire', marine:'Marine' };
-      const mainClass = mainClassMap[key] || 'Miscellaneous';
+      // Product label matches the PRODUCTS config label (used by underwriting dropdown)
+      const productLabel = productCfg?.label || quote.product_label || 'Other';
 
-      // Map product_key + form fields → Product dropdown value
-      const productValue = (() => {
-        if (key === 'motor') {
-          const tc = fd.type_of_cover || '';
-          if (tc === 'Comprehensive')                     return 'Comprehensive';
-          if (tc === 'Third Party')                       return 'Third Party';
-          if (tc.includes('Third Party Fire'))            return 'Third Party Fire and Theft';
-          return tc || 'Comprehensive';
+      // Coverage = sub-type detail (what was selected within the product)
+      const coverageDetail = fd.type_of_cover || fd.plan_type || fd.marine_type
+        || fd.liability_cover_type || fd.policy_type || '';
+
+      // Collect ALL document URLs from the quotation form_data
+      const quotationDocUrls = {};
+      Object.entries(fd).forEach(([k, v]) => {
+        if (k.startsWith('doc_') && v && typeof v === 'string' && v.startsWith('http')) {
+          quotationDocUrls[k] = v;
         }
-        if (key === 'fire')              return 'Fire & Allied Perils';
-        if (key === 'marine')            return fd.marine_type || 'Import Marine';
-        if (key === 'surgical')          return fd.plan_type || fd.policy_type || 'Surgical & Hospitalisation';
-        if (key === 'personal_accidents')return 'Group Personal Accident';
-        if (key === 'wci')               return fd.type_of_cover || 'Workmen Compensation';
-        if (key === 'public_liability')  return 'Public Liability';
-        if (key === 'fgt')               return 'Fidelity Guarantee';
-        if (key === 'travel')            return 'Travel Insurance';
-        if (key === 'cyber')             return 'Cyber Insurance';
-        if (key === 'life_endowment')    return 'Life / Endowment';
-        if (key === 'dtap')              return 'Group Personal Accident';
-        if (key === 'ear')               return 'Engineering All Risks';
-        if (key === 'car')               return 'Contractors All Risks';
-        if (key === 'product_liability') return 'Product Liability';
-        if (key === 'title_insurance')   return 'Title Insurance';
-        return quote.product_label || 'Other';
-      })();
+      });
+
+      // Collect ALL cover/clause selections from form_data (yesno fields)
+      const coverSelections = {};
+      Object.entries(fd).forEach(([k, v]) => {
+        if ((k.startsWith('cover_') || k.startsWith('clause_')) && v) {
+          coverSelections[k] = v;
+        }
+      });
 
       const prefill = {
-        _quote_id:          quote.id,
-        // Class & product — auto-mapped from product_key
-        main_class:         mainClass,
-        product:            productValue,
-        // Insurer from selected response
+        _quote_id: quote.id,
+
+        // ── Spread ALL quotation form data first so every product-specific
+        //    field (covers, clauses, FI fields, risk fields, docs) carries over
+        ...fd,
+
+        // ── Overrides: remap field names that differ between quotation + underwriting forms ──
+
+        // Reference
+        ceilao_ib_file_no:  fd.ceilao_ib_file_no || '',
+        introducer_code:    fd.introducer         || '',
+        manager:            fd.manager            || '',
+
+        // Insurance Company
+        product:            productLabel,
         insurance_provider: response.company_name,
-        insurer:            response.company_name,
-        policy_type:        quote.product_label || '',
-        coverage:           fd.type_of_cover || fd.plan_type || fd.marine_type || fd.liability_cover_type || fd.policy_type || '',
-        // Premium breakdown from insurer response
-        basic_premium:      String(response.basic_premium || response.premium || ''),
-        srcc_premium:       String(response.srcc_premium  || ''),
-        tc_premium:         String(response.tc_premium    || ''),
-        admin_fees:         String(response.admin_fee     || ''),
-        vat_fee:            String(response.vat_amount    || ''),
-        net_premium:        String(response.basic_premium || response.premium || ''),
-        total_invoice:      String(response.premium       || ''),
-        // Commission from insurer
-        commission_type:    response.commission_type       || '',
-        commission_basic:   String(response.commission_basic || ''),
-        commission_srcc:    String(response.commission_srcc  || ''),
-        commission_tc:      String(response.commission_tc    || ''),
-        // Sum insured — tries all common field names across 17 products
-        sum_insured:        String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || fd.cover_limit || fd.hospitalization_cover || ''),
-        // Client details
+
+        // Proposer Details (quotation uses different field names)
         client_name:        fd.proposer_name || fd.company_name || fd.full_name || '',
         customer_type:      fd.customer_type === 'Corporate' ? 'Company' : (fd.customer_type || ''),
-        introducer_code:    fd.introducer    || '',
-        manager:            fd.manager       || '',
-        email:              fd.email         || '',
-        mobile_no:          fd.mobile        || '',
-        telephone:          fd.telephone     || '',
-        contact_person:     fd.contact_person || '',
-        // Proofs
-        nic_proof:             fd.nic_no      || '',
+        nic_proof:          fd.nic_no      || '',
         business_registration: fd.business_reg || '',
-        svat_proof:            fd.vat_no      || '',
-        // Address
+        svat_proof:         fd.vat_no      || '',
         street1:            fd.address || fd.property_address || fd.address_of_risk || fd.premises_address || '',
-        city:               fd.city    || fd.district || '',
-        district:           fd.district || '',
-        // Policy period
+        mobile_no:          fd.mobile  || '',
+
+        // Period of Insurance
+        coverage:           coverageDetail,
+        policy_type:        quote.product_label || '',
         policy_period_from: fd.period_from  || fd.departure_date || fd.loan_start || fd.commencement_date || '',
         policy_period_to:   fd.period_to    || fd.return_date    || fd.loan_end   || fd.expiry_date       || '',
-        // Vehicle (motor)
-        vehicle_number:     fd.vehicle_no   || '',
-        // Extra risk details
-        make:               fd.make         || '',
-        model:              fd.model        || '',
-        engine_no:          fd.engine_no    || '',
-        chassis_no:         fd.chassis_no   || '',
-        year_of_manufacture: fd.year_of_manufacture || '',
-        vehicle_category:   fd.vehicle_category    || '',
-        // Special conditions
-        notes:              response.special_conditions || '',
+
+        // Sum Insured
+        sum_insured: String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || fd.cover_limit || fd.hospitalization_cover || ''),
+
+        // Motor-specific name remaps
+        vehicle_number: fd.vehicle_no || '',
+
+        // Premium from insurer response (overrides any raw fd values)
+        basic_premium:  String(response.basic_premium || response.premium || ''),
+        srcc_premium:   String(response.srcc_premium  || ''),
+        tc_premium:     String(response.tc_premium    || ''),
+        admin_fees:     String(response.admin_fee     || ''),
+        vat_fee:        String(response.vat_amount    || ''),
+        net_premium:    String(response.basic_premium || response.premium || ''),
+        total_invoice:  String(response.premium       || ''),
+
+        // Deductibles from insurer response
+        deductible: response.deductible || '',
+        excesses:   response.excesses   || '',
+
+        // Commission from insurer response
+        commission_type:  response.commission_type         || '',
+        commission_basic: String(response.commission_basic || ''),
+        commission_srcc:  String(response.commission_srcc  || ''),
+        commission_tc:    String(response.commission_tc    || ''),
+
+        // Group medical
+        plan_premiums: response.plan_premiums ? JSON.stringify(response.plan_premiums) : '',
+
+        // Insurer's uploaded document → quotation slot
+        ...(response.doc_url ? { quotation_doc_url: response.doc_url } : {}),
+
+        // Insurer's cover/clause responses (stored as JSON for reference)
+        cover_responses:  response.cover_responses  ? JSON.stringify(response.cover_responses)  : '',
+        clause_responses: response.clause_responses ? JSON.stringify(response.clause_responses) : '',
+
+        // Notes from insurer
+        notes: response.special_conditions || '',
       };
       window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
     }, 1500);

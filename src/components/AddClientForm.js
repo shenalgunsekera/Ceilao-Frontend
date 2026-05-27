@@ -304,7 +304,6 @@ function NumericField({ value, onChange, readOnly, ...props }) {
 const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }) => {
   const { user, userProfile } = useAuth();
   const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
-  const fileNoGenerated = React.useRef(false);
 
   /* ── scalar fields state ─────────────────────────────────────────────── */
   const [fields, setFields] = useState(() => {
@@ -393,23 +392,6 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     }
   }, [fields.product]);
 
-  /* ── auto-generate Ceilao IB File No. once product + client name are known */
-  useEffect(() => {
-    if (fileNoGenerated.current) return;
-    if (fields.ceilao_ib_file_no) { fileNoGenerated.current = true; return; }
-    const key = PRODUCT_KEY_MAP[fields.product];
-    if (!key || !PRODUCTS[key]) return;
-    const name = fields.client_name.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8);
-    if (!name) return;
-    const prefix  = PRODUCTS[key].prefix;
-    const dateBase = dates.policy_period_from;
-    const ymd = dateBase && !isNaN(dateBase)
-      ? dateBase.toISOString().slice(0, 10).replace(/-/g, '')
-      : new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const seq = String(Date.now()).slice(-4);
-    setFields(f => ({ ...f, ceilao_ib_file_no: `${prefix}-${ymd}-${seq}-${name}` }));
-    fileNoGenerated.current = true;
-  }, [fields.product, fields.client_name, fields.ceilao_ib_file_no, dates.policy_period_from]);
 
   /* ── product-specific risk fields ────────────────────────────────────── */
   const productKey = useMemo(() => PRODUCT_KEY_MAP[fields.product] || null, [fields.product]);
@@ -617,11 +599,9 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     );
   };
 
-  /* ── product prefix hint ─────────────────────────────────────────────── */
+  /* ── file no hint ────────────────────────────────────────────────────── */
   const productPrefix = productKey ? (PRODUCTS[productKey]?.prefix || '') : '';
-  const fileNoHint = productPrefix
-    ? `Format: ${productPrefix}-YYYYMMDD-XXXX-NAME`
-    : 'Select a product to see the reference format';
+  const fileNoHint = productPrefix ? `Format: ${productPrefix}-YYYYMMDD-XXXX-NAME` : '';
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -849,11 +829,29 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         <Grid container spacing={1.5} sx={{ mb: 2 }}>
           {docFields.map(df => (
             <Grid item xs={12} sm={6} key={df.doc}>
-              <DocUploadBox label={df.label} fieldName={df.doc} existing={initialData[df.doc]}
+              <DocUploadBox label={df.label} fieldName={df.doc} existing={initialData[df.doc] || riskValues[df.doc]}
                 onFile={file => setDocs(d => ({ ...d, [df.doc]: file }))}
                 progress={progress[df.doc] ?? null} uploaded={!!uploaded[df.doc]} />
             </Grid>
           ))}
+          {/* Product-specific docs carried over from quotation form */}
+          {Object.entries(riskValues)
+            .filter(([k, v]) => k.startsWith('doc_') && v && typeof v === 'string' && v.startsWith('http') && !docFields.some(df => df.doc === k))
+            .map(([k, url]) => (
+              <Grid item xs={12} sm={6} key={k}>
+                <Box sx={{ p: 1.5, border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px', bgcolor: 'rgba(16,185,129,0.04)' }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#374151', mb: 0.5 }}>
+                    {k.replace(/^doc_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  </Typography>
+                  <Typography sx={{ fontSize: 10.5, color: '#10B981', mb: 0.3 }}>From quotation form</Typography>
+                  <Link href={url} target="_blank" rel="noopener noreferrer"
+                    sx={{ fontSize: 11, color: '#10B981', fontWeight: 700, '&:hover': { textDecoration: 'underline' } }}>
+                    View document ↗
+                  </Link>
+                </Box>
+              </Grid>
+            ))
+          }
         </Grid>
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
           {docFields.map(df => (
