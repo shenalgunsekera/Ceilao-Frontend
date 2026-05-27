@@ -45,9 +45,8 @@ const PRODUCT_MAIN_CLASS = {
 
 /* ── Risk field sections to pull from product config ─────────────────────── */
 const RISK_SECTIONS = [
-  'Risk Information', 'Underwriting Information', 'Sum Insured', 'Vehicle Details',
-  'Voyage Details', 'Marine Details', 'Engineering Details', 'Loan Details',
-  'Property Details', 'Liability Details',
+  'Risk Information', 'Vehicle Details', 'Voyage Details', 'Marine Details',
+  'Engineering Details', 'Loan Details', 'Property Details', 'Liability Details',
 ];
 
 /* ── Static document fields ──────────────────────────────────────────────── */
@@ -89,47 +88,46 @@ const dropdowns = {
 /* ── Field definitions ─────────────────────────────────────────────────────
    Exported so TableSection can use it for CSV template generation           */
 export const textFields = [
-  // Reference & Contacts
-  { label: 'Ceilao IB File No.', name: 'ceilao_ib_file_no', section: 'Reference' },
-  { label: 'Manager',            name: 'manager',            section: 'Reference' },
-  { label: 'Introducer Code',    name: 'introducer_code',    section: 'Reference' },
-  // General Info
-  { label: 'Main Class',         name: 'main_class',         section: 'General Info', dropdown: true },
-  { label: 'Product',            name: 'product',            section: 'General Info', dropdown: true, required: true },
-  { label: 'Customer Type',      name: 'customer_type',      section: 'General Info', dropdown: true, required: true },
-  { label: 'Insurance Provider', name: 'insurance_provider', section: 'General Info', dropdown: true, required: true },
-  { label: 'Insurer',            name: 'insurer',            section: 'General Info' },
-  { label: 'Branch',             name: 'branch',             section: 'General Info', dropdown: true },
-  // Client Details
-  { label: 'Client Name',        name: 'client_name',        section: 'Client Details', required: true },
-  { label: 'NIC / Passport No.', name: 'nic_proof',          section: 'Client Details' },
-  { label: 'Business Registration', name: 'business_registration', section: 'Client Details' },
-  { label: 'SVAT / VAT No.',     name: 'svat_proof',         section: 'Client Details' },
-  { label: 'Street 1',           name: 'street1',            section: 'Client Details' },
-  { label: 'Street 2',           name: 'street2',            section: 'Client Details' },
-  { label: 'City',               name: 'city',               section: 'Client Details' },
-  { label: 'District',           name: 'district',           section: 'Client Details' },
-  { label: 'Province',           name: 'province',           section: 'Client Details' },
-  { label: 'Telephone',          name: 'telephone',          section: 'Client Details' },
-  { label: 'Mobile No',          name: 'mobile_no',          section: 'Client Details', required: true },
-  { label: 'Contact Person',     name: 'contact_person',     section: 'Client Details' },
-  { label: 'Email',              name: 'email',              section: 'Client Details' },
-  { label: 'Social Media',       name: 'social_media',       section: 'Client Details' },
-  // Policy Details
-  { label: 'Policy No',          name: 'policy_no',          section: 'Policy Details' },
-  { label: 'Policy Type',        name: 'policy_type',        section: 'Policy Details' },
-  { label: 'Coverage',           name: 'coverage',           section: 'Policy Details' },
-  { label: 'Policy Period From', name: 'policy_period_from', section: 'Policy Details', date: true },
-  { label: 'Policy Period To',   name: 'policy_period_to',   section: 'Policy Details', date: true },
-  { label: 'Policy Days',        name: 'policy_days',        section: 'Policy Details', type: 'number', readOnly: true },
-  { label: 'Year',               name: 'policy_year',        section: 'Policy Details', readOnly: true },
-  { label: 'Month',              name: 'policy_month',       section: 'Policy Details', readOnly: true },
-  { label: 'O/S Days',           name: 'os_days',            section: 'Policy Details', type: 'number' },
-  { label: 'Credit Period (days)', name: 'credit_period',    section: 'Policy Details', type: 'number' },
+  // Introducer
+  { label: 'Ceilao IB File No.', name: 'ceilao_ib_file_no', section: 'Introducer' },
+  { label: 'Manager',            name: 'manager',            section: 'Introducer' },
+  { label: 'Introducer Code',    name: 'introducer_code',    section: 'Introducer' },
+  // Insurance Company
+  { label: 'Main Class',         name: 'main_class',         section: 'Insurance Company', dropdown: true },
+  { label: 'Product',            name: 'product',            section: 'Insurance Company', dropdown: true, required: true },
+  { label: 'Customer Type',      name: 'customer_type',      section: 'Insurance Company', dropdown: true, required: true },
+  { label: 'Insurance Provider', name: 'insurance_provider', section: 'Insurance Company', dropdown: true, required: true },
+  { label: 'Branch',             name: 'branch',             section: 'Insurance Company', dropdown: true },
+  // Proposer Details
+  { label: 'Client Name',        name: 'client_name',        section: 'Proposer Details', required: true },
+  { label: 'NIC / Passport No.', name: 'nic_proof',          section: 'Proposer Details' },
+  { label: 'Business Registration', name: 'business_registration', section: 'Proposer Details' },
+  { label: 'SVAT / VAT No.',     name: 'svat_proof',         section: 'Proposer Details' },
+  { label: 'Street 1',           name: 'street1',            section: 'Proposer Details' },
+  { label: 'Street 2',           name: 'street2',            section: 'Proposer Details' },
+  { label: 'City',               name: 'city',               section: 'Proposer Details' },
+  { label: 'District',           name: 'district',           section: 'Proposer Details' },
+  { label: 'Province',           name: 'province',           section: 'Proposer Details' },
+  { label: 'Telephone',          name: 'telephone',          section: 'Proposer Details' },
+  { label: 'Mobile No',          name: 'mobile_no',          section: 'Proposer Details', required: true },
+  { label: 'Contact Person',     name: 'contact_person',     section: 'Proposer Details' },
+  { label: 'Email',              name: 'email',              section: 'Proposer Details' },
+  { label: 'Social Media',       name: 'social_media',       section: 'Proposer Details' },
+  // Period of Insurance
+  { label: 'Policy No',          name: 'policy_no',          section: 'Period of Insurance' },
+  { label: 'Policy Type',        name: 'policy_type',        section: 'Period of Insurance' },
+  { label: 'Coverage',           name: 'coverage',           section: 'Period of Insurance' },
+  { label: 'Policy Period From', name: 'policy_period_from', section: 'Period of Insurance', date: true },
+  { label: 'Policy Period To',   name: 'policy_period_to',   section: 'Period of Insurance', date: true },
+  { label: 'Policy Days',        name: 'policy_days',        section: 'Period of Insurance', type: 'number', readOnly: true },
+  { label: 'Year',               name: 'policy_year',        section: 'Period of Insurance', readOnly: true },
+  { label: 'Month',              name: 'policy_month',       section: 'Period of Insurance', readOnly: true },
+  { label: 'O/S Days',           name: 'os_days',            section: 'Period of Insurance', type: 'number' },
+  { label: 'Credit Period (days)', name: 'credit_period',    section: 'Period of Insurance', type: 'number' },
   // Vehicle (motor only — shown conditionally)
   { label: 'Vehicle Number',     name: 'vehicle_number',     section: 'Risk Information', motor: true },
-  // Sum Insured & Premium
-  { label: 'Sum Insured',        name: 'sum_insured',        section: 'Premium', type: 'number' },
+  // Sum Insured (own section)
+  { label: 'Sum Insured',        name: 'sum_insured',        section: 'Sum Insured', type: 'number' },
   { label: 'Basic Premium',      name: 'basic_premium',      section: 'Premium', type: 'number' },
   { label: 'SRCC Premium',       name: 'srcc_premium',       section: 'Premium', type: 'number' },
   { label: 'TC Premium',         name: 'tc_premium',         section: 'Premium', type: 'number' },
@@ -174,16 +172,24 @@ export const textFields = [
 ];
 
 const SECTION_COLORS = {
-  Reference:        '#FF5A5A',
-  'General Info':   '#FF8B5A',
-  'Client Details': '#FFA95A',
-  'Policy Details': '#10B981',
-  'Risk Information': '#0891b2',
-  Premium:          '#6366f1',
-  Payment:          '#8b5cf6',
-  Commission:       '#ec4899',
-  Claims:           '#ef4444',
-  Other:            '#6B7280',
+  Introducer:                 '#FF5A5A',
+  'Insurance Company':        '#FF8B5A',
+  'Proposer Details':         '#FFA95A',
+  'Period of Insurance':      '#10B981',
+  'Financial Interest':       '#0284c7',
+  'Risk Information':         '#0891b2',
+  'Claims History':           '#f59e0b',
+  'Underwriting Information': '#7c3aed',
+  'Sum Insured':              '#059669',
+  'Covers Required':          '#16a34a',
+  'Additional Clauses':       '#15803d',
+  Deductibles:                '#dc2626',
+  Premium:                    '#6366f1',
+  Payment:                    '#8b5cf6',
+  Commission:                 '#ec4899',
+  Claims:                     '#ef4444',
+  Documents:                  '#6366f1',
+  Other:                      '#6B7280',
 };
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -298,6 +304,7 @@ function NumericField({ value, onChange, readOnly, ...props }) {
 const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }) => {
   const { user, userProfile } = useAuth();
   const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  const fileNoGenerated = React.useRef(false);
 
   /* ── scalar fields state ─────────────────────────────────────────────── */
   const [fields, setFields] = useState(() => {
@@ -386,6 +393,24 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     }
   }, [fields.product]);
 
+  /* ── auto-generate Ceilao IB File No. once product + client name are known */
+  useEffect(() => {
+    if (fileNoGenerated.current) return;
+    if (fields.ceilao_ib_file_no) { fileNoGenerated.current = true; return; }
+    const key = PRODUCT_KEY_MAP[fields.product];
+    if (!key || !PRODUCTS[key]) return;
+    const name = fields.client_name.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8);
+    if (!name) return;
+    const prefix  = PRODUCTS[key].prefix;
+    const dateBase = dates.policy_period_from;
+    const ymd = dateBase && !isNaN(dateBase)
+      ? dateBase.toISOString().slice(0, 10).replace(/-/g, '')
+      : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const seq = String(Date.now()).slice(-4);
+    setFields(f => ({ ...f, ceilao_ib_file_no: `${prefix}-${ymd}-${seq}-${name}` }));
+    fileNoGenerated.current = true;
+  }, [fields.product, fields.client_name, fields.ceilao_ib_file_no, dates.policy_period_from]);
+
   /* ── product-specific risk fields ────────────────────────────────────── */
   const productKey = useMemo(() => PRODUCT_KEY_MAP[fields.product] || null, [fields.product]);
 
@@ -401,10 +426,48 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     );
   }, [productKey]);
 
+  const financialInterestFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      f.section === 'Financial Interest' && f.type !== 'file' && f.type !== 'plantable'
+    );
+  }, [productKey]);
+
+  const claimsHistoryFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      f.section === 'Claims History' && f.type !== 'file' && f.type !== 'plantable'
+    );
+  }, [productKey]);
+
+  const underwritingInfoFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      f.section === 'Underwriting Information' && f.type !== 'file' && f.type !== 'plantable'
+    );
+  }, [productKey]);
+
+  const coversFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      (f.section === 'Covers Required' || f.section === 'Cover Required') &&
+      f.type !== 'file' && f.type !== 'plantable'
+    );
+  }, [productKey]);
+
+  const clausesFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      f.section === 'Additional Clauses' && f.type !== 'file' && f.type !== 'plantable'
+    );
+  }, [productKey]);
+
   /* Extra risk field values */
   const [riskValues, setRiskValues] = useState(() => {
     const rv = {};
     Object.keys(initialData).forEach(k => { rv[k] = initialData[k] ?? ''; });
+    if (!('deductible' in rv)) rv.deductible = '';
+    if (!('excesses'   in rv)) rv.excesses   = '';
     return rv;
   });
   const setRisk = (name, val) => setRiskValues(r => ({ ...r, [name]: val }));
@@ -564,20 +627,8 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box component="form" onSubmit={handleSubmit} sx={{ px: 3, py: 2.5, overflow: 'auto' }}>
 
-        {/* ── Documents ────────────────────────────────────── */}
-        <SectionHeader title="Documents" />
-        <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-          {docFields.map(df => (
-            <Grid item xs={12} sm={6} key={df.doc}>
-              <DocUploadBox label={df.label} fieldName={df.doc} existing={initialData[df.doc]}
-                onFile={file => setDocs(d => ({ ...d, [df.doc]: file }))}
-                progress={progress[df.doc] ?? null} uploaded={!!uploaded[df.doc]} />
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* ── Reference & Contacts ─────────────────────────── */}
-        <SectionHeader title="Reference" />
+        {/* ── Introducer ───────────────────────────────────── */}
+        <SectionHeader title="Introducer" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
           <Grid item xs={12} sm={6} md={4}>
             <TextField label="Ceilao IB File No." value={fields.ceilao_ib_file_no}
@@ -599,47 +650,52 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           </Grid>
         </Grid>
 
-        {/* ── General Info ──────────────────────────────────── */}
-        <SectionHeader title="General Info" />
+        {/* ── Insurance Company ─────────────────────────────── */}
+        <SectionHeader title="Insurance Company" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {textFields.filter(f => f.section === 'General Info').map(f => (
+          {textFields.filter(f => f.section === 'Insurance Company').map(f => (
             <Grid item xs={12} sm={6} md={4} key={f.name}>
               {renderStaticField(f)}
             </Grid>
           ))}
         </Grid>
 
-        {/* ── Client Details ────────────────────────────────── */}
-        <SectionHeader title="Client Details" />
+        {/* ── Proposer Details ─────────────────────────────── */}
+        <SectionHeader title="Proposer Details" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {textFields.filter(f => f.section === 'Client Details').map(f => (
+          {textFields.filter(f => f.section === 'Proposer Details').map(f => (
             <Grid item xs={12} sm={6} md={4} key={f.name}>
               {renderStaticField(f)}
-            </Grid>
-          ))}
-          {/* doc description fields */}
-          {docFields.map(df => (
-            <Grid item xs={12} sm={6} md={4} key={df.text}>
-              <TextField label={`${df.label} Description`} value={fields[df.text]}
-                onChange={e => set(df.text, e.target.value)}
-                fullWidth size="small"
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
             </Grid>
           ))}
         </Grid>
 
-        {/* ── Policy Details ────────────────────────────────── */}
-        <SectionHeader title="Policy Details" />
+        {/* ── Period of Insurance ───────────────────────────── */}
+        <SectionHeader title="Period of Insurance" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {textFields.filter(f => f.section === 'Policy Details').map(f => (
+          {textFields.filter(f => f.section === 'Period of Insurance').map(f => (
             <Grid item xs={12} sm={6} md={4} key={f.name}>
               {renderStaticField(f)}
             </Grid>
           ))}
         </Grid>
+
+        {/* ── Financial Interest (product-specific) ────────── */}
+        {financialInterestFields.length > 0 && (
+          <>
+            <SectionHeader title="Financial Interest" />
+            <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              {financialInterestFields.map(f => (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderRiskField(f)}
+                </Grid>
+              ))}
+            </Grid>
+          </>
+        )}
 
         {/* ── Risk Information (product-specific) ──────────── */}
-        {(riskFields.length > 0 || fields.product === 'Comprehensive' || fields.product === 'Third Party Fire and Theft' || fields.product === 'Third Party') && (
+        {(riskFields.length > 0 || fields.main_class === 'Motor' || productKey === 'motor') && (
           <>
             <SectionHeader title="Risk Information" />
             {productKey && PRODUCTS[productKey] && (
@@ -648,7 +704,6 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
                       bgcolor: `${PRODUCTS[productKey].color}18`, color: PRODUCTS[productKey].color }} />
             )}
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {/* Always show vehicle number for motor */}
               {(fields.main_class === 'Motor' || productKey === 'motor') && (
                 <Grid item xs={12} sm={6} md={4}>
                   <TextField label="Vehicle Number" value={fields.vehicle_number}
@@ -666,7 +721,73 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           </>
         )}
 
-        {/* ── Sum Insured & Premium ─────────────────────────── */}
+        {/* ── Claims History (product-specific) ────────────── */}
+        {claimsHistoryFields.length > 0 && (
+          <>
+            <SectionHeader title="Claims History" />
+            <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              {claimsHistoryFields.map(f => (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderRiskField(f)}
+                </Grid>
+              ))}
+            </Grid>
+          </>
+        )}
+
+        {/* ── Underwriting Information (product-specific) ───── */}
+        {underwritingInfoFields.length > 0 && (
+          <>
+            <SectionHeader title="Underwriting Information" />
+            <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              {underwritingInfoFields.map(f => (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderRiskField(f)}
+                </Grid>
+              ))}
+            </Grid>
+          </>
+        )}
+
+        {/* ── Sum Insured ───────────────────────────────────── */}
+        <SectionHeader title="Sum Insured" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Sum Insured').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Covers Required (product-specific) ───────────── */}
+        {coversFields.length > 0 && (
+          <>
+            <SectionHeader title="Covers Required" />
+            <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              {coversFields.map(f => (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderRiskField(f)}
+                </Grid>
+              ))}
+            </Grid>
+          </>
+        )}
+
+        {/* ── Additional Clauses (product-specific) ────────── */}
+        {clausesFields.length > 0 && (
+          <>
+            <SectionHeader title="Additional Clauses" />
+            <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              {clausesFields.map(f => (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderRiskField(f)}
+                </Grid>
+              ))}
+            </Grid>
+          </>
+        )}
+
+        {/* ── Premium ──────────────────────────────────────── */}
         <SectionHeader title="Premium" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
           {textFields.filter(f => f.section === 'Premium').map(f => (
@@ -676,14 +797,21 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           ))}
         </Grid>
 
-        {/* ── Payment Tracking ─────────────────────────────── */}
-        <SectionHeader title="Payment" />
+        {/* ── Deductibles ──────────────────────────────────── */}
+        <SectionHeader title="Deductibles" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {textFields.filter(f => f.section === 'Payment').map(f => (
-            <Grid item xs={12} sm={6} md={4} key={f.name}>
-              {renderStaticField(f)}
-            </Grid>
-          ))}
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField label="Deductible" value={riskValues.deductible || ''}
+              onChange={e => setRisk('deductible', e.target.value)}
+              fullWidth size="small"
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField label="Excesses" value={riskValues.excesses || ''}
+              onChange={e => setRisk('excesses', e.target.value)}
+              fullWidth size="small"
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+          </Grid>
         </Grid>
 
         {/* ── Commission ───────────────────────────────────── */}
@@ -696,12 +824,44 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           ))}
         </Grid>
 
+        {/* ── Payment ──────────────────────────────────────── */}
+        <SectionHeader title="Payment" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Payment').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
         {/* ── Claims ───────────────────────────────────────── */}
         <SectionHeader title="Claims" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
           {textFields.filter(f => f.section === 'Claims').map(f => (
             <Grid item xs={12} sm={6} md={4} key={f.name}>
               {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Documents ────────────────────────────────────── */}
+        <SectionHeader title="Documents" />
+        <Grid container spacing={1.5} sx={{ mb: 2 }}>
+          {docFields.map(df => (
+            <Grid item xs={12} sm={6} key={df.doc}>
+              <DocUploadBox label={df.label} fieldName={df.doc} existing={initialData[df.doc]}
+                onFile={file => setDocs(d => ({ ...d, [df.doc]: file }))}
+                progress={progress[df.doc] ?? null} uploaded={!!uploaded[df.doc]} />
+            </Grid>
+          ))}
+        </Grid>
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {docFields.map(df => (
+            <Grid item xs={12} sm={6} md={4} key={df.text}>
+              <TextField label={`${df.label} Notes`} value={fields[df.text]}
+                onChange={e => set(df.text, e.target.value)}
+                fullWidth size="small"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
             </Grid>
           ))}
         </Grid>
