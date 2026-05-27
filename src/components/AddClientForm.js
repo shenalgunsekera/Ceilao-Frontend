@@ -404,7 +404,8 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       f.type !== 'plantable' &&
       f.name !== 'sum_insured' &&
       f.name !== 'total_value' &&
-      f.name !== 'extra_fittings_value'
+      f.name !== 'extra_fittings_value' &&
+      f.name !== 'vehicle_no'
     );
   }, [productKey]);
 
@@ -441,6 +442,14 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     if (!productKey || !PRODUCTS[productKey]) return [];
     return (PRODUCTS[productKey].fields || []).filter(f =>
       f.section === 'Additional Clauses' && f.type !== 'file' && f.type !== 'plantable'
+    );
+  }, [productKey]);
+
+  const sumInsuredSubFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      f.section === 'Sum Insured' && f.type !== 'file' && f.type !== 'plantable' &&
+      f.name !== 'sum_insured'
     );
   }, [productKey]);
 
@@ -732,6 +741,11 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         {/* ── Sum Insured ───────────────────────────────────── */}
         <SectionHeader title="Sum Insured" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {sumInsuredSubFields.map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderRiskField(f)}
+            </Grid>
+          ))}
           {textFields.filter(f => f.section === 'Sum Insured').map(f => (
             <Grid item xs={12} sm={6} md={4} key={f.name}>
               {renderStaticField(f)}

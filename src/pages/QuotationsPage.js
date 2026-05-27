@@ -1990,8 +1990,8 @@ const QuotationsPage = () => {
 
         // ── Overrides: remap field names that differ between quotation + underwriting forms ──
 
-        // Reference
-        ceilao_ib_file_no:  fd.ceilao_ib_file_no || '',
+        // Reference — use the quotation's auto-generated reference as the Ceilao IB File No.
+        ceilao_ib_file_no:  quote.reference || fd.ceilao_ib_file_no || '',
         introducer_code:    fd.introducer         || '',
         manager:            fd.manager            || '',
 
