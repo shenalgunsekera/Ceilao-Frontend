@@ -1847,7 +1847,7 @@ const QuotationsPage = () => {
         reference,
         product_key:     product,
         product_label:   allP[product]?.label || product,
-        form_data:       formValues,
+        form_data:       { ...formValues, ceilao_ib_file_no: reference },
         status:          'draft',
         sent_to:         [],
         responses:       [],
@@ -1860,12 +1860,12 @@ const QuotationsPage = () => {
       setQuotes(prev => [{
         id: ref.id, reference, product_key: product,
         product_label: allP[product]?.label || product,
-        form_data: formValues, status: 'draft',
+        form_data: { ...formValues, ceilao_ib_file_no: reference }, status: 'draft',
         sent_to: [], responses: [],
         created_by_name: userProfile?.full_name || '',
         created_at: { toDate: () => new Date() },
       }, ...prev]);
-      setPendingQuote({ id: ref.id, reference, form_data: formValues, product_key: product });
+      setPendingQuote({ id: ref.id, reference, form_data: { ...formValues, ceilao_ib_file_no: reference }, product_key: product });
       setNewQuoteOpen(false);
       setSendOpen(true);
       setFormValues({});
