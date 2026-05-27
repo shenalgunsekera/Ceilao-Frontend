@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { uploadToCloudinary } from '../cloudinary';
+import { uploadFile as uploadToCloudinary } from '../storage';
 import { useAuth } from '../App';
 import { PRODUCTS } from '../config/products';
 
@@ -455,6 +455,13 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     );
   }, [productKey]);
 
+  const prodDocFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      f.section === 'Document Uploads' && f.type === 'file'
+    );
+  }, [productKey]);
+
   /* Extra risk field values */
   const [riskValues, setRiskValues] = useState(() => {
     const rv = {};
@@ -484,16 +491,17 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     setSaving(true);
     try {
       const docUrls = {};
-      for (const df of docFields) {
-        const file = docs[df.doc];
-        if (file) {
-          const safeName = (fields.client_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-          const url = await uploadToCloudinary(file, `ceilao/clients/${safeName}/docs`, (pct) => {
-            setProgress(p => ({ ...p, [df.doc]: pct }));
-          }, df.label);
-          docUrls[df.doc] = url;
-          setUploaded(u => ({ ...u, [df.doc]: true }));
-        }
+      const safeName = (fields.client_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+      for (const [fieldKey, file] of Object.entries(docs)) {
+        if (!file) continue;
+        const stdField  = docFields.find(df => df.doc  === fieldKey);
+        const prodField = prodDocFields.find(df => df.name === fieldKey);
+        const label = stdField?.label || prodField?.label || fieldKey;
+        const url = await uploadToCloudinary(file, `ceilao/clients/${safeName}/docs`, (pct) => {
+          setProgress(p => ({ ...p, [fieldKey]: pct }));
+        }, label);
+        docUrls[fieldKey] = url;
+        setUploaded(u => ({ ...u, [fieldKey]: true }));
       }
 
       // Build date strings from date state
@@ -875,6 +883,16 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         {/* ── Documents ────────────────────────────────────── */}
         <SectionHeader title="Documents" />
         <Grid container spacing={1.5} sx={{ mb: 2 }}>
+          {/* Product-specific doc uploads (vehicle reg, property photos, etc.) */}
+          {prodDocFields.map(df => (
+            <Grid item xs={12} sm={6} key={df.name}>
+              <DocUploadBox label={df.label} fieldName={df.name}
+                existing={initialData[df.name] || riskValues[df.name]}
+                onFile={file => setDocs(d => ({ ...d, [df.name]: file }))}
+                progress={progress[df.name] ?? null} uploaded={!!uploaded[df.name]} />
+            </Grid>
+          ))}
+          {/* Standard UW document uploads */}
           {docFields.map(df => (
             <Grid item xs={12} sm={6} key={df.doc}>
               <DocUploadBox label={df.label} fieldName={df.doc} existing={initialData[df.doc] || riskValues[df.doc]}
@@ -882,9 +900,10 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
                 progress={progress[df.doc] ?? null} uploaded={!!uploaded[df.doc]} />
             </Grid>
           ))}
-          {/* Product-specific docs carried over from quotation form */}
+          {/* Any extra doc_ URLs from quotation form not covered by product or standard doc fields */}
           {Object.entries(riskValues)
-            .filter(([k, v]) => k.startsWith('doc_') && v && typeof v === 'string' && v.startsWith('http') && !docFields.some(df => df.doc === k))
+            .filter(([k, v]) => k.startsWith('doc_') && v && typeof v === 'string' && v.startsWith('http') &&
+              !docFields.some(df => df.doc === k) && !prodDocFields.some(df => df.name === k))
             .map(([k, url]) => (
               <Grid item xs={12} sm={6} key={k}>
                 <Box sx={{ p: 1.5, border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px', bgcolor: 'rgba(16,185,129,0.04)' }}>

@@ -275,32 +275,13 @@ const CLIENT_IMPORT_COLS = [
   'date_added', // preserves original created_at on restore
 ];
 
-/* Strip Cloudinary transformation params so PDFs/images download correctly.
-   e.g. /upload/fl_inline/v123/file.pdf  →  /upload/v123/file.pdf            */
-function stripCloudinaryTransforms(url) {
-  if (!url || !url.includes('res.cloudinary.com')) return url;
-  const idx = url.indexOf('/upload/');
-  if (idx === -1) return url;
-  const base = url.slice(0, idx + 8);
-  const rest = url.slice(idx + 8);
-  const parts = rest.split('/');
-  // Find the version segment (v followed by 5+ digits); everything before it is transforms
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (/^v\d{5,}$/.test(parts[i])) return base + parts.slice(i).join('/');
-  }
-  return url; // no version segment — return as-is
-}
-
-/* Fetch one URL and return ArrayBuffer, or null on failure.
-   Plain fetch (no explicit mode/cache) mirrors how openFile() works —
-   adding cache:'no-cache' triggers a CORS preflight that Cloudinary blocks. */
+/* Fetch one URL and return ArrayBuffer, or null on failure. */
 async function fetchFile(url) {
   if (!url) return null;
-  const clean = stripCloudinaryTransforms(url);
   try {
     const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 45_000);
-    const resp  = await fetch(clean, { signal: ctrl.signal });
+    const resp  = await fetch(url, { signal: ctrl.signal });
     clearTimeout(timer);
     if (!resp.ok) return null;
     const buf = await resp.arrayBuffer();
@@ -337,9 +318,21 @@ async function fetchClientDocs(client) {
   const files = [];
   const urlLines = [];
 
+  // Standard UW document fields
   for (const { label, key } of DOC_FIELDS) {
     const url = client[key];
     if (!url) continue;
+    urlLines.push(`${label}: ${url}`);
+    const buf = await fetchFile(url);
+    if (buf) files.push({ filename: `${label}.${extFromUrl(url)}`, buf });
+  }
+
+  // Product-specific doc_ fields (doc_vehicle_reg, doc_photos_of_risk, etc.)
+  const standardKeys = new Set(DOC_FIELDS.map(f => f.key));
+  for (const [key, url] of Object.entries(client)) {
+    if (!key.startsWith('doc_') || !url || typeof url !== 'string' || !url.startsWith('http')) continue;
+    if (standardKeys.has(key)) continue;
+    const label = key.replace(/^doc_/, '');
     urlLines.push(`${label}: ${url}`);
     const buf = await fetchFile(url);
     if (buf) files.push({ filename: `${label}.${extFromUrl(url)}`, buf });
@@ -367,15 +360,39 @@ function buildQuotationsImportCsv(quotes) {
   return [header, ...rows].join('\r\n');
 }
 
-/* Build the root CLIENTS_IMPORT.csv — ready for direct re-import */
+/* Build the root CLIENTS_IMPORT.csv — ready for direct re-import.
+   Dynamically includes all doc_ URL fields and extra premium fields
+   so a full restore preserves every document link and all data. */
 function buildClientsImportCsv(clients) {
-  const header = CLIENT_IMPORT_COLS.join(',');
+  // Standard UW doc URL columns
+  const STD_DOC_COLS = [
+    'policyholder_doc_url','proposal_form_doc_url','quotation_doc_url','cr_copy_doc_url',
+    'schedule_doc_url','invoice_doc_url','payment_receipt_doc_url','nic_br_doc_url',
+  ];
+  // Collect any product-specific doc_ URL fields present across all clients
+  const extraDocCols = new Set();
+  clients.forEach(c => {
+    Object.keys(c).forEach(k => {
+      if (k.startsWith('doc_') && !STD_DOC_COLS.includes(k) && c[k] && typeof c[k] === 'string' && c[k].startsWith('http')) {
+        extraDocCols.add(k);
+      }
+    });
+  });
+
+  // Build full column list without duplicates
+  const seen = new Set();
+  const cols = [
+    ...CLIENT_IMPORT_COLS,
+    'other_premium', 'validity_days',
+    ...STD_DOC_COLS,
+    ...Array.from(extraDocCols),
+  ].filter(c => { if (seen.has(c)) return false; seen.add(c); return true; });
+
+  const header = cols.join(',');
   const rows = clients.map(c => {
-    // Resolve created_at Firestore timestamp → ISO date string for date_added column
     const createdDate = c.created_at?.toDate ? c.created_at.toDate() : c.created_at ? new Date(c.created_at) : null;
     const dateAdded = createdDate && !isNaN(createdDate) ? createdDate.toISOString().slice(0, 10) : '';
-
-    return CLIENT_IMPORT_COLS.map(col => {
+    return cols.map(col => {
       const v = col === 'date_added' ? dateAdded : (c[col] ?? '');
       const s = String(v).replace(/"/g, '""');
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;

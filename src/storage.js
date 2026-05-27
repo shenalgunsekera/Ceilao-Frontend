@@ -127,16 +127,9 @@ export async function uploadFile(file, folder = 'ceilao/docs', onProgress, label
   });
 }
 
-// Firebase Storage URLs are direct — no transformation needed.
-// viewUrl is kept for backwards compatibility with legacy Cloudinary URLs in Firestore.
+// Firebase Storage URLs are direct — return as-is.
 export function viewUrl(url) {
-  if (!url) return url;
-  if (url.includes('cloudinary.com')) {
-    const isImage = /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url);
-    if (!isImage) return url;
-    return url.replace('/upload/', '/upload/fl_inline,q_auto,f_auto/');
-  }
-  return url;
+  return url || '';
 }
 
 // Opens any file in a new tab. PDFs use a blob URL for guaranteed inline display.

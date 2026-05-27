@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { viewUrl } from '../cloudinary';
+import { viewUrl } from '../storage';
+import { PRODUCTS } from '../config/products';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -122,6 +123,13 @@ function fieldNameToLabel(name) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// Quotation form field names that differ from UW form field names
+const UW_FIELD_ALIASES = {
+  vehicle_no: 'vehicle_number',
+  make: 'vehicle_make',
+  model: 'vehicle_model',
+};
+
 const ClientDetailsModal = ({ client, onClose }) => {
   const [tab,       setTab]       = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -130,6 +138,33 @@ const ClientDetailsModal = ({ client, onClose }) => {
   const coverItems  = Object.entries(client).filter(([k, v]) => k.startsWith('cover_')  && v && v !== 'No');
   const clauseItems = Object.entries(client).filter(([k, v]) => k.startsWith('clause_') && v && v !== 'No');
   const fiItems     = Object.entries(client).filter(([k, v]) => k.startsWith('fi_')     && v && v !== 'No');
+
+  // Parse insurer cover/clause responses stored as JSON strings
+  const coverResponses  = (() => { try { return JSON.parse(client.cover_responses  || '{}'); } catch { return {}; } })();
+  const clauseResponses = (() => { try { return JSON.parse(client.clause_responses || '{}'); } catch { return {}; } })();
+
+  // Dynamic product field lookup — resolves all product-specific fields for this client's product
+  const productKey    = Object.entries(PRODUCTS).find(([, v]) => v.label === client.product)?.[0];
+  const productFields = productKey ? (PRODUCTS[productKey].fields || []) : [];
+
+  const riskInfoFields  = productFields.filter(f => f.section === 'Risk Information');
+  const claimsHistFields = productFields.filter(f => f.section === 'Claims History');
+  const uwInfoFields    = productFields.filter(f => f.section === 'Underwriting Information');
+  const sumSubFields    = productFields.filter(f => f.section === 'Sum Insured' && f.name !== 'sum_insured' && f.type !== 'file');
+  const prodDocFields   = productFields.filter(f => f.section === 'Document Uploads' && f.type === 'file');
+  const extraDocCards   = prodDocFields.filter(df =>
+    client[df.name] && typeof client[df.name] === 'string' && client[df.name].startsWith('http')
+  );
+
+  // Gets display value for a product config field from the client object,
+  // using UW form name aliases where quotation and UW form use different names.
+  const getFieldValue = (field) => {
+    const alias = UW_FIELD_ALIASES[field.name];
+    const raw = (alias && client[alias] != null && client[alias] !== '') ? client[alias] : client[field.name];
+    if (raw === null || raw === undefined || raw === '' || raw === false) return null;
+    if (Array.isArray(raw)) return raw.filter(Boolean).join(', ');
+    return String(raw);
+  };
 
   const generatePdf = async () => {
     setExporting(true);
@@ -264,37 +299,41 @@ const ClientDetailsModal = ({ client, onClose }) => {
       ]);
 
       addSection('policy', 'PERIOD OF INSURANCE', [
-        ['Policy No',          client.policy_no],
-        ['Policy Type',        client.policy_type],
-        ['Coverage',           client.coverage],
-        ['Policy Period From', client.policy_period_from],
-        ['Policy Period To',   client.policy_period_to],
-        ['Policy Days',        client.policy_days],
-        ['O/S Days',           client.os_days],
-        ['Credit Period',      client.credit_period],
+        ['Policy No',             client.policy_no],
+        ['Policy Type',           client.policy_type],
+        ['Coverage',              client.coverage],
+        ['Policy Period From',    client.policy_period_from],
+        ['Policy Period To',      client.policy_period_to],
+        ['Policy Days',           client.policy_days],
+        ['O/S Days',              client.os_days],
+        ['Credit Period',         client.credit_period],
+        ['Quote Validity (days)', client.validity_days],
       ]);
+
+      // Dynamic risk sections using PRODUCTS config
+      const getRiskVal = (field) => {
+        const alias = UW_FIELD_ALIASES[field.name];
+        const raw = (alias && client[alias] != null && client[alias] !== '') ? client[alias] : client[field.name];
+        if (!raw && raw !== 0) return null;
+        if (Array.isArray(raw)) return raw.filter(Boolean).join(', ');
+        return String(raw);
+      };
 
       if (fiItems.length) addSection('risk', 'FINANCIAL INTEREST', fiItems.map(([k,v]) => [fieldNameToLabel(k), String(v)]));
 
-      const riskRows = [
-        ['Vehicle Number', client.vehicle_number],
-        ['Make / Model',   (client.vehicle_make || client.vehicle_model) ? [client.vehicle_make, client.vehicle_model].filter(Boolean).join(' ') : null],
-        ['Engine No.',     client.engine_no],
-        ['Chassis No.',    client.chassis_no],
-        ['Body Type',      client.body_type],
-        ['Fuel Type',      client.fuel_type],
-        ['Vehicle Usage',  client.vehicle_usage],
-        ['Voyage From',    client.voyage_from],
-        ['Voyage To',      client.voyage_to],
-        ['Vessel Name',    client.vessel_name],
-        ['Cargo',          client.cargo_description],
-      ].filter(r => r[1]);
-      if (riskRows.length) addSection('risk', 'RISK INFORMATION', riskRows);
+      const pdfRiskRows = productFields.filter(f => f.section === 'Risk Information').map(f => [f.label, getRiskVal(f)]).filter(r => r[1]);
+      if (pdfRiskRows.length) addSection('risk', 'RISK INFORMATION', pdfRiskRows);
 
-      const claimsHistRows = Object.entries(client).filter(([k,v]) => k.startsWith('claims_hist_') && v).map(([k,v]) => [fieldNameToLabel(k.replace('claims_hist_','')), String(v)]);
-      if (claimsHistRows.length) addSection('risk', 'CLAIMS HISTORY', claimsHistRows);
+      const pdfClaimsRows = productFields.filter(f => f.section === 'Claims History').map(f => [f.label, getRiskVal(f)]).filter(r => r[1]);
+      if (pdfClaimsRows.length) addSection('risk', 'CLAIMS HISTORY', pdfClaimsRows);
 
-      addSection('coverage', 'SUM INSURED', [['Sum Insured', fmtLKR(client.sum_insured)]]);
+      const pdfUwRows = productFields.filter(f => f.section === 'Underwriting Information').map(f => [f.label, getRiskVal(f)]).filter(r => r[1]);
+      if (pdfUwRows.length) addSection('risk', 'UNDERWRITING INFORMATION', pdfUwRows);
+
+      // Sum Insured breakdown then total
+      const pdfSumSubRows = productFields.filter(f => f.section === 'Sum Insured' && f.name !== 'sum_insured' && f.type !== 'file').map(f => [f.label, getRiskVal(f) ? fmtLKR(getRiskVal(f)) : null]).filter(r => r[1] && r[1] !== '—');
+      if (pdfSumSubRows.length) addSection('coverage', 'SUM INSURED BREAKDOWN', pdfSumSubRows);
+      addSection('coverage', 'SUM INSURED', [['Sum Insured (Total)', fmtLKR(client.sum_insured)]]);
       if (coverItems.length)  addSection('coverage', 'COVERS REQUIRED',   coverItems.map(([k,v]) => [fieldNameToLabel(k), String(v)]));
       if (clauseItems.length) addSection('coverage', 'ADDITIONAL CLAUSES', clauseItems.map(([k,v]) => [fieldNameToLabel(k), String(v)]));
 
@@ -303,6 +342,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Basic Premium',   fmtLKR(client.basic_premium)],
         ['SRCC Premium',    fmtLKR(client.srcc_premium)],
         ['TC Premium',      fmtLKR(client.tc_premium)],
+        ['Other Premium',   fmtLKR(client.other_premium)],
         ['Net Premium',     fmtLKR(client.net_premium)],
         ['Stamp Duty',      fmtLKR(client.stamp_duty)],
         ['Admin Fees',      fmtLKR(client.admin_fees)],
@@ -364,8 +404,12 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Partial Payment Reasons', client.partial_payment_reasons],
       ]);
 
-      const uploadedDocs = docFields.filter(df => client[df.doc]);
-      if (uploadedDocs.length > 0) {
+      // Documents — product-specific docs first, then standard UW docs
+      const allPdfDocs = [
+        ...extraDocCards.map(df => ({ label: df.label, doc: df.name, text: null })),
+        ...docFields.filter(df => client[df.doc]),
+      ];
+      if (allPdfDocs.length > 0) {
         pdf.addPage(); drawHeader(); startSec('documents');
         const margL = 10, gap = 8, cols = 2;
         const colW = (pw - margL*2 - gap*(cols-1)) / cols;
@@ -380,12 +424,12 @@ const ClientDetailsModal = ({ client, onClose }) => {
         };
         addDocPageHdr('UPLOADED DOCUMENTS');
 
-        for (const df of uploadedDocs) {
+        for (const df of allPdfDocs) {
           if (docY + cellH > ph - 18) { pdf.addPage(); drawHeader(); docY = 28; docCol = 0; addDocPageHdr('UPLOADED DOCUMENTS (cont.)'); }
           const cx = margL + docCol*(colW+gap);
           pdf.setFontSize(8.5); pdf.setFont('helvetica','bold'); pdf.setTextColor(26,26,46);
           pdf.text(df.label, cx, docY+5);
-          const note = client[df.text];
+          const note = df.text ? client[df.text] : null;
           if (note) { pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(107,114,128); pdf.text(note, cx, docY+10, {maxWidth:colW}); }
           const imgY = docY + labelH;
           const url  = client[df.doc];
@@ -492,17 +536,18 @@ const ClientDetailsModal = ({ client, onClose }) => {
       case 2: /* Period of Insurance */
         return (
           <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={6} md={4}><Field label="Policy No"          value={client.policy_no} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Policy Type"        value={client.policy_type} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Coverage"           value={client.coverage} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Policy Period From" value={client.policy_period_from} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Policy Period To"   value={client.policy_period_to} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Policy Days"        value={client.policy_days} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="O/S Days"           value={client.os_days} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Credit Period"      value={client.credit_period} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Policy No"             value={client.policy_no} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Policy Type"           value={client.policy_type} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Coverage"              value={client.coverage} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Policy Period From"    value={client.policy_period_from} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Policy Period To"      value={client.policy_period_to} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Policy Days"           value={client.policy_days} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="O/S Days"              value={client.os_days} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Credit Period"         value={client.credit_period} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Quote Validity (days)" value={client.validity_days} /></Grid>
           </Grid>
         );
-      case 3: /* Risk — Financial Interest + Risk Info + Claims History + Underwriting */
+      case 3: /* Risk — Financial Interest + Product Risk Fields + Claims History + Underwriting Info */
         return (
           <Grid container spacing={2.5}>
             {fiItems.length > 0 && (
@@ -513,29 +558,37 @@ const ClientDetailsModal = ({ client, onClose }) => {
                 ))}
               </>
             )}
-            {(client.vehicle_number || client.engine_no || client.voyage_from || client.vessel_name) && (
+            {riskInfoFields.length > 0 && riskInfoFields.some(f => getFieldValue(f)) && (
               <>
                 <SubHeader title="Risk Information" />
-                {client.vehicle_number && <Grid item xs={12} sm={6} md={4}><Field label="Vehicle Number" value={client.vehicle_number} /></Grid>}
-                {(client.vehicle_make || client.vehicle_model) && <Grid item xs={12} sm={6} md={4}><Field label="Make / Model" value={[client.vehicle_make, client.vehicle_model].filter(Boolean).join(' ')} /></Grid>}
-                {client.engine_no     && <Grid item xs={12} sm={6} md={4}><Field label="Engine No."    value={client.engine_no} /></Grid>}
-                {client.chassis_no    && <Grid item xs={12} sm={6} md={4}><Field label="Chassis No."   value={client.chassis_no} /></Grid>}
-                {client.body_type     && <Grid item xs={12} sm={6} md={4}><Field label="Body Type"     value={client.body_type} /></Grid>}
-                {client.fuel_type     && <Grid item xs={12} sm={6} md={4}><Field label="Fuel Type"     value={client.fuel_type} /></Grid>}
-                {client.vehicle_usage && <Grid item xs={12} sm={6} md={4}><Field label="Vehicle Usage" value={client.vehicle_usage} /></Grid>}
-                {client.voyage_from   && <Grid item xs={12} sm={6} md={4}><Field label="Voyage From"   value={client.voyage_from} /></Grid>}
-                {client.voyage_to     && <Grid item xs={12} sm={6} md={4}><Field label="Voyage To"     value={client.voyage_to} /></Grid>}
-                {client.vessel_name   && <Grid item xs={12} sm={6} md={4}><Field label="Vessel Name"   value={client.vessel_name} /></Grid>}
-                {client.cargo_description && <Grid item xs={12} sm={6} md={4}><Field label="Cargo"     value={client.cargo_description} /></Grid>}
+                {riskInfoFields.map(f => {
+                  const v = getFieldValue(f);
+                  return v ? <Grid item xs={12} sm={6} md={4} key={f.name}><Field label={f.label} value={v} /></Grid> : null;
+                })}
               </>
             )}
-            {Object.entries(client).some(([k, v]) => k.startsWith('claims_hist_') && v) && (
+            {claimsHistFields.length > 0 && claimsHistFields.some(f => getFieldValue(f)) && (
               <>
                 <SubHeader title="Claims History" />
-                {Object.entries(client).filter(([k,v]) => k.startsWith('claims_hist_') && v).map(([k,v]) => (
-                  <Grid item xs={12} sm={6} md={4} key={k}><Field label={fieldNameToLabel(k.replace('claims_hist_',''))} value={String(v)} /></Grid>
-                ))}
+                {claimsHistFields.map(f => {
+                  const v = getFieldValue(f);
+                  return v ? <Grid item xs={12} sm={6} md={4} key={f.name}><Field label={f.label} value={v} /></Grid> : null;
+                })}
               </>
+            )}
+            {uwInfoFields.length > 0 && uwInfoFields.some(f => getFieldValue(f)) && (
+              <>
+                <SubHeader title="Underwriting Information" />
+                {uwInfoFields.map(f => {
+                  const v = getFieldValue(f);
+                  return v ? <Grid item xs={12} sm={6} md={4} key={f.name}><Field label={f.label} value={v} /></Grid> : null;
+                })}
+              </>
+            )}
+            {!fiItems.length && !riskInfoFields.some(f => getFieldValue(f)) && !claimsHistFields.some(f => getFieldValue(f)) && !uwInfoFields.some(f => getFieldValue(f)) && (
+              <Grid item xs={12}>
+                <Typography sx={{ color: '#9CA3AF', fontSize: 13 }}>No risk information recorded.</Typography>
+              </Grid>
             )}
           </Grid>
         );
@@ -543,9 +596,19 @@ const ClientDetailsModal = ({ client, onClose }) => {
         return (
           <Grid container spacing={2.5}>
             <SubHeader title="Sum Insured" />
+            {sumSubFields.map(f => {
+              const v = getFieldValue(f);
+              return v ? (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  <Field label={f.label} value={`LKR ${Number(v).toLocaleString()}`} />
+                </Grid>
+              ) : null;
+            })}
             <Grid item xs={12} sm={6} md={4}>
               <Box>
-                <Typography sx={{ fontSize:10.5, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:0.6, mb:0.3 }}>Sum Insured</Typography>
+                <Typography sx={{ fontSize:10.5, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:0.6, mb:0.3 }}>
+                  {sumSubFields.length > 0 ? 'Total Sum Insured' : 'Sum Insured'}
+                </Typography>
                 <Typography sx={{ fontSize:20, fontWeight:800, color:'#059669' }}>
                   {client.sum_insured ? `LKR ${Number(client.sum_insured).toLocaleString()}` : '—'}
                 </Typography>
@@ -554,17 +617,44 @@ const ClientDetailsModal = ({ client, onClose }) => {
             {coverItems.length > 0 && (
               <>
                 <SubHeader title="Covers Required" />
-                {coverItems.map(([k,v]) => (
-                  <Grid item xs={12} sm={6} md={4} key={k}><Field label={fieldNameToLabel(k)} value={String(v)} /></Grid>
-                ))}
+                {coverItems.map(([k, v]) => {
+                  const ir = coverResponses[k] || {};
+                  const irColor = ir.status === 'Accepted' ? '#10B981' : ir.status === 'Declined' ? '#EF4444' : '#F59E0B';
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={k}>
+                      <Field label={fieldNameToLabel(k)} value={String(v)} />
+                      {ir.status && (
+                        <Box sx={{ mt:0.5, px:1, py:0.3, borderRadius:'6px', bgcolor:`${irColor}14`, display:'inline-flex', alignItems:'center', gap:0.5, flexWrap:'wrap' }}>
+                          <Typography sx={{ fontSize:10.5, fontWeight:700, color:irColor }}>{ir.status}</Typography>
+                          {ir.premium ? <Typography sx={{ fontSize:10.5, color:irColor }}>· +LKR {ir.premium}</Typography> : null}
+                          {ir.notes   ? <Typography sx={{ fontSize:10.5, color:'#6B7280' }}>· {ir.notes}</Typography> : null}
+                        </Box>
+                      )}
+                    </Grid>
+                  );
+                })}
               </>
             )}
             {clauseItems.length > 0 && (
               <>
                 <SubHeader title="Additional Clauses" />
-                {clauseItems.map(([k,v]) => (
-                  <Grid item xs={12} sm={6} md={4} key={k}><Field label={fieldNameToLabel(k)} value={String(v)} /></Grid>
-                ))}
+                {clauseItems.map(([k, v]) => {
+                  const ir = clauseResponses[k] || {};
+                  const included = ir.status === 'Included';
+                  const declined = ir.status === 'Not Included' || ir.status === 'Declined';
+                  const irColor = included ? '#10B981' : declined ? '#EF4444' : null;
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={k}>
+                      <Field label={fieldNameToLabel(k)} value={String(v)} />
+                      {ir.status && (
+                        <Box sx={{ mt:0.5, px:1, py:0.3, borderRadius:'6px', bgcolor:`${irColor || '#F59E0B'}14`, display:'inline-flex', alignItems:'center', gap:0.5 }}>
+                          <Typography sx={{ fontSize:10.5, fontWeight:700, color:irColor || '#F59E0B' }}>{ir.status}</Typography>
+                          {ir.notes ? <Typography sx={{ fontSize:10.5, color:'#6B7280' }}>· {ir.notes}</Typography> : null}
+                        </Box>
+                      )}
+                    </Grid>
+                  );
+                })}
               </>
             )}
           </Grid>
@@ -578,6 +668,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
                 <FinancialRow label="Basic Premium"  value={client.basic_premium} />
                 <FinancialRow label="SRCC Premium"   value={client.srcc_premium} />
                 <FinancialRow label="TC Premium"     value={client.tc_premium} />
+                <FinancialRow label="Other Premium"  value={client.other_premium} />
                 <FinancialRow label="Net Premium"    value={client.net_premium} />
               </Box>
               <Box>
@@ -640,9 +731,20 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12}             ><Field label="Partial Payment Reasons"   value={client.partial_payment_reasons} /></Grid>
           </Grid>
         );
-      case 8: /* Documents */
+      case 8: /* Documents — quotation-form docs + standard UW docs */
         return (
           <Grid container spacing={1.5}>
+            {extraDocCards.length > 0 && (
+              <>
+                <SubHeader title="Quotation Form Documents" />
+                {extraDocCards.map(df => (
+                  <Grid item xs={12} sm={6} key={df.name}>
+                    <DocCard label={df.label} url={client[df.name]} />
+                  </Grid>
+                ))}
+              </>
+            )}
+            <SubHeader title="Underwriting Documents" />
             {docFields.map(df => (
               <Grid item xs={12} sm={6} key={df.doc}>
                 <DocCard label={df.label} url={client[df.doc]} description={client[df.text]} />

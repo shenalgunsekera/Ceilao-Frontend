@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../firebase';
-import { uploadToCloudinary, openFile } from '../cloudinary';
+import { uploadFile as uploadToCloudinary, openFile } from '../storage';
 import { PRODUCTS } from '../config/products';
 
 import Box from '@mui/material/Box';

@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../App';
-import { uploadToCloudinary } from '../cloudinary';
+import { uploadFile as uploadToCloudinary } from '../storage';
 import AddClientForm, { textFields as UW_FIELDS } from './AddClientForm';
 import ClientDetailsModal from './ClientDetailsModal';
 import Papa from 'papaparse';

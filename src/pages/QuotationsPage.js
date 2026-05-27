@@ -9,7 +9,7 @@ import { useAuth } from '../App';
 import { PRODUCTS as STATIC_PRODUCTS } from '../config/products';
 import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
-import { uploadToCloudinary, openFile } from '../cloudinary';
+import { uploadFile as uploadToCloudinary, openFile } from '../storage';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import Box from '@mui/material/Box';
