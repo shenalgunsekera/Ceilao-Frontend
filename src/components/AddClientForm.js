@@ -25,27 +25,22 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 
-/* ── Product key mapping (AddClientForm product label → PRODUCTS key) ─────── */
-const PRODUCT_KEY_MAP = {
-  'Comprehensive': 'motor', 'Third Party Fire and Theft': 'motor', 'Third Party': 'motor',
-  'Fire & Allied Perils': 'fire', 'Industrial All Risks': 'fire',
-  'Import Marine': 'marine', 'Export Marine': 'marine', 'Inland Transit': 'marine', 'Open Cover': 'marine',
-  'Contractors All Risks': 'car', 'Engineering All Risks': 'ear',
-  'Machinery Breakdown': 'ear', 'Boiler Explosion': 'ear', 'Electronic Equipment': 'ear',
-  'Public Liability': 'public_liability',
-  'Employers Liability': 'public_liability',
-  'Product Liability': 'product_liability',
-  'Professional Indemnity': 'public_liability',
-  'Directors & Officers': 'public_liability',
-  'Workmen Compensation': 'wci',
-  'Group Personal Accident': 'personal_accidents',
-  'Group Medical & Surgical': 'group_medical',
-  'Surgical & Hospitalisation': 'surgical',
-  'Fidelity Guarantee': 'fgt',
-  'Cyber Insurance': 'cyber',
-  'Travel Insurance': 'travel',
-  'Life / Endowment': 'life_endowment',
-  'Title Insurance': 'title_insurance',
+/* ── Derived from PRODUCTS config — always in sync ───────────────────────── */
+// label → product key  (e.g. 'Motor Insurance' → 'motor')
+const PRODUCT_KEY_MAP = Object.fromEntries(
+  Object.entries(PRODUCTS).map(([k, v]) => [v.label, k])
+);
+// product key → main class  (used to auto-fill the Main Class dropdown)
+const PRODUCT_MAIN_CLASS = {
+  motor: 'Motor',
+  fire: 'Fire',
+  marine: 'Marine',
+  car: 'Engineering', ear: 'Engineering', dtap: 'Engineering',
+  public_liability: 'Liability', product_liability: 'Liability',
+  personal_accidents: 'People', wci: 'People', group_medical: 'People',
+  surgical: 'People', life_endowment: 'People',
+  travel: 'Miscellaneous', fgt: 'Miscellaneous', cyber: 'Miscellaneous',
+  title_insurance: 'Miscellaneous',
 };
 
 /* ── Risk field sections to pull from product config ─────────────────────── */
@@ -70,19 +65,8 @@ const docFields = [
 /* ── Dropdowns ────────────────────────────────────────────────────────────── */
 const dropdowns = {
   main_class: ['Motor', 'Fire', 'Marine', 'Engineering', 'Liability', 'People', 'Miscellaneous'],
-  product: [
-    'Comprehensive', 'Third Party Fire and Theft', 'Third Party',
-    'Fire & Allied Perils', 'Industrial All Risks',
-    'Import Marine', 'Export Marine', 'Inland Transit', 'Open Cover',
-    'Machinery Breakdown', 'Boiler Explosion', 'Electronic Equipment',
-    'Contractors All Risks', 'Engineering All Risks',
-    'Public Liability', 'Employers Liability', 'Product Liability',
-    'Professional Indemnity', 'Directors & Officers',
-    'Workmen Compensation', 'Group Personal Accident',
-    'Group Medical & Surgical', 'Surgical & Hospitalisation',
-    'Fidelity Guarantee', 'Cyber Insurance', 'Travel Insurance',
-    'Life / Endowment', 'Title Insurance', 'Other',
-  ],
+  // Auto-generated from PRODUCTS config — if a product is added there, it appears here
+  product: Object.values(PRODUCTS).map(p => p.label),
   customer_type: ['Individual', 'Company'],
   insurance_provider: [
     'AIA Insurance', 'Allianz Insurance Lanka', 'Ceylinco General Insurance',
@@ -317,9 +301,20 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
 
   /* ── scalar fields state ─────────────────────────────────────────────── */
   const [fields, setFields] = useState(() => {
+    // Resolve product label: prefer stored label, fall back from product_key, else empty
+    const resolveProduct = (raw, key) => {
+      if (raw && PRODUCT_KEY_MAP[raw]) return raw;             // already a label
+      if (key  && PRODUCTS[key]) return PRODUCTS[key].label;  // translate from key
+      return '';
+    };
+
     const obj = {};
     textFields.forEach(f => {
       if (f.date) return;
+      if (f.name === 'product') {
+        obj.product = resolveProduct(initialData.product, initialData.product_key);
+        return;
+      }
       const raw = initialData[f.name];
       if (raw === undefined || raw === null || raw === '') { obj[f.name] = ''; return; }
       if (f.dropdown && dropdowns[f.name]) {
@@ -382,6 +377,14 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     const total = b + s + t;
     setFields(f => ({ ...f, commission_total: total > 0 ? String(total) : '' }));
   }, [fields.commission_basic, fields.commission_srcc, fields.commission_tc]);
+
+  /* ── auto-fill main_class when product changes ───────────────────────── */
+  useEffect(() => {
+    const key = PRODUCT_KEY_MAP[fields.product];
+    if (key && PRODUCT_MAIN_CLASS[key]) {
+      setFields(f => ({ ...f, main_class: PRODUCT_MAIN_CLASS[key] }));
+    }
+  }, [fields.product]);
 
   /* ── product-specific risk fields ────────────────────────────────────── */
   const productKey = useMemo(() => PRODUCT_KEY_MAP[fields.product] || null, [fields.product]);
