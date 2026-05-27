@@ -10,6 +10,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'SRCC (LKR)', 'TC (LKR)', 'Type of Cover', 'Windscreen Cover', 'PA Cover', 'Natural Perils', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -68,6 +69,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'SRCC (LKR)', 'Sum Insured (LKR)', 'EML (LKR)', 'PML (LKR)', 'Terrorism Cover', 'Flood Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -174,6 +176,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'ICC Clause', 'War & Strikes', 'SRCC Cover', 'Theft Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -283,6 +286,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Accidental Death', 'PTD', 'TTD', 'Medical Expenses', 'Hospital Cash', 'Worldwide Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -361,6 +365,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Workmen Compensation', 'Common Law', 'Terrorism Cover', 'SRCC Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -448,6 +453,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Limit Any One Accident', 'Aggregate Limit', 'Products Liability', 'Pollution Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -538,6 +544,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Limit per Employee', 'Aggregate Limit', 'Computer Fraud', 'Social Engineering', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -622,6 +629,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Emergency Medical', 'Trip Cancellation', 'Baggage Cover', 'Personal Accident', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -715,6 +723,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Defective Title', 'Forgery & Fraud', 'Undisclosed Encumbrances', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -802,6 +811,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Limit Any One Occurrence', 'Aggregate Limit', 'Bodily Injury', 'Property Damage', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -890,6 +900,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Cyber Liability', 'Data Breach', 'Ransomware', 'Business Interruption', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -985,6 +996,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Hospitalization', 'Surgical', 'ICU', 'Critical Illness', 'Maternity', 'Worldwide Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -1079,6 +1091,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Sum Assured', 'Policy Term', 'Death Benefit', 'Critical Illness', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -1181,6 +1194,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Initial Sum Assured', 'Death Benefit', 'Disability Benefit', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -1289,6 +1303,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Accidental Damage', 'E&M Breakdown', 'Fire & Explosion', 'Burglary & Theft', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -1385,6 +1400,7 @@ export const PRODUCTS = {
     comparisonRows: ['Annual Premium (LKR)', 'Basic Premium (LKR)', 'Material Damage', 'Third Party Liability', 'Terrorism Cover', 'SRCC Cover', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
@@ -1523,6 +1539,7 @@ export const PRODUCTS = {
     comparisonRows: ['Per-Plan Premiums (dynamic)', 'Grand Total (LKR)', 'Validity (days)', 'Special Conditions'],
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
+      { name: 'manager',    label: 'Manager',          section: 'Introducer' },
       { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },

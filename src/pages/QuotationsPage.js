@@ -2008,29 +2008,43 @@ const QuotationsPage = () => {
         net_premium:        String(response.basic_premium || response.premium || ''),
         total_invoice:      String(response.premium       || ''),
         // Commission from insurer
-        commission_type:    response.commission_type || '',
-        // Sum insured — tries all common field names across 16 products
+        commission_type:    response.commission_type       || '',
+        commission_basic:   String(response.commission_basic || ''),
+        commission_srcc:    String(response.commission_srcc  || ''),
+        commission_tc:      String(response.commission_tc    || ''),
+        // Sum insured — tries all common field names across 17 products
         sum_insured:        String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || fd.cover_limit || fd.hospitalization_cover || ''),
         // Client details
         client_name:        fd.proposer_name || fd.company_name || fd.full_name || '',
         customer_type:      fd.customer_type === 'Corporate' ? 'Company' : (fd.customer_type || ''),
         introducer_code:    fd.introducer    || '',
+        manager:            fd.manager       || '',
         email:              fd.email         || '',
         mobile_no:          fd.mobile        || '',
         telephone:          fd.telephone     || '',
         contact_person:     fd.contact_person || '',
-        // Proofs — map to correct UW form field names
-        nic_proof:            fd.nic_no    || '',
+        // Proofs
+        nic_proof:             fd.nic_no      || '',
         business_registration: fd.business_reg || '',
-        svat_proof:            fd.vat_no   || '',
+        svat_proof:            fd.vat_no      || '',
         // Address
-        street1:            fd.address || fd.property_address || fd.address_of_risk || '',
+        street1:            fd.address || fd.property_address || fd.address_of_risk || fd.premises_address || '',
         city:               fd.city    || fd.district || '',
+        district:           fd.district || '',
         // Policy period
-        policy_period_from: fd.period_from  || fd.departure_date || fd.loan_start || '',
-        policy_period_to:   fd.period_to    || fd.return_date    || fd.loan_end   || '',
-        // Vehicle (motor only)
-        vehicle_number:     fd.vehicle_no || '',
+        policy_period_from: fd.period_from  || fd.departure_date || fd.loan_start || fd.commencement_date || '',
+        policy_period_to:   fd.period_to    || fd.return_date    || fd.loan_end   || fd.expiry_date       || '',
+        // Vehicle (motor)
+        vehicle_number:     fd.vehicle_no   || '',
+        // Extra risk details
+        make:               fd.make         || '',
+        model:              fd.model        || '',
+        engine_no:          fd.engine_no    || '',
+        chassis_no:         fd.chassis_no   || '',
+        year_of_manufacture: fd.year_of_manufacture || '',
+        vehicle_category:   fd.vehicle_category    || '',
+        // Special conditions
+        notes:              response.special_conditions || '',
       };
       window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
     }, 1500);

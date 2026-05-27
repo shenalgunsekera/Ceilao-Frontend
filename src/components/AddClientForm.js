@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadToCloudinary } from '../cloudinary';
 import { useAuth } from '../App';
+import { PRODUCTS } from '../config/products';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -17,13 +18,44 @@ import FormHelperText from '@mui/material/FormHelperText';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
 import Link from '@mui/material/Link';
+import Chip from '@mui/material/Chip';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 
-/* ── field definitions ────────────────────────────────────────────────── */
+/* ── Product key mapping (AddClientForm product label → PRODUCTS key) ─────── */
+const PRODUCT_KEY_MAP = {
+  'Comprehensive': 'motor', 'Third Party Fire and Theft': 'motor', 'Third Party': 'motor',
+  'Fire & Allied Perils': 'fire', 'Industrial All Risks': 'fire',
+  'Import Marine': 'marine', 'Export Marine': 'marine', 'Inland Transit': 'marine', 'Open Cover': 'marine',
+  'Contractors All Risks': 'car', 'Engineering All Risks': 'ear',
+  'Machinery Breakdown': 'ear', 'Boiler Explosion': 'ear', 'Electronic Equipment': 'ear',
+  'Public Liability': 'public_liability',
+  'Employers Liability': 'public_liability',
+  'Product Liability': 'product_liability',
+  'Professional Indemnity': 'public_liability',
+  'Directors & Officers': 'public_liability',
+  'Workmen Compensation': 'wci',
+  'Group Personal Accident': 'personal_accidents',
+  'Group Medical & Surgical': 'group_medical',
+  'Surgical & Hospitalisation': 'surgical',
+  'Fidelity Guarantee': 'fgt',
+  'Cyber Insurance': 'cyber',
+  'Travel Insurance': 'travel',
+  'Life / Endowment': 'life_endowment',
+  'Title Insurance': 'title_insurance',
+};
+
+/* ── Risk field sections to pull from product config ─────────────────────── */
+const RISK_SECTIONS = [
+  'Risk Information', 'Underwriting Information', 'Sum Insured', 'Vehicle Details',
+  'Voyage Details', 'Marine Details', 'Engineering Details', 'Loan Details',
+  'Property Details', 'Liability Details',
+];
+
+/* ── Static document fields ──────────────────────────────────────────────── */
 const docFields = [
   { label: 'Policyholder',     doc: 'policyholder_doc_url',     text: 'policyholder_text' },
   { label: 'Proposal Form',    doc: 'proposal_form_doc_url',    text: 'proposal_form_text' },
@@ -35,113 +67,174 @@ const docFields = [
   { label: 'NIC / BR',         doc: 'nic_br_doc_url',           text: 'nic_br_text' },
 ];
 
+/* ── Dropdowns ────────────────────────────────────────────────────────────── */
 const dropdowns = {
-  main_class: ['Motor','Fire','Marine','Miscellaneous'],
+  main_class: ['Motor', 'Fire', 'Marine', 'Engineering', 'Liability', 'People', 'Miscellaneous'],
   product: [
-    // Motor
-    'Comprehensive','Third Party Fire and Theft','Third Party',
-    // Fire / Property
-    'Fire & Allied Perils','Industrial All Risks',
-    // Marine
-    'Import Marine','Export Marine','Inland Transit','Open Cover',
-    // Engineering
-    'Machinery Breakdown','Boiler Explosion','Electronic Equipment',
-    'Contractors All Risks','Engineering All Risks',
-    // Liability
-    'Public Liability','Employers Liability','Product Liability',
-    'Professional Indemnity','Directors & Officers',
-    // People
-    'Workmen Compensation','Group Personal Accident',
-    'Group Medical & Surgical','Surgical & Hospitalisation',
-    // Misc
-    'Fidelity Guarantee','Cyber Insurance','Travel Insurance',
-    'Life / Endowment','Title Insurance','Other',
+    'Comprehensive', 'Third Party Fire and Theft', 'Third Party',
+    'Fire & Allied Perils', 'Industrial All Risks',
+    'Import Marine', 'Export Marine', 'Inland Transit', 'Open Cover',
+    'Machinery Breakdown', 'Boiler Explosion', 'Electronic Equipment',
+    'Contractors All Risks', 'Engineering All Risks',
+    'Public Liability', 'Employers Liability', 'Product Liability',
+    'Professional Indemnity', 'Directors & Officers',
+    'Workmen Compensation', 'Group Personal Accident',
+    'Group Medical & Surgical', 'Surgical & Hospitalisation',
+    'Fidelity Guarantee', 'Cyber Insurance', 'Travel Insurance',
+    'Life / Endowment', 'Title Insurance', 'Other',
   ],
-  customer_type:      ['Individual','Company'],
+  customer_type: ['Individual', 'Company'],
   insurance_provider: [
-    'AIA Insurance','Allianz Insurance Lanka','Ceylinco General Insurance',
-    'Ceylinco Life Insurance','Fairfirst Insurance','HNB General Insurance',
-    'Janashakthi General Insurance','Janashakthi Life Insurance',
-    'LOLC General Insurance','LOLC Life Assurance',
-    'National Insurance Trust Fund','Orient Insurance',
-    'Sanasa Life Assurance','Softlogic Life Insurance',
-    'Sri Lanka Insurance Corporation','Sunshine Insurance',
-    'Union Assurance','Other',
+    'AIA Insurance', 'Allianz Insurance Lanka', 'Ceylinco General Insurance',
+    'Ceylinco Life Insurance', 'Fairfirst Insurance', 'HNB General Insurance',
+    'Janashakthi General Insurance', 'Janashakthi Life Insurance',
+    'LOLC General Insurance', 'LOLC Life Assurance',
+    'National Insurance Trust Fund', 'Orient Insurance',
+    'Sanasa Life Assurance', 'Softlogic Life Insurance',
+    'Sri Lanka Insurance Corporation', 'Sunshine Insurance',
+    'Union Assurance', 'Other',
   ],
-  branch:          ['Colombo','Kandy','Galle','Kurunegala','Jaffna','Negombo','Matara','Other'],
-  commission_type: ['Flat','Percentage','Other'],
+  branch: ['Colombo', 'Kandy', 'Galle', 'Kurunegala', 'Jaffna', 'Negombo', 'Matara', 'Other'],
+  commission_type: ['Flat', 'Percentage', 'Other'],
+  payment_status: ['Unpaid', 'Partial', 'Paid', 'Overdue'],
+  payment_method: ['Cash', 'Cheque', 'Bank Transfer', 'Online', 'Other'],
+  commission_paid_method: ['Cash', 'Cheque', 'Bank Transfer', 'Online', 'Other'],
+  claim_paid: ['Yes', 'No', 'Partial', 'Repudiated'],
 };
 
+/* ── Field definitions ─────────────────────────────────────────────────────
+   Exported so TableSection can use it for CSV template generation           */
 export const textFields = [
-  { label:'Ceilao IB File No.', name:'ceilao_ib_file_no',    section:'General Info' },
-  { label:'Vehicle Number',      name:'vehicle_number',        section:'General Info' },
-  { label:'Main Class',          name:'main_class',            section:'General Info', dropdown:true },
-  { label:'Insurer',             name:'insurer',               section:'General Info' },
-  { label:'Introducer Code',     name:'introducer_code',       section:'General Info' },
-  { label:'Customer Type',       name:'customer_type',         section:'General Info', dropdown:true, required:true },
-  { label:'Product',             name:'product',               section:'General Info', dropdown:true, required:true },
-  { label:'Policy',              name:'policy_',               section:'General Info' },
-  { label:'Insurance Provider',  name:'insurance_provider',    section:'General Info', dropdown:true, required:true },
-  { label:'Branch',              name:'branch',                section:'General Info', dropdown:true },
-  { label:'Client Name',         name:'client_name',           section:'General Info', required:true },
-  { label:'Street 1',            name:'street1',               section:'Address' },
-  { label:'Street 2',            name:'street2',               section:'Address' },
-  { label:'City',                name:'city',                  section:'Address' },
-  { label:'District',            name:'district',              section:'Address' },
-  { label:'Province',            name:'province',              section:'Address' },
-  { label:'Telephone',           name:'telephone',             section:'Contact' },
-  { label:'Mobile No',           name:'mobile_no',             section:'Contact',  required:true },
-  { label:'Contact Person',      name:'contact_person',        section:'Contact' },
-  { label:'Email',               name:'email',                 section:'Contact' },
-  { label:'Social Media',        name:'social_media',          section:'Contact' },
-  { label:'NIC Proof',           name:'nic_proof',             section:'Proofs' },
-  { label:'DOB Proof',           name:'dob_proof',             section:'Proofs' },
-  { label:'Business Registration',name:'business_registration',section:'Proofs' },
-  { label:'SVAT Proof',          name:'svat_proof',            section:'Proofs' },
-  { label:'VAT Proof',           name:'vat_proof',             section:'Proofs' },
-  { label:'Policy Type',         name:'policy_type',           section:'Policy Details' },
-  { label:'Policy No',           name:'policy_no',             section:'Policy Details' },
-  { label:'Policy Period From',  name:'policy_period_from',    section:'Policy Details', date:true },
-  { label:'Policy Period To',    name:'policy_period_to',      section:'Policy Details', date:true },
-  { label:'Coverage',            name:'coverage',              section:'Policy Details' },
-  { label:'Sum Insured',         name:'sum_insured',           section:'Financials', type:'number' },
-  { label:'Basic Premium',       name:'basic_premium',         section:'Financials', type:'number' },
-  { label:'SRCC Premium',        name:'srcc_premium',          section:'Financials', type:'number' },
-  { label:'TC Premium',          name:'tc_premium',            section:'Financials', type:'number' },
-  { label:'Net Premium',         name:'net_premium',           section:'Financials', type:'number' },
-  { label:'Stamp Duty',          name:'stamp_duty',            section:'Financials', type:'number' },
-  { label:'Admin Fees',          name:'admin_fees',            section:'Financials', type:'number' },
-  { label:'Road Safety Fee',     name:'road_safety_fee',       section:'Financials', type:'number' },
-  { label:'Policy Fee',          name:'policy_fee',            section:'Financials', type:'number' },
-  { label:'VAT Fee',             name:'vat_fee',               section:'Financials', type:'number' },
-  { label:'Total Invoice',       name:'total_invoice',         section:'Financials', type:'number' },
-  { label:'Commission Type',     name:'commission_type',       section:'Commission', dropdown:true },
-  { label:'Commission Basic',    name:'commission_basic',      section:'Commission', type:'number' },
-  { label:'Commission SRCC',     name:'commission_srcc',       section:'Commission', type:'number' },
-  { label:'Commission TC',       name:'commission_tc',         section:'Commission', type:'number' },
-  { label:'Sales Rep ID',        name:'sales_rep_id',          section:'Other' },
-  { label:'Policies',            name:'policies',              section:'Other',     type:'number' },
-  { label:'Date Added',          name:'date_added',            section:'Other',     date:true },
+  // Reference & Contacts
+  { label: 'Ceilao IB File No.', name: 'ceilao_ib_file_no', section: 'Reference' },
+  { label: 'Manager',            name: 'manager',            section: 'Reference' },
+  { label: 'Introducer Code',    name: 'introducer_code',    section: 'Reference' },
+  // General Info
+  { label: 'Main Class',         name: 'main_class',         section: 'General Info', dropdown: true },
+  { label: 'Product',            name: 'product',            section: 'General Info', dropdown: true, required: true },
+  { label: 'Customer Type',      name: 'customer_type',      section: 'General Info', dropdown: true, required: true },
+  { label: 'Insurance Provider', name: 'insurance_provider', section: 'General Info', dropdown: true, required: true },
+  { label: 'Insurer',            name: 'insurer',            section: 'General Info' },
+  { label: 'Branch',             name: 'branch',             section: 'General Info', dropdown: true },
+  // Client Details
+  { label: 'Client Name',        name: 'client_name',        section: 'Client Details', required: true },
+  { label: 'NIC / Passport No.', name: 'nic_proof',          section: 'Client Details' },
+  { label: 'Business Registration', name: 'business_registration', section: 'Client Details' },
+  { label: 'SVAT / VAT No.',     name: 'svat_proof',         section: 'Client Details' },
+  { label: 'Street 1',           name: 'street1',            section: 'Client Details' },
+  { label: 'Street 2',           name: 'street2',            section: 'Client Details' },
+  { label: 'City',               name: 'city',               section: 'Client Details' },
+  { label: 'District',           name: 'district',           section: 'Client Details' },
+  { label: 'Province',           name: 'province',           section: 'Client Details' },
+  { label: 'Telephone',          name: 'telephone',          section: 'Client Details' },
+  { label: 'Mobile No',          name: 'mobile_no',          section: 'Client Details', required: true },
+  { label: 'Contact Person',     name: 'contact_person',     section: 'Client Details' },
+  { label: 'Email',              name: 'email',              section: 'Client Details' },
+  { label: 'Social Media',       name: 'social_media',       section: 'Client Details' },
+  // Policy Details
+  { label: 'Policy No',          name: 'policy_no',          section: 'Policy Details' },
+  { label: 'Policy Type',        name: 'policy_type',        section: 'Policy Details' },
+  { label: 'Coverage',           name: 'coverage',           section: 'Policy Details' },
+  { label: 'Policy Period From', name: 'policy_period_from', section: 'Policy Details', date: true },
+  { label: 'Policy Period To',   name: 'policy_period_to',   section: 'Policy Details', date: true },
+  { label: 'Policy Days',        name: 'policy_days',        section: 'Policy Details', type: 'number', readOnly: true },
+  { label: 'Year',               name: 'policy_year',        section: 'Policy Details', readOnly: true },
+  { label: 'Month',              name: 'policy_month',       section: 'Policy Details', readOnly: true },
+  { label: 'O/S Days',           name: 'os_days',            section: 'Policy Details', type: 'number' },
+  { label: 'Credit Period (days)', name: 'credit_period',    section: 'Policy Details', type: 'number' },
+  // Vehicle (motor only — shown conditionally)
+  { label: 'Vehicle Number',     name: 'vehicle_number',     section: 'Risk Information', motor: true },
+  // Sum Insured & Premium
+  { label: 'Sum Insured',        name: 'sum_insured',        section: 'Premium', type: 'number' },
+  { label: 'Basic Premium',      name: 'basic_premium',      section: 'Premium', type: 'number' },
+  { label: 'SRCC Premium',       name: 'srcc_premium',       section: 'Premium', type: 'number' },
+  { label: 'TC Premium',         name: 'tc_premium',         section: 'Premium', type: 'number' },
+  { label: 'Admin Fees',         name: 'admin_fees',         section: 'Premium', type: 'number' },
+  { label: 'Road Safety Fee',    name: 'road_safety_fee',    section: 'Premium', type: 'number' },
+  { label: 'Policy Fee',         name: 'policy_fee',         section: 'Premium', type: 'number' },
+  { label: 'Stamp Duty',         name: 'stamp_duty',         section: 'Premium', type: 'number' },
+  { label: 'VAT',                name: 'vat_fee',            section: 'Premium', type: 'number' },
+  { label: 'Net Premium (excl. taxes)', name: 'net_premium', section: 'Premium', type: 'number' },
+  { label: 'Total Invoice (incl. taxes)', name: 'total_invoice', section: 'Premium', type: 'number' },
+  // Payment
+  { label: 'Payment Status',     name: 'payment_status',     section: 'Payment', dropdown: true },
+  { label: 'Amount Received',    name: 'amount_received',    section: 'Payment', type: 'number' },
+  { label: 'Payment Date',       name: 'payment_date',       section: 'Payment', date: true },
+  { label: 'Payment Method',     name: 'payment_method',     section: 'Payment', dropdown: true },
+  { label: 'Cheque / Slip No.',  name: 'cheque_slip_no',     section: 'Payment' },
+  { label: 'Receipt No.',        name: 'receipt_no',         section: 'Payment' },
+  // Commission
+  { label: 'Commission Type',    name: 'commission_type',    section: 'Commission', dropdown: true },
+  { label: 'Commission %',       name: 'commission_pct',     section: 'Commission', type: 'number' },
+  { label: 'Commission Basic',   name: 'commission_basic',   section: 'Commission', type: 'number' },
+  { label: 'Commission SRCC',    name: 'commission_srcc',    section: 'Commission', type: 'number' },
+  { label: 'Commission TC',      name: 'commission_tc',      section: 'Commission', type: 'number' },
+  { label: 'Total Commission',   name: 'commission_total',   section: 'Commission', type: 'number', readOnly: true },
+  { label: 'Commission Method',  name: 'commission_paid_method', section: 'Commission', dropdown: true },
+  { label: 'Commission Receive Date', name: 'commission_receive_date', section: 'Commission', date: true },
+  { label: 'Commission Amount Paid',  name: 'commission_amount_paid',  section: 'Commission', type: 'number' },
+  { label: 'Commission VAT',     name: 'commission_vat',     section: 'Commission', type: 'number' },
+  // Claims
+  { label: 'Claim Paid?',        name: 'claim_paid',         section: 'Claims', dropdown: true },
+  { label: 'Date of Claim',      name: 'claim_date',         section: 'Claims', date: true },
+  { label: 'Claim Amount (LKR)', name: 'claim_amount',       section: 'Claims', type: 'number' },
+  { label: 'Settled Amount (LKR)', name: 'claim_settled',    section: 'Claims', type: 'number' },
+  { label: 'Repudiation Reasons', name: 'repudiation_reasons', section: 'Claims' },
+  { label: 'Partial Payment Reasons', name: 'partial_payment_reasons', section: 'Claims' },
+  // Other
+  { label: 'Birthday Policy',    name: 'birthday_policy',    section: 'Other', date: true },
+  { label: 'Sales Rep ID',       name: 'sales_rep_id',       section: 'Other' },
+  { label: 'Policies (count)',   name: 'policies',           section: 'Other', type: 'number' },
+  { label: 'Date Added',         name: 'date_added',         section: 'Other', date: true },
+  { label: 'Notes',              name: 'notes',              section: 'Other' },
 ];
 
-const sections = ['General Info','Address','Contact','Proofs','Policy Details','Financials','Commission','Other'];
-
-const sectionColors = {
-  'General Info':'#FF5A5A', Address:'#FF8B5A', Contact:'#FFA95A', Proofs:'#FFD45A',
-  'Policy Details':'#10B981', Financials:'#6366f1', Commission:'#8b5cf6', Other:'#6B7280',
+const SECTION_COLORS = {
+  Reference:        '#FF5A5A',
+  'General Info':   '#FF8B5A',
+  'Client Details': '#FFA95A',
+  'Policy Details': '#10B981',
+  'Risk Information': '#0891b2',
+  Premium:          '#6366f1',
+  Payment:          '#8b5cf6',
+  Commission:       '#ec4899',
+  Claims:           '#ef4444',
+  Other:            '#6B7280',
 };
 
-/* ── file upload box ──────────────────────────────────────────────────── */
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+function calcPolicyDays(from, to) {
+  if (!from || !to) return '';
+  const a = new Date(from instanceof Date ? from : from);
+  const b = new Date(to   instanceof Date ? to   : to);
+  if (isNaN(a) || isNaN(b)) return '';
+  const diff = Math.round((b - a) / (1000 * 60 * 60 * 24));
+  return diff >= 0 ? String(diff) : '';
+}
+
+function calcOsDays(from) {
+  if (!from) return '';
+  const a = new Date(from instanceof Date ? from : from);
+  if (isNaN(a)) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - a) / (1000 * 60 * 60 * 24));
+  return diff >= 0 ? String(diff) : '';
+}
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function fmtNum(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  const clean = String(v).replace(/,/g, '');
+  const n = Number(clean);
+  return isNaN(n) ? clean : n.toLocaleString('en-US');
+}
+
+/* ── sub-components ──────────────────────────────────────────────────────── */
 function DocUploadBox({ label, fieldName, existing, onFile, progress, uploaded }) {
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState('');
-
-  const handleFile = (file) => {
-    if (!file) return;
-    setFileName(file.name);
-    onFile(file);
-  };
-
+  const handleFile = (file) => { if (!file) return; setFileName(file.name); onFile(file); };
   return (
     <Box>
       <Box
@@ -151,9 +244,7 @@ function DocUploadBox({ label, fieldName, existing, onFile, progress, uploaded }
         onClick={() => document.getElementById(`file-${fieldName}`).click()}
         sx={{
           border: `2px dashed ${dragging ? '#FF5A5A' : uploaded ? '#10B981' : 'rgba(255,139,90,0.35)'}`,
-          borderRadius: '12px',
-          p: 1.5,
-          cursor: 'pointer',
+          borderRadius: '12px', p: 1.5, cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 1,
           bgcolor: dragging ? 'rgba(255,90,90,0.04)' : uploaded ? 'rgba(16,185,129,0.04)' : '#FAFAFA',
           transition: 'all 0.2s ease',
@@ -162,16 +253,14 @@ function DocUploadBox({ label, fieldName, existing, onFile, progress, uploaded }
       >
         {uploaded
           ? <CheckCircleOutlinedIcon sx={{ color: '#10B981', fontSize: 20, flexShrink: 0 }} />
-          : <CloudUploadOutlinedIcon sx={{ color: '#FF8B5A', fontSize: 20, flexShrink: 0 }} />
-        }
+          : <CloudUploadOutlinedIcon sx={{ color: '#FF8B5A', fontSize: 20, flexShrink: 0 }} />}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#374151', lineHeight: 1.2 }}>{label}</Typography>
           {fileName
             ? <Typography sx={{ fontSize: 10.5, color: '#10B981', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{fileName}</Typography>
             : existing
               ? <Typography sx={{ fontSize: 10.5, color: '#9CA3AF' }}>Current file saved — drop to replace</Typography>
-              : <Typography sx={{ fontSize: 10.5, color: '#9CA3AF' }}>Click or drag to upload (PDF/image)</Typography>
-          }
+              : <Typography sx={{ fontSize: 10.5, color: '#9CA3AF' }}>Click or drag to upload (PDF/image)</Typography>}
         </Box>
         {existing && !fileName && (
           <Link href={existing} target="_blank" rel="noopener noreferrer"
@@ -182,29 +271,21 @@ function DocUploadBox({ label, fieldName, existing, onFile, progress, uploaded }
         )}
       </Box>
       {progress !== null && progress < 100 && (
-        <LinearProgress
-          variant="determinate" value={progress}
+        <LinearProgress variant="determinate" value={progress}
           sx={{ mt: 0.5, borderRadius: '2px', height: 3,
-                '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)' } }}
-        />
+                '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)' } }} />
       )}
-      <input
-        type="file" id={`file-${fieldName}`} accept="application/pdf,image/*"
-        style={{ display: 'none' }}
-        onChange={e => handleFile(e.target.files[0])}
-      />
+      <input type="file" id={`file-${fieldName}`} accept="application/pdf,image/*"
+        style={{ display: 'none' }} onChange={e => handleFile(e.target.files[0])} />
     </Box>
   );
 }
 
-/* ── section header ───────────────────────────────────────────────────── */
 function SectionHeader({ title }) {
+  const color = SECTION_COLORS[title] || '#FF5A5A';
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, mt: 0.5 }}>
-      <Box sx={{
-        width: 4, height: 20, borderRadius: '2px',
-        background: `linear-gradient(180deg,${sectionColors[title] || '#FF5A5A'},rgba(0,0,0,0))`,
-      }} />
+      <Box sx={{ width: 4, height: 20, borderRadius: '2px', background: `linear-gradient(180deg,${color},rgba(0,0,0,0))` }} />
       <Typography sx={{ fontWeight: 700, fontSize: 13, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6 }}>
         {title}
       </Typography>
@@ -213,43 +294,36 @@ function SectionHeader({ title }) {
   );
 }
 
-/* ── NumericField — formats numbers with commas while typing ─────────── */
-function NumericField({ value, onChange, ...props }) {
-  const fmt = (v) => {
-    if (v === '' || v === null || v === undefined) return '';
-    const clean = String(v).replace(/,/g, '');
-    const n = Number(clean);
-    return isNaN(n) ? clean : n.toLocaleString('en-US');
-  };
+function NumericField({ value, onChange, readOnly, ...props }) {
   const handleChange = (e) => {
     const raw = e.target.value.replace(/,/g, '');
-    if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
-      onChange({ ...e, target: { ...e.target, value: raw } });
-    }
+    if (raw === '' || /^-?\d*\.?\d*$/.test(raw)) onChange({ ...e, target: { ...e.target, value: raw } });
   };
   return (
     <TextField {...props}
-      value={fmt(value)}
-      onChange={handleChange}
+      value={fmtNum(value)}
+      onChange={readOnly ? undefined : handleChange}
+      InputProps={{ readOnly: !!readOnly, ...(props.InputProps || {}) }}
       inputProps={{ inputMode: 'numeric', ...(props.inputProps || {}) }}
+      sx={{ ...props.sx, ...(readOnly ? { '& .MuiOutlinedInput-root': { bgcolor: 'rgba(0,0,0,0.03)' } } : {}) }}
     />
   );
 }
 
-/* ── main form ────────────────────────────────────────────────────────── */
+/* ══════════════════════════════ MAIN FORM ═══════════════════════════════ */
 const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }) => {
   const { user, userProfile } = useAuth();
   const isPrivileged = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+
+  /* ── scalar fields state ─────────────────────────────────────────────── */
   const [fields, setFields] = useState(() => {
     const obj = {};
     textFields.forEach(f => {
-      if (f.date) return; // date fields are handled by the `dates` state, not `fields`
+      if (f.date) return;
       const raw = initialData[f.name];
-      if (raw === undefined || raw === null || raw === '') {
-        obj[f.name] = '';
-      } else if (f.dropdown && dropdowns[f.name]) {
-        obj[f.name] = dropdowns[f.name].includes(String(raw))
-          ? String(raw)
+      if (raw === undefined || raw === null || raw === '') { obj[f.name] = ''; return; }
+      if (f.dropdown && dropdowns[f.name]) {
+        obj[f.name] = dropdowns[f.name].includes(String(raw)) ? String(raw)
           : (dropdowns[f.name].includes('Other') ? 'Other' : '');
       } else {
         obj[f.name] = String(raw);
@@ -258,16 +332,20 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     docFields.forEach(f => { obj[f.text] = initialData[f.text] || ''; });
     return obj;
   });
-  const [dates, setDates]   = useState({
-    policy_period_from: initialData.policy_period_from ? new Date(initialData.policy_period_from) : null,
-    policy_period_to:   initialData.policy_period_to   ? new Date(initialData.policy_period_to)   : null,
-    // date_added maps to created_at — pre-populate from existing record on edit
-    date_added: initialData.created_at?.toDate
+
+  /* ── date fields state ────────────────────────────────────────────────── */
+  const [dates, setDates] = useState({
+    policy_period_from:      initialData.policy_period_from ? new Date(initialData.policy_period_from) : null,
+    policy_period_to:        initialData.policy_period_to   ? new Date(initialData.policy_period_to)   : null,
+    payment_date:            initialData.payment_date        ? new Date(initialData.payment_date)        : null,
+    commission_receive_date: initialData.commission_receive_date ? new Date(initialData.commission_receive_date) : null,
+    claim_date:              initialData.claim_date           ? new Date(initialData.claim_date)           : null,
+    birthday_policy:         initialData.birthday_policy      ? new Date(initialData.birthday_policy)      : null,
+    date_added:              initialData.created_at?.toDate
       ? initialData.created_at.toDate()
-      : initialData.created_at
-      ? new Date(initialData.created_at)
-      : null,
+      : initialData.created_at ? new Date(initialData.created_at) : null,
   });
+
   const [docs,     setDocs]     = useState({});
   const [progress, setProgress] = useState({});
   const [uploaded, setUploaded] = useState({});
@@ -278,32 +356,71 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
 
   const handleDate = (name, val) => {
     setDates(d => ({ ...d, [name]: val }));
-    set(name, val ? val.toISOString().split('T')[0] : '');
   };
 
-  const handleDocFile = (fieldName, file) => {
-    setDocs(d => ({ ...d, [fieldName]: file }));
-  };
+  /* ── auto-calcs ──────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const from = dates.policy_period_from;
+    const to   = dates.policy_period_to;
+    const days = calcPolicyDays(from, to);
+    const os   = calcOsDays(from);
+    const year  = from ? String(from.getFullYear()) : '';
+    const month = from ? MONTHS[from.getMonth()] : '';
+    setFields(f => ({
+      ...f,
+      policy_days:  days,
+      os_days:      f.os_days !== '' ? f.os_days : os, // only auto-fill if empty
+      policy_year:  year,
+      policy_month: month,
+    }));
+  }, [dates.policy_period_from, dates.policy_period_to]);
 
+  useEffect(() => {
+    const b = parseFloat(fields.commission_basic || 0);
+    const s = parseFloat(fields.commission_srcc  || 0);
+    const t = parseFloat(fields.commission_tc    || 0);
+    const total = b + s + t;
+    setFields(f => ({ ...f, commission_total: total > 0 ? String(total) : '' }));
+  }, [fields.commission_basic, fields.commission_srcc, fields.commission_tc]);
+
+  /* ── product-specific risk fields ────────────────────────────────────── */
+  const productKey = useMemo(() => PRODUCT_KEY_MAP[fields.product] || null, [fields.product]);
+
+  const riskFields = useMemo(() => {
+    if (!productKey || !PRODUCTS[productKey]) return [];
+    return (PRODUCTS[productKey].fields || []).filter(f =>
+      RISK_SECTIONS.includes(f.section) &&
+      f.type !== 'file' &&
+      f.type !== 'plantable' &&
+      f.name !== 'sum_insured' &&
+      f.name !== 'total_value' &&
+      f.name !== 'extra_fittings_value'
+    );
+  }, [productKey]);
+
+  /* Extra risk field values */
+  const [riskValues, setRiskValues] = useState(() => {
+    const rv = {};
+    Object.keys(initialData).forEach(k => { rv[k] = initialData[k] ?? ''; });
+    return rv;
+  });
+  const setRisk = (name, val) => setRiskValues(r => ({ ...r, [name]: val }));
+
+  /* ── submit ──────────────────────────────────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    /* validate required text fields */
-    for (const f of textFields.filter(f => f.required)) {
+    for (const f of textFields.filter(f => f.required && !f.readOnly)) {
       if (!fields[f.name]?.trim()) { setError(`${f.label} is required`); return; }
     }
-
     setSaving(true);
     try {
-      /* upload docs to Cloudinary */
       const docUrls = {};
       for (const df of docFields) {
         const file = docs[df.doc];
         if (file) {
           const safeName = (fields.client_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-          const folder = `ceilao/clients/${safeName}/docs`;
-          const url = await uploadToCloudinary(file, folder, (pct) => {
+          const url = await uploadToCloudinary(file, `ceilao/clients/${safeName}/docs`, (pct) => {
             setProgress(p => ({ ...p, [df.doc]: pct }));
           }, df.label);
           docUrls[df.doc] = url;
@@ -311,17 +428,30 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         }
       }
 
-      const payload = { ...fields, ...docUrls };
-      // date_added is a virtual field — remove it from payload and use it for created_at
+      // Build date strings from date state
+      const datePayload = {};
+      Object.entries(dates).forEach(([k, v]) => {
+        if (k === 'date_added') return;
+        if (v && !isNaN(v)) datePayload[k] = v.toISOString().split('T')[0];
+      });
+
+      const payload = {
+        ...fields,
+        ...riskValues,
+        ...datePayload,
+        ...docUrls,
+        product_key: productKey || '',
+      };
       delete payload.date_added;
+      delete payload.policy_year;   // derived — store only for display
+      delete payload.policy_month;  // derived
       const dateAdded = dates.date_added && !isNaN(dates.date_added) ? dates.date_added : null;
 
+      // Convert number strings back to plain strings (keep raw for Firestore)
       if (isEdit && initialData.id) {
-        const ref = doc(db, 'clients', initialData.id);
-        await updateDoc(ref, {
+        await updateDoc(doc(db, 'clients', initialData.id), {
           ...payload,
           updated_at: serverTimestamp(),
-          // Only update created_at if the user explicitly changed the Date Added field
           ...(dateAdded ? { created_at: dateAdded } : {}),
         });
       } else {
@@ -336,7 +466,6 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           ...(initialData.source_quote_id ? { source_quote_id: initialData.source_quote_id } : {}),
         });
       }
-
       onSuccess?.();
     } catch (err) {
       setError(err.message || 'Failed to save client');
@@ -344,122 +473,258 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     setSaving(false);
   };
 
+  /* ── render helpers ──────────────────────────────────────────────────── */
+  const renderDropdown = (f, val, onChangeFn) => (
+    <FormControl fullWidth size="small" key={f.name}>
+      <InputLabel sx={{ fontSize: 13 }}>{f.label}{f.required ? ' *' : ''}</InputLabel>
+      <Select label={`${f.label}${f.required ? ' *' : ''}`} value={val}
+        onChange={e => onChangeFn(f.name, e.target.value)} required={!!f.required}
+        sx={{ borderRadius: '10px', fontSize: 13 }}>
+        {(dropdowns[f.name] || []).map(opt => <MenuItem key={opt} value={opt} sx={{ fontSize: 13 }}>{opt}</MenuItem>)}
+      </Select>
+      {f.required && !val && <FormHelperText error>{f.label} is required</FormHelperText>}
+    </FormControl>
+  );
+
+  const renderStaticField = (f) => {
+    const isReadOnly = !!f.readOnly;
+    if (f.dropdown && dropdowns[f.name]) return renderDropdown(f, fields[f.name], set);
+    if (f.date) return (
+      <DatePicker key={f.name} label={f.label} value={dates[f.name]} onChange={val => handleDate(f.name, val)}
+        slotProps={{ textField: { fullWidth: true, size: 'small', required: !!f.required,
+          sx: { '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } } } }} />
+    );
+    if (f.type === 'number') return (
+      <NumericField key={f.name} label={f.label} value={fields[f.name]}
+        onChange={isReadOnly ? undefined : e => set(f.name, e.target.value)}
+        readOnly={isReadOnly} fullWidth size="small" required={!!f.required}
+        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+    );
+    return (
+      <TextField key={f.name} label={f.label} value={fields[f.name]}
+        onChange={isReadOnly ? undefined : e => set(f.name, e.target.value)}
+        fullWidth size="small" required={!!f.required}
+        InputProps={{ readOnly: isReadOnly }}
+        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13,
+          ...(isReadOnly ? { bgcolor: 'rgba(0,0,0,0.03)' } : {}) } }} />
+    );
+  };
+
+  /* ── risk field renderer (from products.js field definitions) ──────── */
+  const renderRiskField = (f) => {
+    const val = riskValues[f.name] ?? '';
+    if (f.type === 'select') return (
+      <FormControl fullWidth size="small" key={f.name}>
+        <InputLabel sx={{ fontSize: 13 }}>{f.label}</InputLabel>
+        <Select label={f.label} value={val} onChange={e => setRisk(f.name, e.target.value)}
+          sx={{ borderRadius: '10px', fontSize: 13 }}>
+          {(f.options || []).map(opt => <MenuItem key={opt} value={opt} sx={{ fontSize: 13 }}>{opt}</MenuItem>)}
+        </Select>
+      </FormControl>
+    );
+    if (f.type === 'yesno') return (
+      <FormControl fullWidth size="small" key={f.name}>
+        <InputLabel sx={{ fontSize: 13 }}>{f.label}</InputLabel>
+        <Select label={f.label} value={val} onChange={e => setRisk(f.name, e.target.value)}
+          sx={{ borderRadius: '10px', fontSize: 13 }}>
+          {['Yes', 'No'].map(opt => <MenuItem key={opt} value={opt} sx={{ fontSize: 13 }}>{opt}</MenuItem>)}
+        </Select>
+      </FormControl>
+    );
+    if (f.type === 'number' || f.type === 'currency') return (
+      <NumericField key={f.name} label={f.label} value={val}
+        onChange={e => setRisk(f.name, e.target.value)}
+        fullWidth size="small"
+        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+    );
+    if (f.type === 'date') return (
+      <DatePicker key={f.name} label={f.label}
+        value={riskValues[f.name] ? new Date(riskValues[f.name]) : null}
+        onChange={val => setRisk(f.name, val ? val.toISOString().split('T')[0] : '')}
+        slotProps={{ textField: { fullWidth: true, size: 'small',
+          sx: { '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } } } }} />
+    );
+    return (
+      <TextField key={f.name} label={f.label} value={val} onChange={e => setRisk(f.name, e.target.value)}
+        fullWidth size="small" multiline={f.type === 'textarea'} rows={f.type === 'textarea' ? 2 : 1}
+        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+    );
+  };
+
+  /* ── product prefix hint ─────────────────────────────────────────────── */
+  const productPrefix = productKey ? (PRODUCTS[productKey]?.prefix || '') : '';
+  const fileNoHint = productPrefix
+    ? `Format: ${productPrefix}-YYYYMMDD-XXXX-NAME`
+    : 'Select a product to see the reference format';
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box component="form" onSubmit={handleSubmit} sx={{ px: 3, py: 2.5, overflow: 'auto' }}>
 
-        {/* ── documents ─────────────────────────────────────── */}
+        {/* ── Documents ────────────────────────────────────── */}
         <SectionHeader title="Documents" />
         <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
           {docFields.map(df => (
             <Grid item xs={12} sm={6} key={df.doc}>
-              <DocUploadBox
-                label={df.label}
-                fieldName={df.doc}
-                existing={initialData[df.doc]}
-                onFile={file => handleDocFile(df.doc, file)}
-                progress={progress[df.doc] ?? null}
-                uploaded={!!uploaded[df.doc]}
-              />
+              <DocUploadBox label={df.label} fieldName={df.doc} existing={initialData[df.doc]}
+                onFile={file => setDocs(d => ({ ...d, [df.doc]: file }))}
+                progress={progress[df.doc] ?? null} uploaded={!!uploaded[df.doc]} />
             </Grid>
           ))}
         </Grid>
 
-        {/* ── text sections ──────────────────────────────────── */}
-        {sections.map(section => {
-          const sFields = textFields.filter(f => f.section === section);
-          if (!sFields.length) return null;
-          return (
-            <Box key={section} sx={{ mb: 2.5 }}>
-              <SectionHeader title={section} />
-              <Grid container spacing={2}>
-                {sFields.map(f => (
-                  <Grid item xs={12} sm={6} md={4} key={f.name}>
-                    {f.dropdown ? (
-                      <FormControl fullWidth size="small">
-                        <InputLabel sx={{ fontSize: 13 }}>{f.label}{f.required ? ' *' : ''}</InputLabel>
-                        <Select
-                          label={`${f.label}${f.required ? ' *' : ''}`}
-                          value={fields[f.name]}
-                          onChange={e => set(f.name, e.target.value)}
-                          required={!!f.required}
-                          sx={{ borderRadius: '10px', fontSize: 13 }}
-                        >
-                          {dropdowns[f.name]?.map(opt => (
-                            <MenuItem key={opt} value={opt} sx={{ fontSize: 13 }}>{opt}</MenuItem>
-                          ))}
-                        </Select>
-                        {f.required && !fields[f.name] && (
-                          <FormHelperText error>{f.label} is required</FormHelperText>
-                        )}
-                      </FormControl>
-                    ) : f.date ? (
-                      <DatePicker
-                        label={f.label}
-                        value={dates[f.name]}
-                        onChange={val => handleDate(f.name, val)}
-                        slotProps={{
-                          textField: {
-                            fullWidth: true, size: 'small', required: !!f.required,
-                            sx: { '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } },
-                          },
-                        }}
-                      />
-                    ) : f.type === 'number' ? (
-                      <NumericField
-                        label={f.label}
-                        value={fields[f.name]}
-                        onChange={e => set(f.name, e.target.value)}
-                        fullWidth size="small"
-                        required={!!f.required}
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }}
-                      />
-                    ) : (
-                      <TextField
-                        label={f.label}
-                        value={fields[f.name]}
-                        onChange={e => set(f.name, e.target.value)}
-                        fullWidth size="small"
-                        required={!!f.required}
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }}
-                      />
-                    )}
-                  </Grid>
-                ))}
-                {/* doc description fields in General Info section */}
-                {section === 'General Info' && docFields.map(df => (
-                  <Grid item xs={12} sm={6} md={4} key={df.text}>
-                    <TextField
-                      label={`${df.label} Description`}
-                      value={fields[df.text]}
-                      onChange={e => set(df.text, e.target.value)}
-                      fullWidth size="small"
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          );
-        })}
+        {/* ── Reference & Contacts ─────────────────────────── */}
+        <SectionHeader title="Reference" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField label="Ceilao IB File No." value={fields.ceilao_ib_file_no}
+              onChange={e => set('ceilao_ib_file_no', e.target.value)}
+              fullWidth size="small" helperText={fileNoHint}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField label="Manager" value={fields.manager}
+              onChange={e => set('manager', e.target.value)}
+              fullWidth size="small"
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField label="Introducer Code" value={fields.introducer_code}
+              onChange={e => set('introducer_code', e.target.value)}
+              fullWidth size="small"
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+          </Grid>
+        </Grid>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: '10px' }}>{error}</Alert>
+        {/* ── General Info ──────────────────────────────────── */}
+        <SectionHeader title="General Info" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'General Info').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Client Details ────────────────────────────────── */}
+        <SectionHeader title="Client Details" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Client Details').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+          {/* doc description fields */}
+          {docFields.map(df => (
+            <Grid item xs={12} sm={6} md={4} key={df.text}>
+              <TextField label={`${df.label} Description`} value={fields[df.text]}
+                onChange={e => set(df.text, e.target.value)}
+                fullWidth size="small"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Policy Details ────────────────────────────────── */}
+        <SectionHeader title="Policy Details" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Policy Details').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Risk Information (product-specific) ──────────── */}
+        {(riskFields.length > 0 || fields.product === 'Comprehensive' || fields.product === 'Third Party Fire and Theft' || fields.product === 'Third Party') && (
+          <>
+            <SectionHeader title="Risk Information" />
+            {productKey && PRODUCTS[productKey] && (
+              <Chip label={PRODUCTS[productKey].label} size="small"
+                sx={{ mb: 1.5, fontSize: 11, fontWeight: 700,
+                      bgcolor: `${PRODUCTS[productKey].color}18`, color: PRODUCTS[productKey].color }} />
+            )}
+            <Grid container spacing={2} sx={{ mb: 2.5 }}>
+              {/* Always show vehicle number for motor */}
+              {(fields.main_class === 'Motor' || productKey === 'motor') && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <TextField label="Vehicle Number" value={fields.vehicle_number}
+                    onChange={e => set('vehicle_number', e.target.value)}
+                    fullWidth size="small"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
+                </Grid>
+              )}
+              {riskFields.map(f => (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderRiskField(f)}
+                </Grid>
+              ))}
+            </Grid>
+          </>
         )}
+
+        {/* ── Sum Insured & Premium ─────────────────────────── */}
+        <SectionHeader title="Premium" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Premium').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Payment Tracking ─────────────────────────────── */}
+        <SectionHeader title="Payment" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Payment').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Commission ───────────────────────────────────── */}
+        <SectionHeader title="Commission" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Commission').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Claims ───────────────────────────────────────── */}
+        <SectionHeader title="Claims" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Claims').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ── Other ────────────────────────────────────────── */}
+        <SectionHeader title="Other" />
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          {textFields.filter(f => f.section === 'Other').map(f => (
+            <Grid item xs={12} sm={6} md={4} key={f.name}>
+              {renderStaticField(f)}
+            </Grid>
+          ))}
+        </Grid>
+
+        {error && <Alert severity="error" sx={{ mb: 2, borderRadius: '10px' }}>{error}</Alert>}
 
         {saving && (
           <Box sx={{ mb: 2 }}>
-            <Typography sx={{ fontSize: 12, color: '#FF8B5A', mb: 0.5, fontWeight: 600 }}>
-              Uploading and saving…
-            </Typography>
-            <LinearProgress sx={{
-              borderRadius: '4px', height: 5,
-              '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)' },
-            }} />
+            <Typography sx={{ fontSize: 12, color: '#FF8B5A', mb: 0.5, fontWeight: 600 }}>Uploading and saving…</Typography>
+            <LinearProgress sx={{ borderRadius: '4px', height: 5,
+              '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)' } }} />
           </Box>
         )}
 
-        <Box sx={{ display: 'flex', gap: 1.5, pt: 1, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,139,90,0.12)', mt: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, pt: 1, justifyContent: 'flex-end',
+                    borderTop: '1px solid rgba(255,139,90,0.12)', mt: 1 }}>
           <Button onClick={onCancel} variant="outlined" disabled={saving}
             sx={{ borderColor: '#e0e0e0', color: '#6B7280', '&:hover': { borderColor: '#aaa' } }}>
             Cancel

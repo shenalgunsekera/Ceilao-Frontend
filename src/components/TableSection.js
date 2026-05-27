@@ -6,9 +6,11 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { uploadToCloudinary } from '../cloudinary';
-import AddClientForm from './AddClientForm';
+import AddClientForm, { textFields as UW_FIELDS } from './AddClientForm';
 import ClientDetailsModal from './ClientDetailsModal';
 import Papa from 'papaparse';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -48,6 +50,177 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import GridOnIcon from '@mui/icons-material/GridOn';
+
+/* ── All underwriting columns (for Excel & CSV) ───────────────────────── */
+// Derived from AddClientForm textFields + extra product-risk keys
+const MONTHS_LABEL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function fmtDateUW(v) {
+  if (!v) return '';
+  if (v?.toDate) return v.toDate().toLocaleDateString('en-GB');
+  const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleDateString('en-GB');
+}
+
+function deriveYear(client) {
+  const v = client.policy_period_from;
+  if (!v) return '';
+  const d = new Date(v); return isNaN(d) ? '' : String(d.getFullYear());
+}
+function deriveMonth(client) {
+  const v = client.policy_period_from;
+  if (!v) return '';
+  const d = new Date(v); return isNaN(d) ? '' : MONTHS_LABEL[d.getMonth()];
+}
+function derivePolicyDays(client) {
+  const from = client.policy_period_from;
+  const to   = client.policy_period_to;
+  if (!from || !to) return '';
+  const a = new Date(from); const b = new Date(to);
+  if (isNaN(a) || isNaN(b)) return '';
+  return String(Math.round((b - a) / 86400000));
+}
+
+/* ── Excel export for underwriting sheet ─────────────────────────────── */
+async function exportUnderwritingExcel(clients) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Ceilao Insurance Brokers';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('Underwriting', {
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
+    views: [{ state: 'frozen', xSplit: 1, ySplit: 4 }],
+  });
+
+  const RED    = 'FFFF5A5A';
+  const AMBER  = 'FFFF8B5A';
+  const DARK   = 'FF1A1A2E';
+  const WHITE  = 'FFFFFFFF';
+  const LTGRAY = 'FFF9FAFB';
+
+  /* Column definitions */
+  const cols = [
+    // Reference
+    { key: 'ceilao_ib_file_no',  header: 'Ceilao IB File No.',     w: 22 },
+    { key: '_year',              header: 'Year',                   w: 8,  derived: deriveYear },
+    { key: '_month',             header: 'Month',                  w: 12, derived: deriveMonth },
+    { key: 'policy_no',          header: 'Policy No.',             w: 20 },
+    { key: 'policy_period_from', header: 'Policy Date',            w: 14, isDate: true },
+    { key: 'manager',            header: 'Responsible Person',     w: 18 },
+    { key: 'introducer_code',    header: 'Agent / Introducer',     w: 18 },
+    // Client
+    { key: 'client_name',        header: 'Policyholder',           w: 24 },
+    { key: 'nic_proof',          header: 'NIC / PP No.',           w: 16 },
+    { key: 'street1',            header: 'Address',                w: 28 },
+    { key: '_contact',           header: 'Contact & Email',        w: 26, derived: c => [c.mobile_no, c.email].filter(Boolean).join(' / ') },
+    // Policy
+    { key: 'insurance_provider', header: 'Insurer',                w: 24 },
+    { key: 'sum_insured',        header: 'Sum Insured (Rs)',        w: 16, isNum: true },
+    { key: 'vehicle_number',     header: 'Vehicle No.',            w: 14 },
+    { key: 'product',            header: 'Policy Class',           w: 20 },
+    { key: 'policy_period_to',   header: 'Policy Expiry',          w: 14, isDate: true },
+    { key: '_policy_days',       header: 'Policy Days',            w: 10, derived: derivePolicyDays },
+    { key: 'os_days',            header: 'O/S Days',               w: 10 },
+    { key: 'credit_period',      header: 'Credit Period (days)',    w: 16 },
+    // Premium
+    { key: 'basic_premium',      header: 'Basic Premium (Rs)',      w: 16, isNum: true },
+    { key: 'srcc_premium',       header: 'SRCC (Rs)',               w: 14, isNum: true },
+    { key: 'tc_premium',         header: 'TC Premium (Rs)',         w: 14, isNum: true },
+    { key: 'net_premium',        header: 'Premium excl. Taxes (Rs)',w: 20, isNum: true },
+    { key: 'total_invoice',      header: 'Total Premium incl. Taxes (Rs)', w: 24, isNum: true },
+    // Payment
+    { key: 'payment_status',     header: 'Payment Status',         w: 14 },
+    { key: 'amount_received',    header: 'Amount Received (Rs)',    w: 18, isNum: true },
+    { key: 'payment_date',       header: 'Payment Date',           w: 14, isDate: true },
+    { key: 'payment_method',     header: 'Payment Method',         w: 16 },
+    { key: 'cheque_slip_no',     header: 'Cheque / Slip No.',      w: 18 },
+    { key: 'receipt_no',         header: 'Receipt No.',            w: 14 },
+    // Commission
+    { key: 'commission_pct',     header: 'Commission %',           w: 13, isNum: true },
+    { key: 'commission_basic',   header: 'Commission Basic (Rs)',   w: 18, isNum: true },
+    { key: 'commission_srcc',    header: 'Commission SRCC (Rs)',    w: 18, isNum: true },
+    { key: 'commission_tc',      header: 'Commission TC (Rs)',      w: 16, isNum: true },
+    { key: 'commission_total',   header: 'Total Commission (Rs)',   w: 18, isNum: true },
+    { key: 'commission_paid_method', header: 'Commis. Method',     w: 16 },
+    { key: 'commission_receive_date', header: 'Commis. Receive Date', w: 18, isDate: true },
+    { key: 'commission_amount_paid', header: 'Commis. Amount Paid (Rs)', w: 20, isNum: true },
+    { key: 'commission_vat',     header: 'Commis. VAT (Rs)',       w: 14, isNum: true },
+    // Claims
+    { key: 'claim_paid',         header: 'Claim Paid?',            w: 12 },
+    { key: 'claim_date',         header: 'Date of Claim',          w: 14, isDate: true },
+    { key: 'claim_amount',       header: 'Claim Amount (Rs)',       w: 16, isNum: true },
+    { key: 'claim_settled',      header: 'Settled Amount (Rs)',     w: 16, isNum: true },
+    { key: 'repudiation_reasons', header: 'If Repudiated, Reasons', w: 28 },
+    { key: 'partial_payment_reasons', header: 'Partial Payment Reasons', w: 28 },
+    // Other
+    { key: 'birthday_policy',    header: 'Birthday Policy',        w: 14, isDate: true },
+    { key: 'notes',              header: 'Notes',                  w: 32 },
+  ];
+
+  /* Title rows */
+  ws.mergeCells(1, 1, 1, cols.length);
+  const t1 = ws.getCell(1, 1);
+  t1.value = 'CEILAO INSURANCE BROKERS (PVT) LTD — UNDERWRITING REGISTER';
+  t1.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+  t1.font  = { name: 'Calibri', bold: true, size: 14, color: { argb: WHITE } };
+  t1.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 28;
+
+  ws.mergeCells(2, 1, 2, cols.length);
+  const t2 = ws.getCell(2, 1);
+  t2.value = `Generated: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}   ·   ${clients.length} records`;
+  t2.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D3748' } };
+  t2.font  = { name: 'Calibri', size: 10, color: { argb: 'FFCBD5E1' } };
+  t2.alignment = { horizontal: 'center' };
+  ws.getRow(2).height = 16;
+
+  ws.getRow(3).height = 8;
+
+  /* Header row */
+  ws.getRow(4).height = 22;
+  cols.forEach((c, i) => {
+    const cell = ws.getCell(4, i + 1);
+    cell.value = c.header;
+    cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } };
+    cell.font  = { name: 'Calibri', bold: true, size: 9.5, color: { argb: AMBER } };
+    cell.alignment = { horizontal: c.isNum ? 'right' : 'center', vertical: 'middle', wrapText: true };
+    cell.border = { bottom: { style: 'medium', color: { argb: RED } } };
+    ws.getColumn(i + 1).width = c.w;
+  });
+
+  ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: cols.length } };
+
+  /* Data rows */
+  clients.forEach((client, ri) => {
+    const rowNum = ri + 5;
+    const bg = ri % 2 === 0 ? WHITE : LTGRAY;
+    ws.getRow(rowNum).height = 16;
+    cols.forEach((c, ci) => {
+      const cell = ws.getCell(rowNum, ci + 1);
+      const raw  = c.derived ? c.derived(client) : client[c.key];
+      if (c.isNum) {
+        const n = parseFloat(String(raw || '').replace(/,/g, ''));
+        cell.value  = isNaN(n) ? null : n;
+        cell.numFmt = '#,##0.00';
+        cell.alignment = { horizontal: 'right' };
+      } else if (c.isDate) {
+        cell.value = fmtDateUW(raw);
+        cell.alignment = { horizontal: 'center' };
+      } else {
+        cell.value = raw ? String(raw) : null;
+      }
+      cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      cell.font   = { name: 'Calibri', size: 9 };
+      cell.border = { bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } } };
+    });
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(
+    new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `Ceilao_Underwriting_${new Date().toISOString().slice(0, 10)}.xlsx`
+  );
+}
 
 /* ── module-level client cache (survives React re-mounts) ─────────────── */
 let _cachedClients = null;
@@ -352,32 +525,30 @@ const TableSection = () => {
     setDeleteAllDlg(false);
   };
 
-  /* CSV template */
+  /* CSV template — generated from UW_FIELDS so it always stays in sync */
   const handleDownloadTemplate = () => {
-    const allFields = [
-      'customer_type','product','insurance_provider','client_name','mobile_no',
-      'ceilao_ib_file_no','vehicle_number','main_class','insurer','introducer_code',
-      'branch','street1','street2','city','district','province','telephone',
-      'contact_person','email','social_media','nic_proof','dob_proof',
-      'business_registration','svat_proof','vat_proof',
-      'policy_','policy_type','policy_no','policy_period_from','policy_period_to',
-      'coverage','sum_insured','basic_premium','srcc_premium','tc_premium','net_premium',
-      'stamp_duty','admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
-      'commission_type','commission_basic','commission_srcc','commission_tc',
-      'sales_rep_id','policies',
-      'date_added', // optional — preserves original date on restore (YYYY-MM-DD)
-    ];
+    const allFields = UW_FIELDS
+      .filter(f => !f.readOnly)
+      .map(f => f.name);
+
     const example = {
-      customer_type:'Individual', product:'Comprehensive', insurance_provider:'Ceylinco',
-      client_name:'John Doe', mobile_no:'0771234567', policy_no:'POL123456',
-      policy_period_from:'2025-01-01', policy_period_to:'2026-01-01',
-      net_premium:'58000', total_invoice:'64600',
-      date_added: new Date().toISOString().slice(0,10),
+      customer_type: 'Individual', product: 'Comprehensive',
+      insurance_provider: 'Ceylinco General Insurance',
+      client_name: 'John Doe', mobile_no: '0771234567',
+      ceilao_ib_file_no: 'MT-20250101-0001-JOHNDOE',
+      manager: 'Jane Smith', introducer_code: 'INT001',
+      policy_no: 'POL123456',
+      policy_period_from: '2025-01-01', policy_period_to: '2026-01-01',
+      basic_premium: '50000', net_premium: '58000', total_invoice: '64600',
+      payment_status: 'Paid', payment_method: 'Bank Transfer',
+      commission_type: 'Percentage', commission_pct: '15',
+      commission_basic: '7500',
+      date_added: new Date().toISOString().slice(0, 10),
     };
     const csv = Papa.unparse([allFields, allFields.map(h => example[h] ?? '')]);
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
-      download: 'ceilao_client_template.csv',
+      download: 'ceilao_underwriting_template.csv',
     });
     a.click(); URL.revokeObjectURL(a.href);
   };
@@ -493,6 +664,15 @@ const TableSection = () => {
                   '&:hover': { borderColor: '#FF8B5A', bgcolor: 'rgba(255,139,90,0.07)' } }}
           >
             CSV Template
+          </Button>
+          <Button
+            size="small" variant="outlined"
+            startIcon={<GridOnIcon />}
+            onClick={() => exportUnderwritingExcel(filtered)}
+            sx={{ borderColor: 'rgba(16,185,129,0.35)', color: '#059669', fontSize: 12,
+                  '&:hover': { borderColor: '#059669', bgcolor: 'rgba(16,185,129,0.07)' } }}
+          >
+            Export Excel
           </Button>
           <Button
             size="small" variant="outlined"
