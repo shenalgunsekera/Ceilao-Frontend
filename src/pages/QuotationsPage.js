@@ -2049,10 +2049,18 @@ const QuotationsPage = () => {
         cover_responses:  response.cover_responses  ? JSON.stringify(response.cover_responses)  : '',
         clause_responses: response.clause_responses ? JSON.stringify(response.clause_responses) : '',
 
+        // Missing insurer fields
+        other_premium: String(response.other_premium || ''),
+        validity_days: String(response.validity_days  || ''),
+
         // Notes from insurer
-        notes: response.special_conditions || '',
+        notes: response.special_conditions || response.notes || '',
       };
-      window.location.href = `/underwriting?prefill=${encodeURIComponent(JSON.stringify(prefill))}`;
+
+      // Use sessionStorage instead of URL param — Firebase Storage URLs are long
+      // and a large quotation (29 clauses, 6 docs, etc.) easily breaks URL limits
+      sessionStorage.setItem('uw_prefill', JSON.stringify(prefill));
+      window.location.href = '/underwriting';
     }, 1500);
   };
 

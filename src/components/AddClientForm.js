@@ -124,6 +124,7 @@ export const textFields = [
   { label: 'Month',              name: 'policy_month',       section: 'Period of Insurance', readOnly: true },
   { label: 'O/S Days',           name: 'os_days',            section: 'Period of Insurance', type: 'number' },
   { label: 'Credit Period (days)', name: 'credit_period',    section: 'Period of Insurance', type: 'number' },
+  { label: 'Quote Validity (days)', name: 'validity_days',   section: 'Period of Insurance', type: 'number' },
   // Vehicle (motor only — shown conditionally)
   { label: 'Vehicle Number',     name: 'vehicle_number',     section: 'Risk Information', motor: true },
   // Sum Insured (own section)
@@ -132,6 +133,7 @@ export const textFields = [
   { label: 'SRCC Premium',       name: 'srcc_premium',       section: 'Premium', type: 'number' },
   { label: 'TC Premium',         name: 'tc_premium',         section: 'Premium', type: 'number' },
   { label: 'Admin Fees',         name: 'admin_fees',         section: 'Premium', type: 'number' },
+  { label: 'Other Premium',      name: 'other_premium',      section: 'Premium', type: 'number' },
   { label: 'Road Safety Fee',    name: 'road_safety_fee',    section: 'Premium', type: 'number' },
   { label: 'Policy Fee',         name: 'policy_fee',         section: 'Premium', type: 'number' },
   { label: 'Stamp Duty',         name: 'stamp_duty',         section: 'Premium', type: 'number' },
@@ -463,6 +465,15 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   });
   const setRisk = (name, val) => setRiskValues(r => ({ ...r, [name]: val }));
 
+  // Parse insurer's per-cover and per-clause responses (stored as JSON strings in riskValues)
+  const coverResponses = useMemo(() => {
+    try { return JSON.parse(riskValues.cover_responses || '{}'); } catch { return {}; }
+  }, [riskValues.cover_responses]);
+
+  const clauseResponses = useMemo(() => {
+    try { return JSON.parse(riskValues.clause_responses || '{}'); } catch { return {}; }
+  }, [riskValues.clause_responses]);
+
   /* ── submit ──────────────────────────────────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -758,11 +769,23 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Covers Required" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {coversFields.map(f => (
-                <Grid item xs={12} sm={6} md={4} key={f.name}>
-                  {renderRiskField(f)}
-                </Grid>
-              ))}
+              {coversFields.map(f => {
+                const ir = coverResponses[f.name] || {};
+                const irColor = ir.status === 'Accepted' ? '#10B981'
+                  : ir.status === 'Declined' ? '#EF4444' : '#F59E0B';
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={f.name}>
+                    {renderRiskField(f)}
+                    {ir.status && (
+                      <Box sx={{ mt: 0.5, px: 1, py: 0.3, borderRadius: '6px', bgcolor: `${irColor}14`, display: 'inline-flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: irColor }}>{ir.status}</Typography>
+                        {ir.premium ? <Typography sx={{ fontSize: 10.5, color: irColor }}>· +LKR {ir.premium}</Typography> : null}
+                        {ir.notes  ? <Typography sx={{ fontSize: 10.5, color: '#6B7280' }}>· {ir.notes}</Typography> : null}
+                      </Box>
+                    )}
+                  </Grid>
+                );
+              })}
             </Grid>
           </>
         )}
@@ -772,11 +795,22 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Additional Clauses" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {clausesFields.map(f => (
-                <Grid item xs={12} sm={6} md={4} key={f.name}>
-                  {renderRiskField(f)}
-                </Grid>
-              ))}
+              {clausesFields.map(f => {
+                const ir = clauseResponses[f.name] || {};
+                const irColor = ir.status === 'Included' ? '#10B981'
+                  : ir.status === 'Not included' ? '#EF4444' : '#F59E0B';
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={f.name}>
+                    {renderRiskField(f)}
+                    {ir.status && (
+                      <Box sx={{ mt: 0.5, px: 1, py: 0.3, borderRadius: '6px', bgcolor: `${irColor}14`, display: 'inline-flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: irColor }}>{ir.status}</Typography>
+                        {ir.notes ? <Typography sx={{ fontSize: 10.5, color: '#6B7280' }}>· {ir.notes}</Typography> : null}
+                      </Box>
+                    )}
+                  </Grid>
+                );
+              })}
             </Grid>
           </>
         )}

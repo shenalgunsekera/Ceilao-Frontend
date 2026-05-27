@@ -126,6 +126,8 @@ async function exportUnderwritingExcel(clients) {
     { key: 'basic_premium',      header: 'Basic Premium (Rs)',      w: 16, isNum: true },
     { key: 'srcc_premium',       header: 'SRCC (Rs)',               w: 14, isNum: true },
     { key: 'tc_premium',         header: 'TC Premium (Rs)',         w: 14, isNum: true },
+    { key: 'other_premium',      header: 'Other Premium (Rs)',      w: 14, isNum: true },
+    { key: 'validity_days',      header: 'Quote Validity (days)',   w: 14 },
     { key: 'net_premium',        header: 'Premium excl. Taxes (Rs)',w: 20, isNum: true },
     { key: 'total_invoice',      header: 'Total Premium incl. Taxes (Rs)', w: 24, isNum: true },
     // Payment
@@ -423,22 +425,29 @@ const TableSection = () => {
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
-  // Auto-open Add/Edit Client form with pre-filled data from Quote comparison
+  // Auto-open Add/Edit Client form with pre-filled data from Quote comparison.
+  // Data is stored in sessionStorage (not URL params) so Firebase Storage URLs
+  // and large forms (29 clauses, 30+ risk fields) are never truncated.
   useEffect(() => {
     if (prefillHandled.current) return;
+
+    // Support legacy URL-param prefill (backwards compat) AND sessionStorage
     const params = new URLSearchParams(location.search);
-    const raw = params.get('prefill');
+    const urlRaw = params.get('prefill');
+    const ssRaw  = sessionStorage.getItem('uw_prefill');
+    const raw    = ssRaw || urlRaw;
     if (!raw) return;
+
     try {
-      const data = JSON.parse(decodeURIComponent(raw));
+      const data = ssRaw ? JSON.parse(raw) : JSON.parse(decodeURIComponent(raw));
       prefillHandled.current = true;
+      sessionStorage.removeItem('uw_prefill');
       window.history.replaceState({}, '', window.location.pathname);
 
       const quoteId  = data._quote_id;
       const { _quote_id: _removed, ...cleanData } = data; // eslint-disable-line no-unused-vars
 
       if (quoteId) {
-        // If a client was already saved from this quote, open it in edit mode
         const existing = _cachedClients?.find(c => c.source_quote_id === quoteId);
         if (existing) {
           setEditClient({ ...existing, ...cleanData });
@@ -450,7 +459,7 @@ const TableSection = () => {
         setPrefillData(cleanData);
         setAddOpen(true);
       }
-    } catch { /* ignore malformed param */ }
+    } catch { /* ignore malformed data */ }
   }, [location.search]);
 
   /* Available years derived from actual client data */
