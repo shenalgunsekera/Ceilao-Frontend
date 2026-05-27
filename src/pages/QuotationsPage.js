@@ -697,21 +697,17 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
       const fmt = n => n ? Number(n).toLocaleString() : '—';
       // Premium breakdown rows — shown to customer, commission excluded
       const breakdownRows = isPlansProduct
-        ? (() => {
-            let html = '';
-            for (let pi = 0; pi < planCount; pi++) {
-              html += `<tr><td colspan="${responses.length + 1}" style="background:#0891b2;color:#fff;padding:7px 14px;font-weight:800;font-size:12px;">Plan ${pi + 1}</td></tr>`;
-              [
-                ['Basic Premium (LKR)', r => fmt(r.plan_premiums?.[pi]?.basic)],
-                ['Tax (LKR)',           r => fmt(r.plan_premiums?.[pi]?.tax)],
-                ['Plan Total (LKR)',    r => `<strong style="color:#0891b2">${fmt(r.plan_premiums?.[pi]?.total)}</strong>`],
-              ].forEach(([label, getter], i) => {
-                html += `<tr style="background:${i%2===0?'#F0F9FF':'#fff'}"><td style="padding:8px 14px 8px 22px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`;
-              });
-            }
-            html += `<tr style="background:#E0F2FE"><td style="padding:8px 14px;font-weight:800;color:#0891b2;">Grand Total (LKR)</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;"><strong style="color:#0891b2">${fmt(r.premium)}</strong></td>`).join('')}</tr>`;
-            return html;
-          })()
+        ? Array.from({ length: planCount }, (_, pi) => [
+            `<tr><td colspan="${responses.length + 1}" style="background:#0891b2;color:#fff;padding:7px 14px;font-weight:800;font-size:12px;">Plan ${pi + 1}</td></tr>`,
+            ...([
+              ['Basic Premium (LKR)', r => fmt(r.plan_premiums?.[pi]?.basic)],
+              ['Tax (LKR)',           r => fmt(r.plan_premiums?.[pi]?.tax)],
+              ['Plan Total (LKR)',    r => `<strong style="color:#0891b2">${fmt(r.plan_premiums?.[pi]?.total)}</strong>`],
+            ].map(([label, getter], i) =>
+              `<tr style="background:${i%2===0?'#F0F9FF':'#fff'}"><td style="padding:8px 14px 8px 22px;font-weight:600;color:#374151;">${label}</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;">${getter(r)}</td>`).join('')}</tr>`
+            )),
+          ].join('')).join('') +
+          `<tr style="background:#E0F2FE"><td style="padding:8px 14px;font-weight:800;color:#0891b2;">Grand Total (LKR)</td>${responses.map(r => `<td style="padding:8px 14px;text-align:right;"><strong style="color:#0891b2">${fmt(r.premium)}</strong></td>`).join('')}</tr>`
         : [
             ['Basic Premium (LKR)', r => fmt(r.basic_premium)],
             ['SRCC (LKR)',          r => fmt(r.srcc_premium)],
@@ -916,7 +912,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
     addSection('PREMIUM BREAKDOWN');
     if (isPlansProduct) {
       for (let pi = 0; pi < planCount; pi++) {
-        mergedRow(`Plan ${pi + 1}`, '0891b2' /* teal */.padStart(8, 'FF'), WHITE, 9, 16, 'left');
+        mergedRow(`Plan ${pi + 1}`, 'FF0891b2', WHITE, 9, 16, 'left');
         [
           ['Basic Premium (LKR)', r => r.plan_premiums?.[pi]?.basic ? Number(r.plan_premiums[pi].basic).toLocaleString() : '—'],
           ['Tax (LKR)',           r => r.plan_premiums?.[pi]?.tax   ? Number(r.plan_premiums[pi].tax).toLocaleString()   : '—'],
