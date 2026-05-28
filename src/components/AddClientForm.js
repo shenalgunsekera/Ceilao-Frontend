@@ -512,9 +512,9 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       });
 
       const payload = {
-        ...fields,
-        ...riskValues,
-        ...datePayload,
+        ...riskValues,   // risk/cover/clause fields (product-specific)
+        ...fields,       // text fields win over riskValues for any shared keys
+        ...datePayload,  // date fields override anything above
         ...docUrls,
         product_key: productKey || '',
       };
