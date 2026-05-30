@@ -60,9 +60,10 @@ import PendingOutlinedIcon from '@mui/icons-material/PendingOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
-const EMAILJS_SERVICE  = process.env.REACT_APP_EMAILJS_SERVICE_ID  || '';
-const EMAILJS_TEMPLATE = process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '';
-const EMAILJS_KEY      = process.env.REACT_APP_EMAILJS_PUBLIC_KEY  || '';
+const EMAILJS_SERVICE           = process.env.REACT_APP_EMAILJS_SERVICE_ID           || '';
+const EMAILJS_TEMPLATE          = process.env.REACT_APP_EMAILJS_TEMPLATE_ID          || '';
+const EMAILJS_CUSTOMER_TEMPLATE = process.env.REACT_APP_EMAILJS_CUSTOMER_TEMPLATE_ID || EMAILJS_TEMPLATE;
+const EMAILJS_KEY               = process.env.REACT_APP_EMAILJS_PUBLIC_KEY           || '';
 
 // Initialise once — must be after all imports
 if (EMAILJS_KEY) emailjs.init({ publicKey: EMAILJS_KEY });
@@ -791,9 +792,12 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
           </td></tr>
         </table>`;
 
+      if (!EMAILJS_SERVICE || !EMAILJS_CUSTOMER_TEMPLATE || !EMAILJS_KEY) {
+        throw new Error('EmailJS not configured — check REACT_APP_EMAILJS_* environment variables.');
+      }
       await emailjs.send(
-        process.env.REACT_APP_EMAILJS_SERVICE_ID  || '',
-        process.env.REACT_APP_EMAILJS_CUSTOMER_TEMPLATE_ID || process.env.REACT_APP_EMAILJS_TEMPLATE_ID || '',
+        EMAILJS_SERVICE,
+        EMAILJS_CUSTOMER_TEMPLATE,
         {
           to_email:      custEmail.trim(),
           to_name:       'Valued Client',
@@ -802,7 +806,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
           table_html:    tableHtml + selectionSection,
           company_count: responses.length,
         },
-        { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY || '' }
+        { publicKey: EMAILJS_KEY }
       );
       setSendDone(true);
       setTimeout(() => setSendDone(false), 4000);
