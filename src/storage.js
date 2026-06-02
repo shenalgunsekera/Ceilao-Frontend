@@ -105,7 +105,7 @@ export async function uploadFile(file, folder = 'ceilao/docs', onProgress, label
     cacheControl: 'public, max-age=31536000, immutable',
   };
 
-  return new Promise((resolve, reject) => {
+  const attempt = (attemptsLeft) => new Promise((resolve, reject) => {
     const task = uploadBytesResumable(fileRef, compressed, metadata);
 
     task.on(
@@ -115,7 +115,19 @@ export async function uploadFile(file, folder = 'ceilao/docs', onProgress, label
           onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
         }
       },
-      (err) => reject(new Error(err.message)),
+      async (err) => {
+        const retryable = err.code === 'storage/retry-limit-exceeded' ||
+                          err.code === 'storage/unknown'              ||
+                          err.message?.toLowerCase().includes('network');
+        if (retryable && attemptsLeft > 1) {
+          // Reset progress bar and retry after a short pause
+          if (onProgress) onProgress(0);
+          await new Promise(r => setTimeout(r, 2000));
+          attempt(attemptsLeft - 1).then(resolve).catch(reject);
+        } else {
+          reject(new Error(err.message));
+        }
+      },
       async () => {
         try {
           resolve(await getDownloadURL(task.snapshot.ref));
@@ -125,6 +137,8 @@ export async function uploadFile(file, folder = 'ceilao/docs', onProgress, label
       }
     );
   });
+
+  return attempt(3);
 }
 
 // Firebase Storage URLs are direct — return as-is.

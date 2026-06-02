@@ -124,6 +124,7 @@ function genRef(productKey, customerName, allProducts = STATIC_PRODUCTS) {
 /* ── dynamic product form ─────────────────────────────────────────────────── */
 function ProductForm({ product, values, onChange, errors = {}, allProducts = STATIC_PRODUCTS }) {
   const [fileUploading, setFileUploading] = useState({});
+  const [fileErrors,    setFileErrors]    = useState({});
   const def = allProducts[product];
   if (!def) return null;
 
@@ -323,13 +324,17 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
                 const file = e.target.files[0];
                 if (!file) return;
                 setFileUploading(prev => ({ ...prev, [f.name]: true }));
+                setFileErrors(prev => ({ ...prev, [f.name]: '' }));
                 try {
                   const prefix = allProducts[product]?.prefix || 'QT';
                   const safeName = (values.proposer_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
                   const uploadedUrl = await uploadToCloudinary(file, `ceilao/quotation-docs/${prefix}-${safeName}`, undefined, f.label);
                   onChange(f.name, uploadedUrl);
                   onChange(f.name + '_filename', file.name);
-                } catch { /* silently ignore */ }
+                } catch (err) {
+                  const isRetry = err.message?.includes('retry-limit') || err.message?.includes('retry time');
+                  setFileErrors(prev => ({ ...prev, [f.name]: isRetry ? 'Network issue — please try again.' : 'Upload failed.' }));
+                }
                 setFileUploading(prev => ({ ...prev, [f.name]: false }));
               }} />
           </Button>
@@ -343,6 +348,10 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
                   {fname || 'View document'}
                 </Typography>
               </Box>
+            ) : fileErrors[f.name] ? (
+              <Typography sx={{ fontSize: 11, color: '#ef4444', mt: 0.3 }}>
+                ⚠ {fileErrors[f.name]}
+              </Typography>
             ) : (
               <Typography sx={{ fontSize: 11, color: '#9CA3AF', mt: 0.3 }}>
                 Accepted: {(f.accept || 'pdf, jpg, png').toUpperCase()}
@@ -521,19 +530,31 @@ function QuoteRow({ quote, onSelect, tab, onDelete, allProducts = STATIC_PRODUCT
 
         <Collapse in={open} timeout={220} unmountOnExit>
           <Box sx={{ px: 2.5, pb: 2, pt: 0.5, borderTop: '1px solid rgba(255,139,90,0.08)' }}>
-            {/* Form data summary */}
+            {/* Form data summary — only show labelled, non-file, non-URL fields */}
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 1.5, mb: 2 }}>
-              {Object.entries(quote.form_data || {}).filter(([,v]) => v).slice(0,8).map(([k, v]) => {
-                const fieldDef = product?.fields?.find(f => f.name === k);
-                return (
-                  <Box key={k}>
-                    <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {fieldDef?.label || k}
-                    </Typography>
-                    <Typography sx={{ fontSize: 12.5, color: '#1A1A2E', fontWeight: 500 }}>{v}</Typography>
-                  </Box>
-                );
-              })}
+              {(product?.fields || [])
+                .filter(f =>
+                  f.type !== 'file' &&
+                  f.type !== 'plantable' &&
+                  f.section !== 'Introducer' &&
+                  f.name !== 'ceilao_ib_file_no'
+                )
+                .map(f => {
+                  const v = quote.form_data?.[f.name];
+                  if (!v || typeof v === 'object') return null;
+                  if (typeof v === 'string' && v.startsWith('http')) return null;
+                  return (
+                    <Box key={f.name}>
+                      <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {f.label}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12.5, color: '#1A1A2E', fontWeight: 500 }}>{String(v)}</Typography>
+                    </Box>
+                  );
+                })
+                .filter(Boolean)
+                .slice(0, 8)
+              }
             </Box>
 
             {/* Sent to */}

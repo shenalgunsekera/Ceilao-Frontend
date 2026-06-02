@@ -258,11 +258,18 @@ const QuoteResponsePage = () => {
     if (!file) return;
     setFileName(file.name);
     setUploading(true);
+    setError('');
     try {
       const url = await uploadToCloudinary(file, `ceilao/quote-responses/${qid}`, pct => setUploadPct(pct), `${companyName} Quote Response`);
       setFileUrl(url);
     } catch (err) {
-      setError(err.message);
+      const isRetry = err.message?.includes('retry-limit') || err.message?.includes('retry time');
+      setError(
+        isRetry
+          ? 'Upload failed due to a network issue. Please check your connection and try uploading again.'
+          : `Upload failed: ${err.message}`
+      );
+      setFileName('');
     }
     setUploading(false);
   };
