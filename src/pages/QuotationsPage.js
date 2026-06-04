@@ -453,7 +453,7 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
 }
 
 /* ── quote row ─────────────────────────────────────────────────────────────── */
-function QuoteRow({ quote, onSelect, tab, onDelete, allProducts = STATIC_PRODUCTS }) {
+function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProducts = STATIC_PRODUCTS }) {
   const [open, setOpen] = useState(false);
   const product = allProducts[quote.product_key];
   const sentCount = quote.sent_to?.length || 0;
@@ -608,10 +608,17 @@ function QuoteRow({ quote, onSelect, tab, onDelete, allProducts = STATIC_PRODUCT
               </Box>
             )}
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+              {isManager && quote.sent_to?.length > 0 && (
+                <Button size="small" variant="outlined"
+                  onClick={e => { e.stopPropagation(); onResend(quote); }}
+                  sx={{ fontSize: 11, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1' }}>
+                  ↺ Resend Emails
+                </Button>
+              )}
               <Button size="small" color="error" variant="outlined"
                 onClick={e => { e.stopPropagation(); onDelete(quote); }}
-                sx={{ fontSize: 11, borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                sx={{ fontSize: 11, borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444', ml: 'auto' }}>
                 Delete Quote
               </Button>
             </Box>
@@ -1923,50 +1930,54 @@ const QuotationsPage = () => {
     try {
       const responseBase = `${window.location.origin}/quote-respond`;
       const sentTo = [];
+      const emailFailures = [];
       for (const co of selectedCos) {
         const responseUrl = `${responseBase}?qid=${pendingQuote.id}&cid=${co.id}&cn=${encodeURIComponent(co.name)}`;
         sentTo.push({ company_id: co.id, company_name: co.name, company_email: co.email, sent_at: new Date().toISOString(), responded: false });
 
-        if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY && co.email) {
-          const productLabel = allP[pendingQuote.product_key]?.label || pendingQuote.product_key;
-          const productFields = allP[pendingQuote.product_key]?.fields || [];
-          const formData      = pendingQuote.form_data || {};
-          const noFields      = new Set(
-            productFields.filter(f => f.type === 'yesno' && formData[f.name] === 'No').map(f => f.name)
-          );
-          const formEntries = Object.entries(formData).filter(([k, v]) => {
-            if (!v) return false;
-            if (typeof v === 'string' && v.startsWith('http')) return false; // skip file URLs
-            if (k === 'ceilao_ib_file_no') return false; // internal field
-            const fd = productFields.find(f => f.name === k);
-            if (!fd) return false; // skip unknown/internal keys
-            if (fd.section === 'Introducer') return false; // never show introducer to insurers
-            if (fd.section === 'Document Uploads') return false; // skip doc slots
-            if (fd.type === 'file') return false;
-            if (fd.type === 'yesno' && v === 'No') return false;
-            if (fd.showIf && noFields.has(fd.showIf.field)) return false;
-            return true;
-          });
-          const details = formEntries.length
-            ? formEntries.map(([k, v]) => {
-                const field = productFields.find(f => f.name === k);
-                const display = Array.isArray(v) ? v.join(', ') : String(v);
-                return `${field?.label || k}: ${display}`;
-              }).join('\n')
-            : 'No additional details provided.';
-
-          try {
-            await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-              to_name:       co.name,
-              to_email:      co.email,
-              reference:     pendingQuote.reference,
-              product:       productLabel,
-              response_link: responseUrl,
-              details,
-            }, { publicKey: EMAILJS_KEY });
-          } catch (emailErr) {
-            // Don't block the whole flow if email fails — quote is still saved
-            console.error('EmailJS error for', co.name, ':', emailErr?.text || emailErr?.message || emailErr);
+        if (EMAILJS_SERVICE && EMAILJS_TEMPLATE && EMAILJS_KEY) {
+          if (!co.email) {
+            emailFailures.push(`${co.name}: no email address on file`);
+          } else {
+            const productLabel = allP[pendingQuote.product_key]?.label || pendingQuote.product_key;
+            const productFields = allP[pendingQuote.product_key]?.fields || [];
+            const formData      = pendingQuote.form_data || {};
+            const noFields      = new Set(
+              productFields.filter(f => f.type === 'yesno' && formData[f.name] === 'No').map(f => f.name)
+            );
+            const formEntries = Object.entries(formData).filter(([k, v]) => {
+              if (!v) return false;
+              if (typeof v === 'string' && v.startsWith('http')) return false;
+              if (k === 'ceilao_ib_file_no') return false;
+              const fd = productFields.find(f => f.name === k);
+              if (!fd) return false;
+              if (fd.section === 'Introducer') return false;
+              if (fd.section === 'Document Uploads') return false;
+              if (fd.type === 'file') return false;
+              if (fd.type === 'yesno' && v === 'No') return false;
+              if (fd.showIf && noFields.has(fd.showIf.field)) return false;
+              return true;
+            });
+            const details = formEntries.length
+              ? formEntries.map(([k, v]) => {
+                  const field = productFields.find(f => f.name === k);
+                  const display = Array.isArray(v) ? v.join(', ') : String(v);
+                  return `${field?.label || k}: ${display}`;
+                }).join('\n')
+              : 'No additional details provided.';
+            try {
+              await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+                to_name:       co.name,
+                to_email:      co.email,
+                reference:     pendingQuote.reference,
+                product:       productLabel,
+                response_link: responseUrl,
+                details,
+              }, { publicKey: EMAILJS_KEY });
+            } catch (emailErr) {
+              const msg = emailErr?.text || emailErr?.message || 'Unknown error';
+              emailFailures.push(`${co.name}: ${msg}`);
+            }
           }
         }
       }
@@ -1983,12 +1994,54 @@ const QuotationsPage = () => {
       setSendOpen(false);
       setSelectedCos([]);
       setPendingQuote(null);
-      setToast({ open: true, msg: `Quote request sent to ${sentTo.length} insurer${sentTo.length > 1 ? 's' : ''}!`, severity: 'success' });
+      if (emailFailures.length > 0) {
+        setToast({ open: true, msg: `Quote saved. Email failed for: ${emailFailures.join('; ')}`, severity: 'warning' });
+      } else {
+        setToast({ open: true, msg: `Quote request sent to ${sentTo.length} insurer${sentTo.length > 1 ? 's' : ''}!`, severity: 'success' });
+      }
       setTab(0);
     } catch (err) {
       setToast({ open: true, msg: err.message, severity: 'error' });
     }
     setSending(false);
+  };
+
+  const handleResendEmails = async (quote) => {
+    if (!EMAILJS_SERVICE || !EMAILJS_TEMPLATE || !EMAILJS_KEY) {
+      setToast({ open: true, msg: 'EmailJS not configured — cannot send emails.', severity: 'error' });
+      return;
+    }
+    const sentTo = quote.sent_to || [];
+    if (!sentTo.length) return;
+    setToast({ open: true, msg: 'Resending emails…', severity: 'info' });
+    const responseBase = `${window.location.origin}/quote-respond`;
+    const productLabel = allP[quote.product_key]?.label || quote.product_key;
+    let sent = 0;
+    const failures = [];
+    for (const co of sentTo) {
+      const company = companies.find(c => c.id === co.company_id);
+      const email = company?.email || co.company_email;
+      if (!email) { failures.push(`${co.company_name}: no email`); continue; }
+      const responseUrl = `${responseBase}?qid=${quote.id}&cid=${co.company_id}&cn=${encodeURIComponent(co.company_name)}`;
+      try {
+        await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+          to_name:       co.company_name,
+          to_email:      email,
+          reference:     quote.reference,
+          product:       productLabel,
+          response_link: responseUrl,
+          details:       'This is a resent quote request. Please use the link above to submit your quotation.',
+        }, { publicKey: EMAILJS_KEY });
+        sent++;
+      } catch (err) {
+        failures.push(`${co.company_name}: ${err?.text || err?.message || 'error'}`);
+      }
+    }
+    if (failures.length) {
+      setToast({ open: true, msg: `Resent ${sent}. Failed: ${failures.join('; ')}`, severity: failures.length === sentTo.length ? 'error' : 'warning' });
+    } else {
+      setToast({ open: true, msg: `Emails resent to ${sent} insurer${sent > 1 ? 's' : ''}!`, severity: 'success' });
+    }
   };
 
   const handleConfirmQuote = async (quote, response) => {
@@ -2416,6 +2469,8 @@ const QuotationsPage = () => {
                     tab={tab === 0 ? 'sent' : tab === 1 ? 'received' : 'compare'}
                     onSelect={setCompareQuote}
                     onDelete={q => setDeleteTarget(q)}
+                    onResend={handleResendEmails}
+                    isManager={userProfile?.role === 'manager' || userProfile?.role === 'admin'}
                     allProducts={allP} />
                 ))}
                 {tabQuotes[tab].length > Q_PER_PAGE && (
