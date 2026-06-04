@@ -1936,15 +1936,22 @@ const QuotationsPage = () => {
           );
           const formEntries = Object.entries(formData).filter(([k, v]) => {
             if (!v) return false;
+            if (typeof v === 'string' && v.startsWith('http')) return false; // skip file URLs
+            if (k === 'ceilao_ib_file_no') return false; // internal field
             const fd = productFields.find(f => f.name === k);
-            if (fd?.type === 'yesno' && v === 'No') return false;
-            if (fd?.showIf && noFields.has(fd.showIf.field)) return false;
+            if (!fd) return false; // skip unknown/internal keys
+            if (fd.section === 'Introducer') return false; // never show introducer to insurers
+            if (fd.section === 'Document Uploads') return false; // skip doc slots
+            if (fd.type === 'file') return false;
+            if (fd.type === 'yesno' && v === 'No') return false;
+            if (fd.showIf && noFields.has(fd.showIf.field)) return false;
             return true;
           });
           const details = formEntries.length
             ? formEntries.map(([k, v]) => {
                 const field = productFields.find(f => f.name === k);
-                return `${field?.label || k}: ${v}`;
+                const display = Array.isArray(v) ? v.join(', ') : String(v);
+                return `${field?.label || k}: ${display}`;
               }).join('\n')
             : 'No additional details provided.';
 
