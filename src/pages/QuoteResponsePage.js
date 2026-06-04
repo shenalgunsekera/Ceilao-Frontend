@@ -31,7 +31,7 @@ import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
 // Sections filled by insurer — excluded from the read-only quote summary
 const INSURER_SECTIONS = new Set([
-  'Covers Required', 'Cover Required', 'Additional Clauses',
+  'Introducer', 'Covers Required', 'Cover Required', 'Additional Clauses',
 ]);
 
 function buildInfoSections(product, formData) {
@@ -137,6 +137,8 @@ const QuoteResponsePage = () => {
   const [form, setForm] = useState({
     basic_premium: '', srcc_premium: '', tc_premium: '',
     admin_fee: '', vat_amount: '', other_premium: '',
+    terrorism_premium: '', policy_fees: '', cess: '',
+    road_safety_tax: '', stamp_fee: '', nbl: '', ssc_levy: '',
     deductible: '', excesses: '', commission_type: '',
     validity_days: '', notes: '',
   });
@@ -275,12 +277,19 @@ const QuoteResponsePage = () => {
   };
 
   const totalPremium =
-    (Number(form.basic_premium) || 0) +
-    (Number(form.srcc_premium)  || 0) +
-    (Number(form.tc_premium)    || 0) +
-    (Number(form.admin_fee)     || 0) +
-    (Number(form.vat_amount)    || 0) +
-    (Number(form.other_premium) || 0);
+    (Number(form.basic_premium)    || 0) +
+    (Number(form.srcc_premium)     || 0) +
+    (Number(form.tc_premium)       || 0) +
+    (Number(form.admin_fee)        || 0) +
+    (Number(form.vat_amount)       || 0) +
+    (Number(form.other_premium)    || 0) +
+    (Number(form.terrorism_premium)|| 0) +
+    (Number(form.policy_fees)      || 0) +
+    (Number(form.cess)             || 0) +
+    (Number(form.road_safety_tax)  || 0) +
+    (Number(form.stamp_fee)        || 0) +
+    (Number(form.nbl)              || 0) +
+    (Number(form.ssc_levy)         || 0);
 
   const validateInsurer = () => {
     const errs = {};
@@ -340,12 +349,19 @@ const QuoteResponsePage = () => {
         company_name:    companyName,
         premium:         grandTotal,
         ...(isPlans ? { plan_premiums: planPremiums } : {
-          basic_premium:   Number(form.basic_premium) || 0,
-          srcc_premium:    Number(form.srcc_premium)  || 0,
-          tc_premium:      Number(form.tc_premium)    || 0,
-          admin_fee:       Number(form.admin_fee)     || 0,
-          vat_amount:      Number(form.vat_amount)    || 0,
-          other_premium:   Number(form.other_premium) || 0,
+          basic_premium:     Number(form.basic_premium)    || 0,
+          srcc_premium:      Number(form.srcc_premium)     || 0,
+          tc_premium:        Number(form.tc_premium)       || 0,
+          admin_fee:         Number(form.admin_fee)        || 0,
+          vat_amount:        Number(form.vat_amount)       || 0,
+          other_premium:     Number(form.other_premium)    || 0,
+          terrorism_premium: Number(form.terrorism_premium)|| 0,
+          policy_fees:       Number(form.policy_fees)      || 0,
+          cess:              Number(form.cess)             || 0,
+          road_safety_tax:   Number(form.road_safety_tax)  || 0,
+          stamp_fee:         Number(form.stamp_fee)        || 0,
+          nbl:               Number(form.nbl)              || 0,
+          ssc_levy:          Number(form.ssc_levy)         || 0,
         }),
         deductible:      form.deductible,
         excesses:        form.excesses,
@@ -762,6 +778,14 @@ const QuoteResponsePage = () => {
               <Typography sx={{ fontWeight: 800, fontSize: 15, color: '#FF8B5A' }}>Covers Required</Typography>
               <Typography sx={{ fontSize: 12, color: '#94A3B8', mt: 0.3 }}>Indicate which covers your policy provides and any special terms</Typography>
             </Box>
+            {quote?.form_data?.type_of_cover && (
+              <Box sx={{ px: 3, py: 1.5, bgcolor: 'rgba(99,102,241,0.05)', borderBottom: '1px solid rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>Type of Cover Requested</Typography>
+                <Box sx={{ px: 1.5, py: 0.4, borderRadius: '20px', bgcolor: 'rgba(99,102,241,0.12)', display: 'inline-block' }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#4F46E5' }}>{quote.form_data.type_of_cover}</Typography>
+                </Box>
+              </Box>
+            )}
             <CoverTable
               fields={coverFields}
               responses={coverResponses}
@@ -867,16 +891,30 @@ const QuoteResponsePage = () => {
                     <TextField label="Basic Premium (LKR) *" type="number" size="small" fullWidth
                       error={!!fieldErrors.basic_premium} helperText={fieldErrors.basic_premium}
                       value={form.basic_premium} onChange={e => setFE('basic_premium', e.target.value)} />
-                    <TextField label="SRCC (LKR) *" type="number" size="small" fullWidth
+                    <TextField label="Strike Riot Civil Commotion — SRCC (LKR)" type="number" size="small" fullWidth
                       error={!!fieldErrors.srcc_premium} helperText={fieldErrors.srcc_premium}
                       value={form.srcc_premium} onChange={e => setFE('srcc_premium', e.target.value)} />
-                    <TextField label="TC (LKR) *" type="number" size="small" fullWidth
+                    <TextField label="TC (LKR)" type="number" size="small" fullWidth
                       error={!!fieldErrors.tc_premium} helperText={fieldErrors.tc_premium}
                       value={form.tc_premium} onChange={e => setFE('tc_premium', e.target.value)} />
-                    <TextField label="Admin Fee (LKR) *" type="number" size="small" fullWidth
+                    <TextField label="Terrorism Cover (LKR)" type="number" size="small" fullWidth
+                      value={form.terrorism_premium} onChange={e => setFE('terrorism_premium', e.target.value)} />
+                    <TextField label="Policy Fees (LKR)" type="number" size="small" fullWidth
+                      value={form.policy_fees} onChange={e => setFE('policy_fees', e.target.value)} />
+                    <TextField label="Cess (LKR)" type="number" size="small" fullWidth
+                      value={form.cess} onChange={e => setFE('cess', e.target.value)} />
+                    <TextField label="Road Safety Tax (LKR)" type="number" size="small" fullWidth
+                      value={form.road_safety_tax} onChange={e => setFE('road_safety_tax', e.target.value)} />
+                    <TextField label="Stamp Fee (LKR)" type="number" size="small" fullWidth
+                      value={form.stamp_fee} onChange={e => setFE('stamp_fee', e.target.value)} />
+                    <TextField label="NBL (LKR)" type="number" size="small" fullWidth
+                      value={form.nbl} onChange={e => setFE('nbl', e.target.value)} />
+                    <TextField label="SSC Levy (LKR)" type="number" size="small" fullWidth
+                      value={form.ssc_levy} onChange={e => setFE('ssc_levy', e.target.value)} />
+                    <TextField label="Admin Fee (LKR)" type="number" size="small" fullWidth
                       error={!!fieldErrors.admin_fee} helperText={fieldErrors.admin_fee}
                       value={form.admin_fee} onChange={e => setFE('admin_fee', e.target.value)} />
-                    <TextField label="VAT (LKR) *" type="number" size="small" fullWidth
+                    <TextField label="VAT (LKR)" type="number" size="small" fullWidth
                       error={!!fieldErrors.vat_amount} helperText={fieldErrors.vat_amount}
                       value={form.vat_amount} onChange={e => setFE('vat_amount', e.target.value)} />
                     <TextField label="Other (LKR)" type="number" size="small" fullWidth

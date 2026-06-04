@@ -1125,9 +1125,23 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
           return rows;
         })()
       : [
-          ...['basic_premium','srcc_premium','tc_premium','admin_fee','vat_amount','other_premium'].map((k,i) =>
-            mkRow(['Basic Premium (LKR)','SRCC (LKR)','TC (LKR)','Admin Fee (LKR)','VAT (LKR)','Other (LKR)'][i],
-                  responses.map(r => r[k] ? `LKR ${Number(r[k]).toLocaleString()}` : '—'), false, false, i)),
+          ...([
+            ['basic_premium',     'Basic Premium (LKR)'],
+            ['srcc_premium',      'SRCC (LKR)'],
+            ['tc_premium',        'TC (LKR)'],
+            ['terrorism_premium', 'Terrorism Cover (LKR)'],
+            ['policy_fees',       'Policy Fees (LKR)'],
+            ['cess',              'Cess (LKR)'],
+            ['road_safety_tax',   'Road Safety Tax (LKR)'],
+            ['stamp_fee',         'Stamp Fee (LKR)'],
+            ['nbl',               'NBL (LKR)'],
+            ['ssc_levy',          'SSC Levy (LKR)'],
+            ['admin_fee',         'Admin Fee (LKR)'],
+            ['vat_amount',        'VAT (LKR)'],
+            ['other_premium',     'Other (LKR)'],
+          ].map(([k, label], i) =>
+            mkRow(label, responses.map(r => r[k] ? `LKR ${Number(r[k]).toLocaleString()}` : '—'), false, false, i)
+          )),
           mkRow('TOTAL PREMIUM (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true),
         ];
 
@@ -2074,9 +2088,19 @@ const QuotationsPage = () => {
         cover_responses:  response.cover_responses  ? JSON.stringify(response.cover_responses)  : '',
         clause_responses: response.clause_responses ? JSON.stringify(response.clause_responses) : '',
 
-        // Missing insurer fields
-        other_premium: String(response.other_premium || ''),
-        validity_days: String(response.validity_days  || ''),
+        // Insurer fee/tax fields
+        other_premium:     String(response.other_premium     || ''),
+        terrorism_premium: String(response.terrorism_premium || ''),
+        policy_fees:       String(response.policy_fees       || ''),
+        cess:              String(response.cess              || ''),
+        road_safety_fee:   String(response.road_safety_tax   || ''),
+        stamp_duty:        String(response.stamp_fee         || ''),
+        nbl:               String(response.nbl               || ''),
+        ssc_levy:          String(response.ssc_levy          || ''),
+        validity_days:     String(response.validity_days     || ''),
+
+        // Proposer postal code
+        postal_code: fd.postal_code || '',
 
         // Notes from insurer
         notes: response.special_conditions || response.notes || '',

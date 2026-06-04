@@ -291,6 +291,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['City',                  client.city],
         ['District',              client.district],
         ['Province',              client.province],
+        ['Postal Code',           client.postal_code],
         ['Telephone',             client.telephone],
         ['Mobile No',             client.mobile_no],
         ['Email',                 client.email],
@@ -339,9 +340,13 @@ const ClientDetailsModal = ({ client, onClose }) => {
 
       startSec('financials');
       const finRows = [
-        ['Basic Premium',   fmtLKR(client.basic_premium)],
+        ['Basic Premium',    fmtLKR(client.basic_premium)],
         ['SRCC Premium',    fmtLKR(client.srcc_premium)],
         ['TC Premium',      fmtLKR(client.tc_premium)],
+        ['Terrorism Cover', fmtLKR(client.terrorism_premium)],
+        ['Cess',            fmtLKR(client.cess)],
+        ['NBL',             fmtLKR(client.nbl)],
+        ['SSC Levy',        fmtLKR(client.ssc_levy)],
         ['Other Premium',   fmtLKR(client.other_premium)],
         ['Net Premium',     fmtLKR(client.net_premium)],
         ['Stamp Duty',      fmtLKR(client.stamp_duty)],
@@ -526,6 +531,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12} sm={6} md={4}><Field label="City"                  value={client.city} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="District"              value={client.district} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Province"              value={client.province} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Postal Code"           value={client.postal_code} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Telephone"             value={client.telephone} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Mobile No"             value={client.mobile_no} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Email"                 value={client.email} /></Grid>
@@ -665,9 +671,13 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Box sx={{ display:'grid', gridTemplateColumns:{xs:'1fr',sm:'1fr 1fr'}, gap:3, mb:2 }}>
               <Box>
                 <Typography sx={{ fontSize:12, fontWeight:700, color:'#9CA3AF', mb:1, letterSpacing:0.6, textTransform:'uppercase' }}>Premiums</Typography>
-                <FinancialRow label="Basic Premium"  value={client.basic_premium} />
+                <FinancialRow label="Basic Premium"   value={client.basic_premium} />
                 <FinancialRow label="SRCC Premium"   value={client.srcc_premium} />
                 <FinancialRow label="TC Premium"     value={client.tc_premium} />
+                <FinancialRow label="Terrorism Cover" value={client.terrorism_premium} />
+                <FinancialRow label="Cess"           value={client.cess} />
+                <FinancialRow label="NBL"            value={client.nbl} />
+                <FinancialRow label="SSC Levy"       value={client.ssc_levy} />
                 <FinancialRow label="Other Premium"  value={client.other_premium} />
                 <FinancialRow label="Net Premium"    value={client.net_premium} />
               </Box>
