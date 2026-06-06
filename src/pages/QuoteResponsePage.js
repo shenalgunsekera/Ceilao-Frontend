@@ -45,7 +45,12 @@ function buildInfoSections(product, formData) {
   const sectionOrder = [];
   (product.fields || []).forEach(f => {
     if (!f.section || INSURER_SECTIONS.has(f.section)) return;
-    if (f.showIf && formData[f.showIf.field] !== f.showIf.value) return;
+    if (f.showIf) {
+      if (f.showIf.notZero) {
+        const pv = formData[f.showIf.field];
+        if (!pv || pv === '0' || Number(pv) === 0) return;
+      } else if (formData[f.showIf.field] !== f.showIf.value) return;
+    }
     if (noFields.has(f.name)) return;
     const val = formData[f.name];
     if (!val) return;
