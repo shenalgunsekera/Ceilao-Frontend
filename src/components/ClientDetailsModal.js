@@ -342,9 +342,8 @@ const ClientDetailsModal = ({ client, onClose }) => {
       const finRows = [
         ['Basic Premium',    fmtLKR(client.basic_premium)],
         ['SRCC Premium',    fmtLKR(client.srcc_premium)],
-        ['TC Premium',      fmtLKR(client.tc_premium)],
-        ['Terrorism Cover', fmtLKR(client.terrorism_premium)],
-        ['Cess',            fmtLKR(client.cess)],
+        ['Terrorism Cover (TC)', fmtLKR(client.tc_premium)],
+        ['Cess',                 fmtLKR(client.cess)],
         ['NBL',             fmtLKR(client.nbl)],
         ['SSC Levy',        fmtLKR(client.ssc_levy)],
         ['Other Premium',   fmtLKR(client.other_premium)],
@@ -673,9 +672,8 @@ const ClientDetailsModal = ({ client, onClose }) => {
                 <Typography sx={{ fontSize:12, fontWeight:700, color:'#9CA3AF', mb:1, letterSpacing:0.6, textTransform:'uppercase' }}>Premiums</Typography>
                 <FinancialRow label="Basic Premium"   value={client.basic_premium} />
                 <FinancialRow label="SRCC Premium"   value={client.srcc_premium} />
-                <FinancialRow label="TC Premium"     value={client.tc_premium} />
-                <FinancialRow label="Terrorism Cover" value={client.terrorism_premium} />
-                <FinancialRow label="Cess"           value={client.cess} />
+                <FinancialRow label="Terrorism Cover (TC)" value={client.tc_premium} />
+                <FinancialRow label="Cess"               value={client.cess} />
                 <FinancialRow label="NBL"            value={client.nbl} />
                 <FinancialRow label="SSC Levy"       value={client.ssc_levy} />
                 <FinancialRow label="Other Premium"  value={client.other_premium} />

@@ -133,7 +133,6 @@ export const textFields = [
   { label: 'Basic Premium',      name: 'basic_premium',      section: 'Premium', type: 'number' },
   { label: 'SRCC Premium',       name: 'srcc_premium',       section: 'Premium', type: 'number' },
   { label: 'TC Premium',         name: 'tc_premium',         section: 'Premium', type: 'number' },
-  { label: 'Terrorism Cover',    name: 'terrorism_premium',  section: 'Premium', type: 'number' },
   { label: 'Cess',               name: 'cess',               section: 'Premium', type: 'number' },
   { label: 'NBL',                name: 'nbl',                section: 'Premium', type: 'number' },
   { label: 'SSC Levy',           name: 'ssc_levy',           section: 'Premium', type: 'number' },

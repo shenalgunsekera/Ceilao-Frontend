@@ -143,6 +143,10 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
 
   const isVisible = (f) => {
     if (!f.showIf) return true;
+    if (f.showIf.notZero) {
+      const v = values[f.showIf.field];
+      return !!v && v !== '0' && Number(v) > 0;
+    }
     return values[f.showIf.field] === f.showIf.value;
   };
 
@@ -634,8 +638,8 @@ function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProd
 function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCTS }) {
   const product   = allProducts[quote?.product_key];
   const responses = quote?.responses || [];
-  const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno');
-  const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
+  const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes');
+  const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes');
   const isPlansProduct = !!product?.hasPlans;
   const planCount = isPlansProduct ? Math.max(parseInt(quote?.form_data?.no_of_plans) || 1, 1) : 0;
 
@@ -1136,7 +1140,6 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
             ['basic_premium',     'Basic Premium (LKR)'],
             ['srcc_premium',      'SRCC (LKR)'],
             ['tc_premium',        'TC (LKR)'],
-            ['terrorism_premium', 'Terrorism Cover (LKR)'],
             ['policy_fees',       'Policy Fees (LKR)'],
             ['cess',              'Cess (LKR)'],
             ['road_safety_tax',   'Road Safety Tax (LKR)'],
@@ -2150,7 +2153,6 @@ const QuotationsPage = () => {
 
         // Insurer fee/tax fields
         other_premium:     String(response.other_premium     || ''),
-        terrorism_premium: String(response.terrorism_premium || ''),
         policy_fees:       String(response.policy_fees       || ''),
         cess:              String(response.cess              || ''),
         road_safety_fee:   String(response.road_safety_tax   || ''),

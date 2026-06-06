@@ -49,6 +49,7 @@ function buildInfoSections(product, formData) {
     if (noFields.has(f.name)) return;
     const val = formData[f.name];
     if (!val) return;
+    if ((f.type === 'number' || f.type === 'currency') && (val === '0' || val === 0)) return;
     if (!sectionMap[f.section]) {
       sectionMap[f.section] = [];
       sectionOrder.push(f.section);
@@ -137,7 +138,7 @@ const QuoteResponsePage = () => {
   const [form, setForm] = useState({
     basic_premium: '', srcc_premium: '', tc_premium: '',
     admin_fee: '', vat_amount: '', other_premium: '',
-    terrorism_premium: '', policy_fees: '', cess: '',
+    policy_fees: '', cess: '',
     road_safety_tax: '', stamp_fee: '', nbl: '', ssc_levy: '',
     deductible: '', excesses: '', commission_type: '',
     validity_days: '', notes: '',
@@ -283,7 +284,6 @@ const QuoteResponsePage = () => {
     (Number(form.admin_fee)        || 0) +
     (Number(form.vat_amount)       || 0) +
     (Number(form.other_premium)    || 0) +
-    (Number(form.terrorism_premium)|| 0) +
     (Number(form.policy_fees)      || 0) +
     (Number(form.cess)             || 0) +
     (Number(form.road_safety_tax)  || 0) +
@@ -355,7 +355,6 @@ const QuoteResponsePage = () => {
           admin_fee:         Number(form.admin_fee)        || 0,
           vat_amount:        Number(form.vat_amount)       || 0,
           other_premium:     Number(form.other_premium)    || 0,
-          terrorism_premium: Number(form.terrorism_premium)|| 0,
           policy_fees:       Number(form.policy_fees)      || 0,
           cess:              Number(form.cess)             || 0,
           road_safety_tax:   Number(form.road_safety_tax)  || 0,
@@ -533,8 +532,8 @@ const QuoteResponsePage = () => {
   const product      = productDef || null;
   const isPlansProduct = !!product?.hasPlans;
   const infoSections = buildInfoSections(product, quote?.form_data);
-  const coverFields  = getYesnoFields(product, 'Covers Required', 'Cover Required');
-  const clauseFields = getYesnoFields(product, 'Additional Clauses');
+  const coverFields  = getYesnoFields(product, 'Covers Required', 'Cover Required').filter(f => quote?.form_data?.[f.name] === 'Yes');
+  const clauseFields = getYesnoFields(product, 'Additional Clauses').filter(f => quote?.form_data?.[f.name] === 'Yes');
 
   const updatePlanPremium = (pi, key, rawVal) => {
     setPlanPremiums(prev => {
@@ -760,7 +759,11 @@ const QuoteResponsePage = () => {
                             </Box>
                           );
                         })() : (
-                          <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, lineHeight: 1.5 }}>{value}</Typography>
+                          <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, lineHeight: 1.5 }}>
+                            {(field.type === 'currency' || field.type === 'number') && !isNaN(Number(value)) && value !== ''
+                              ? Number(value).toLocaleString()
+                              : value}
+                          </Typography>
                         )}
                       </Box>
                     ))}
@@ -894,11 +897,9 @@ const QuoteResponsePage = () => {
                     <TextField label="Strike Riot Civil Commotion — SRCC (LKR)" type="number" size="small" fullWidth
                       error={!!fieldErrors.srcc_premium} helperText={fieldErrors.srcc_premium}
                       value={form.srcc_premium} onChange={e => setFE('srcc_premium', e.target.value)} />
-                    <TextField label="TC (LKR)" type="number" size="small" fullWidth
+                    <TextField label="Terrorism Cover — TC (LKR)" type="number" size="small" fullWidth
                       error={!!fieldErrors.tc_premium} helperText={fieldErrors.tc_premium}
                       value={form.tc_premium} onChange={e => setFE('tc_premium', e.target.value)} />
-                    <TextField label="Terrorism Cover (LKR)" type="number" size="small" fullWidth
-                      value={form.terrorism_premium} onChange={e => setFE('terrorism_premium', e.target.value)} />
                     <TextField label="Policy Fees (LKR)" type="number" size="small" fullWidth
                       value={form.policy_fees} onChange={e => setFE('policy_fees', e.target.value)} />
                     <TextField label="Cess (LKR)" type="number" size="small" fullWidth
