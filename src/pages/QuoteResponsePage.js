@@ -537,8 +537,15 @@ const QuoteResponsePage = () => {
   const product      = productDef || null;
   const isPlansProduct = !!product?.hasPlans;
   const infoSections = buildInfoSections(product, quote?.form_data);
-  const coverFields  = getYesnoFields(product, 'Covers Required', 'Cover Required').filter(f => quote?.form_data?.[f.name] === 'Yes');
-  const clauseFields = getYesnoFields(product, 'Additional Clauses').filter(f => quote?.form_data?.[f.name] === 'Yes');
+  const parseDynamicExtras = (storeKey) => {
+    try {
+      return (JSON.parse(quote?.form_data?.[storeKey] || '[]'))
+        .filter(c => c.name?.trim() && c.value === 'Yes')
+        .map(c => ({ name: storeKey + '_' + c.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase(), label: c.name, type: 'yesno' }));
+    } catch { return []; }
+  };
+  const coverFields  = [...getYesnoFields(product, 'Covers Required', 'Cover Required').filter(f => quote?.form_data?.[f.name] === 'Yes'), ...parseDynamicExtras('extra_covers')];
+  const clauseFields = [...getYesnoFields(product, 'Additional Clauses').filter(f => quote?.form_data?.[f.name] === 'Yes'), ...parseDynamicExtras('extra_clauses')];
 
   const updatePlanPremium = (pi, key, rawVal) => {
     setPlanPremiums(prev => {

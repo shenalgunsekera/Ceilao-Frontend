@@ -449,6 +449,47 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
             {sec.fields.map(f => renderField(f))}
           </Box>
+          {/* "Add Other Cover" — shown at the bottom of every Covers Required section */}
+          {['Covers Required', 'Cover Required', 'Additional Clauses'].includes(sec.name) && (() => {
+            const storeKey = sec.name === 'Additional Clauses' ? 'extra_clauses' : 'extra_covers';
+            let extras = [];
+            try { extras = JSON.parse(values[storeKey] || '[]'); } catch {}
+            return (
+              <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed rgba(255,139,90,0.2)' }}>
+                {extras.map((item, idx) => (
+                  <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+                    <TextField size="small" placeholder={sec.name === 'Additional Clauses' ? 'Clause name…' : 'Cover name…'}
+                      value={item.name} fullWidth
+                      onChange={e => {
+                        const updated = extras.map((x, i) => i === idx ? { ...x, name: e.target.value } : x);
+                        onChange(storeKey, JSON.stringify(updated));
+                      }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', fontSize: 13 } }} />
+                    {['Yes', 'No'].map(opt => (
+                      <Box key={opt} onClick={() => {
+                        const updated = extras.map((x, i) => i === idx ? { ...x, value: opt } : x);
+                        onChange(storeKey, JSON.stringify(updated));
+                      }} sx={{
+                        px: 1.5, py: 0.7, borderRadius: '8px', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, flexShrink: 0,
+                        border: `1.5px solid ${item.value === opt ? '#FF5A5A' : 'rgba(0,0,0,0.12)'}`,
+                        bgcolor: item.value === opt ? 'rgba(255,90,90,0.08)' : 'transparent',
+                        color: item.value === opt ? '#FF5A5A' : '#9CA3AF', transition: 'all 0.15s',
+                      }}>{opt}</Box>
+                    ))}
+                    <Box onClick={() => {
+                      const updated = extras.filter((_, i) => i !== idx);
+                      onChange(storeKey, JSON.stringify(updated));
+                    }} sx={{ cursor: 'pointer', color: '#ef4444', fontSize: 16, px: 0.5, flexShrink: 0, lineHeight: 1 }}>✕</Box>
+                  </Box>
+                ))}
+                <Box onClick={() => onChange(storeKey, JSON.stringify([...extras, { name: '', value: 'Yes' }]))}
+                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 0.5, cursor: 'pointer',
+                        fontSize: 12, fontWeight: 700, color: '#FF8B5A', '&:hover': { color: '#FF5A5A' } }}>
+                  + Add {sec.name === 'Additional Clauses' ? 'Other Clause' : 'Other Cover'}
+                </Box>
+              </Box>
+            );
+          })()}
         </Box>
         );
       })}
@@ -634,12 +675,33 @@ function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProd
   );
 }
 
+/* Parse extra custom covers/clauses stored as JSON in form_data */
+function parseDynamicExtras(formData, storeKey) {
+  try {
+    return (JSON.parse(formData?.[storeKey] || '[]'))
+      .filter(c => c.name?.trim() && c.value === 'Yes')
+      .map(c => ({
+        name: storeKey + '_' + c.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase(),
+        label: c.name,
+        type: 'yesno',
+      }));
+  } catch { return []; }
+}
+
 /* ── comparison view ──────────────────────────────────────────────────────── */
 function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCTS }) {
   const product   = allProducts[quote?.product_key];
   const responses = quote?.responses || [];
-  const coverFields  = (product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes');
-  const clauseFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes');
+  const extraCovers  = parseDynamicExtras(quote?.form_data, 'extra_covers');
+  const extraClauses = parseDynamicExtras(quote?.form_data, 'extra_clauses');
+  const coverFields  = [
+    ...(product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes'),
+    ...extraCovers,
+  ];
+  const clauseFields = [
+    ...(product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes'),
+    ...extraClauses,
+  ];
   const isPlansProduct = !!product?.hasPlans;
   const planCount = isPlansProduct ? Math.max(parseInt(quote?.form_data?.no_of_plans) || 1, 1) : 0;
 
@@ -755,9 +817,15 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
       const deductiblesRow = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Deductibles</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.deductible||'—'}</td>`).join('')}</tr>`;
       const excessRow      = `<tr><td style="padding:8px 14px;font-weight:600;color:#374151;">Excesses</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;">${r.excesses||'—'}</td>`).join('')}</tr>`;
       const validityRow    = `<tr style="background:#FFF8F5"><td style="padding:8px 14px;font-weight:600;color:#374151;">Validity (days)</td>${responses.map(r => `<td style="padding:8px 14px;color:#4B5563;text-align:center;">${r.validity_days||'—'}</td>`).join('')}</tr>`;
-      // Covers section
-      const cvFields = (product?.fields || []).filter(f => ['Covers Required','Cover Required'].includes(f.section) && f.type === 'yesno');
-      const clFields = (product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno');
+      // Covers section (static + dynamic custom covers)
+      const cvFields = [
+        ...(product?.fields || []).filter(f => ['Covers Required','Cover Required'].includes(f.section) && f.type === 'yesno' && quote.form_data?.[f.name] === 'Yes'),
+        ...parseDynamicExtras(quote.form_data, 'extra_covers'),
+      ];
+      const clFields = [
+        ...(product?.fields || []).filter(f => f.section === 'Additional Clauses' && f.type === 'yesno' && quote.form_data?.[f.name] === 'Yes'),
+        ...parseDynamicExtras(quote.form_data, 'extra_clauses'),
+      ];
       const sectionHeader = (label) => `<tr><td colspan="${responses.length+1}" style="background:#1A1A2E;padding:10px 14px;font-size:11px;font-weight:800;color:#FF8B5A;text-transform:uppercase;letter-spacing:1px;">${label}</td></tr>`;
       const coverRows = cvFields.length > 0 ? sectionHeader('Covers Required') + cvFields.map((f,i) => {
         const cells = responses.map(r => {
