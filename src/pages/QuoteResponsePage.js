@@ -93,7 +93,7 @@ const CoverTable = ({ fields, responses, setResponses, quoteFormData, headerLabe
       </thead>
       <tbody>
         {fields.map((f, i) => {
-          const clientVal = quoteFormData?.[f.name] || 'No';
+          const clientVal = f.clientValue || quoteFormData?.[f.name] || 'No';
           const cr = responses[f.name] || { provided: '', terms: '' };
           return (
             <tr key={f.name} style={{ background: i % 2 === 0 ? '#fff' : '#FFF8F5', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
@@ -466,16 +466,26 @@ const QuoteResponsePage = () => {
     });
 
     const prod = productDef || null;
+    // Resolve a label for a response key: product field first, then custom extra covers/clauses
+    const labelFor = (k) => {
+      const field = prod?.fields?.find(f => f.name === k);
+      if (field) return field.label;
+      for (const sk of ['extra_covers', 'extra_clauses']) {
+        try {
+          const hit = JSON.parse(quote?.form_data?.[sk] || '[]')
+            .find(c => sk + '_' + c.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() === k);
+          if (hit) return hit.name;
+        } catch {}
+      }
+      return k;
+    };
     const coverEntries = Object.entries(submittedData?.cover_responses || {})
       .filter(([, v]) => v.provided);
     if (coverEntries.length > 0) {
       autoTable(pdf, {
         startY: pdf.lastAutoTable.finalY + 8,
         head: [['Cover / Clause', 'Provided', 'Special Terms']],
-        body: coverEntries.map(([k, v]) => {
-          const field = prod?.fields?.find(f => f.name === k);
-          return [field?.label || k, v.provided || '—', v.terms || '—'];
-        }),
+        body: coverEntries.map(([k, v]) => [labelFor(k), v.provided || '—', v.terms || '—']),
         headStyles: { fillColor: [26, 26, 46], textColor: [255, 139, 90], fontSize: 10 },
         alternateRowStyles: { fillColor: [255, 248, 245] },
         styles: { fontSize: 9.5, cellPadding: 4 },
@@ -488,10 +498,7 @@ const QuoteResponsePage = () => {
       autoTable(pdf, {
         startY: pdf.lastAutoTable.finalY + 8,
         head: [['Additional Clause', 'Included', 'Special Terms']],
-        body: clauseEntries.map(([k, v]) => {
-          const field = prod?.fields?.find(f => f.name === k);
-          return [field?.label || k, v.provided || '—', v.terms || '—'];
-        }),
+        body: clauseEntries.map(([k, v]) => [labelFor(k), v.provided || '—', v.terms || '—']),
         headStyles: { fillColor: [26, 26, 46], textColor: [255, 139, 90], fontSize: 10 },
         alternateRowStyles: { fillColor: [255, 248, 245] },
         styles: { fontSize: 9.5, cellPadding: 4 },
@@ -541,7 +548,7 @@ const QuoteResponsePage = () => {
     try {
       return (JSON.parse(quote?.form_data?.[storeKey] || '[]'))
         .filter(c => c.name?.trim() && c.value === 'Yes')
-        .map(c => ({ name: storeKey + '_' + c.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase(), label: c.name, type: 'yesno' }));
+        .map(c => ({ name: storeKey + '_' + c.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase(), label: c.name, type: 'yesno', clientValue: c.value }));
     } catch { return []; }
   };
   const coverFields  = [...getYesnoFields(product, 'Covers Required', 'Cover Required').filter(f => quote?.form_data?.[f.name] === 'Yes'), ...parseDynamicExtras('extra_covers')];
