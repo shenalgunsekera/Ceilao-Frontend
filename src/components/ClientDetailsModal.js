@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { viewUrl } from '../storage';
 import { PRODUCTS } from '../config/products';
+import { db } from '../firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../App';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -16,6 +19,13 @@ import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
 import CircularProgress from '@mui/material/CircularProgress';
+import TextField from '@mui/material/TextField';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import IconButton from '@mui/material/IconButton';
+import Alert from '@mui/material/Alert';
 
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
@@ -28,6 +38,10 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import HistoryEduOutlinedIcon from '@mui/icons-material/HistoryEduOutlined';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 const docFields = [
   { label:'Policyholder',     doc:'policyholder_doc_url',     text:'policyholder_text' },
@@ -49,8 +63,19 @@ const TABS = [
   { label:'Financials',  icon:<MonetizationOnOutlinedIcon /> },
   { label:'Commission',  icon:<PaymentOutlinedIcon /> },
   { label:'Claims',      icon:<ReportProblemOutlinedIcon /> },
+  { label:'Endorsements',icon:<HistoryEduOutlinedIcon /> },
   { label:'Documents',   icon:<FolderOutlinedIcon /> },
 ];
+
+// Endorsement = a recorded change to an in-force policy (sum insured, period,
+// added covers/locations, etc.). Each carries the financial deltas it creates so
+// revised totals can be derived from the original policy values.
+const ENDORSEMENT_TYPES = [
+  'Sum Insured Change', 'Period Extension / Change', 'Additional Coverage',
+  'Add Cover', 'Add New Location', 'Cancellation / Return', 'Other',
+];
+const endoNum = (v) => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
+const fmtSigned = (n) => `${n < 0 ? '-' : '+'}LKR ${Math.abs(n).toLocaleString()}`;
 
 function Field({ label, value }) {
   if (!value && value !== 0) return null;
@@ -131,9 +156,71 @@ const UW_FIELD_ALIASES = {
 };
 
 const ClientDetailsModal = ({ client, onClose }) => {
+  const { user, userProfile } = useAuth();
   const [tab,       setTab]       = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+
+  // Endorsements — kept in local state so the modal (and its PDF/Excel) reflect
+  // edits immediately; each change is also persisted to the client document.
+  const [endorsements, setEndorsements] = useState(() =>
+    Array.isArray(client?.endorsements) ? client.endorsements : []);
+  const blankEndo = { effective_date: '', type: ENDORSEMENT_TYPES[0], description: '', sum_insured_change: '', premium_change: '', commission_change: '' };
+  const [endoDraft, setEndoDraft] = useState(blankEndo);
+  const [endoSaving, setEndoSaving] = useState(false);
+  const [endoError, setEndoError] = useState('');
+
   if (!client) return null;
+
+  // Revised totals = original policy value + cumulative endorsement deltas
+  const sumDelta  = endorsements.reduce((a, e) => a + endoNum(e.sum_insured_change), 0);
+  const premDelta = endorsements.reduce((a, e) => a + endoNum(e.premium_change), 0);
+  const commDelta = endorsements.reduce((a, e) => a + endoNum(e.commission_change), 0);
+  const revisedSum  = endoNum(client.sum_insured)   + sumDelta;
+  const revisedPrem = endoNum(client.total_invoice) + premDelta;
+  const revisedComm = endoNum(client.commission_total) + commDelta;
+
+  const persistEndorsements = async (next) => {
+    if (!client.id) { setEndoError('Cannot save — this record has no id. Reload and try again.'); return false; }
+    setEndoSaving(true); setEndoError('');
+    try {
+      await updateDoc(doc(db, 'clients', client.id), { endorsements: next, updated_at: serverTimestamp() });
+      setEndorsements(next);
+      client.endorsements = next; // keep the in-memory record in sync for PDF/Excel
+      setEndoSaving(false);
+      return true;
+    } catch (err) {
+      setEndoError(err?.message || 'Failed to save endorsement.');
+      setEndoSaving(false);
+      return false;
+    }
+  };
+
+  const addEndorsement = async () => {
+    if (!endoDraft.effective_date && !endoDraft.description.trim()) {
+      setEndoError('Add an effective date or a description for the endorsement.');
+      return;
+    }
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      endorsement_no: endorsements.length + 1,
+      effective_date: endoDraft.effective_date || '',
+      type: endoDraft.type,
+      description: endoDraft.description.trim(),
+      sum_insured_change: endoDraft.sum_insured_change === '' ? '' : String(endoNum(endoDraft.sum_insured_change)),
+      premium_change: endoDraft.premium_change === '' ? '' : String(endoNum(endoDraft.premium_change)),
+      commission_change: endoDraft.commission_change === '' ? '' : String(endoNum(endoDraft.commission_change)),
+      created_at: new Date().toISOString(),
+      created_by: userProfile?.full_name || user?.email?.split('@')[0] || 'Unknown',
+    };
+    const ok = await persistEndorsements([...endorsements, entry]);
+    if (ok) setEndoDraft(blankEndo);
+  };
+
+  const deleteEndorsement = async (id) => {
+    const next = endorsements.filter(e => e.id !== id).map((e, i) => ({ ...e, endorsement_no: i + 1 }));
+    await persistEndorsements(next);
+  };
 
   const coverItems  = Object.entries(client).filter(([k, v]) => k.startsWith('cover_')  && v && v !== 'No');
   const clauseItems = Object.entries(client).filter(([k, v]) => k.startsWith('clause_') && v && v !== 'No');
@@ -186,6 +273,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         { key:'financials', label:'Financials' },
         { key:'commission', label:'Commission' },
         { key:'claims',     label:'Claims'     },
+        { key:'endorsements', label:'Endorsements' },
         { key:'documents',  label:'Documents'  },
       ];
       const TAB_H = 8;
@@ -408,6 +496,42 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Partial Payment Reasons', client.partial_payment_reasons],
       ]);
 
+      // Endorsements — revised totals summary + change log
+      if (endorsements.length > 0) {
+        startSec('endorsements');
+        addSection('endorsements', 'REVISED TOTALS (AFTER ENDORSEMENTS)', [
+          ['Sum Insured', `${fmtLKR(client.sum_insured)}  ->  ${fmtLKR(revisedSum)}${sumDelta ? `  (${fmtSigned(sumDelta)})` : ''}`],
+          ['Total Invoice', `${fmtLKR(client.total_invoice)}  ->  ${fmtLKR(revisedPrem)}${premDelta ? `  (${fmtSigned(premDelta)})` : ''}`],
+          ['Total Commission', `${fmtLKR(client.commission_total)}  ->  ${fmtLKR(revisedComm)}${commDelta ? `  (${fmtSigned(commDelta)})` : ''}`],
+        ]);
+        autoTable(pdf, {
+          startY: y,
+          head: [[
+            { content: 'ENDORSEMENT LOG', colSpan: 7, styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 8.5, cellPadding: { top:3.5, bottom:3.5, left:6, right:6 } } },
+          ], [
+            { content: '#' }, { content: 'Effective' }, { content: 'Type' }, { content: 'Description' },
+            { content: 'Sum Insured' }, { content: 'Premium' }, { content: 'Commission' },
+          ]],
+          body: endorsements.map(e => [
+            String(e.endorsement_no),
+            e.effective_date || '—',
+            e.type || '—',
+            e.description || '—',
+            endoNum(e.sum_insured_change) ? fmtSigned(endoNum(e.sum_insured_change)) : '—',
+            endoNum(e.premium_change) ? fmtSigned(endoNum(e.premium_change)) : '—',
+            endoNum(e.commission_change) ? fmtSigned(endoNum(e.commission_change)) : '—',
+          ]),
+          headStyles: { fillColor: [124,58,237], textColor: [255,255,255], fontStyle: 'bold', fontSize: 7.5 },
+          columnStyles: { 0:{cellWidth:8, halign:'center'}, 1:{cellWidth:24}, 2:{cellWidth:30}, 4:{halign:'right'}, 5:{halign:'right'}, 6:{halign:'right'} },
+          styles: { fontSize: 8, cellPadding: { top:3, bottom:3, left:5, right:5 }, lineColor: [225,215,245], lineWidth: 0.1, overflow: 'linebreak' },
+          bodyStyles: { fillColor: [255,255,255] },
+          alternateRowStyles: { fillColor: [250,248,255] },
+          margin: { left:10, right:10, top:26+TAB_H, bottom:16 },
+          didDrawPage: d => { if (d.pageNumber > 1) { drawHeader(); if (!pageToSection[d.pageNumber]) pageToSection[d.pageNumber] = 'endorsements'; } },
+        });
+        y = pdf.lastAutoTable.finalY + 5;
+      }
+
       // Documents — product-specific docs first, then standard UW docs
       const allPdfDocs = [
         ...extraDocCards.map(df => ({ label: df.label, doc: df.name, text: null })),
@@ -497,6 +621,140 @@ const ClientDetailsModal = ({ client, onClose }) => {
       console.error('PDF export error:', err);
     }
     setExporting(false);
+  };
+
+  /* ── Excel export — underwriting record + endorsements ─────────────────── */
+  const exportExcel = async () => {
+    setExportingXlsx(true);
+    try {
+      const { default: ExcelJS } = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      const xfmt = v => (v === null || v === undefined || v === '' || v === false) ? '' : (Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v));
+
+      const ws = wb.addWorksheet('Underwriting Record');
+      ws.columns = [{ width: 34 }, { width: 60 }];
+
+      const titleRow = ws.addRow([`${client.client_name || 'Client'} — Underwriting Record`, '']);
+      ws.mergeCells(titleRow.number, 1, titleRow.number, 2);
+      titleRow.getCell(1).font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+      titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } };
+      titleRow.getCell(1).alignment = { vertical: 'middle' };
+      titleRow.height = 24;
+      ws.addRow([]);
+
+      const addSheetSection = (title, rows) => {
+        const filtered = rows.filter(r => xfmt(r[1]) !== '');
+        if (!filtered.length) return;
+        const hr = ws.addRow([title, '']);
+        ws.mergeCells(hr.number, 1, hr.number, 2);
+        hr.getCell(1).font = { bold: true, size: 11, color: { argb: 'FFFF8B5A' } };
+        hr.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } };
+        filtered.forEach(([label, value]) => {
+          const r = ws.addRow([label, xfmt(value)]);
+          r.getCell(1).font = { bold: true, color: { argb: 'FF374151' } };
+          r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8F5' } };
+          r.getCell(2).alignment = { wrapText: true };
+        });
+        ws.addRow([]);
+      };
+
+      const getRiskVal = (field) => {
+        const alias = UW_FIELD_ALIASES[field.name];
+        const raw = (alias && client[alias] != null && client[alias] !== '') ? client[alias] : client[field.name];
+        return xfmt(raw);
+      };
+
+      addSheetSection('INTRODUCER', [
+        ['Ceilao IB File No.', client.ceilao_ib_file_no], ['Manager', client.manager], ['Introducer Code', client.introducer_code],
+      ]);
+      addSheetSection('INSURANCE COMPANY', [
+        ['Main Class', client.main_class], ['Product', client.product], ['Customer Type', client.customer_type],
+        ['Insurance Provider', client.insurance_provider], ['Branch', client.branch],
+      ]);
+      addSheetSection('PROPOSER DETAILS', [
+        ['Client Name', client.client_name], ['NIC / Passport No.', client.nic_proof], ['Business Registration', client.business_registration],
+        ['SVAT / VAT No.', client.svat_proof], ['Street 1', client.street1], ['Street 2', client.street2],
+        ['City', client.city], ['District', client.district], ['Province', client.province], ['Postal Code', client.postal_code],
+        ['Telephone', client.telephone], ['Mobile No', client.mobile_no], ['Email', client.email],
+        ['Contact Person', client.contact_person], ['Social Media', client.social_media],
+      ]);
+      addSheetSection('PERIOD OF INSURANCE', [
+        ['Policy No', client.policy_no], ['Policy Type', client.policy_type], ['Coverage', client.coverage],
+        ['Policy Period From', client.policy_period_from], ['Policy Period To', client.policy_period_to],
+        ['Policy Days', client.policy_days], ['O/S Days', client.os_days], ['Credit Period', client.credit_period],
+        ['Quote Validity (days)', client.validity_days],
+      ]);
+      if (fiItems.length) addSheetSection('FINANCIAL INTEREST', fiItems.map(([k, v]) => [fieldNameToLabel(k), v]));
+      addSheetSection('RISK INFORMATION', riskInfoFields.map(f => [f.label, getRiskVal(f)]));
+      addSheetSection('CLAIMS HISTORY', claimsHistFields.map(f => [f.label, getRiskVal(f)]));
+      addSheetSection('UNDERWRITING INFORMATION', uwInfoFields.map(f => [f.label, getRiskVal(f)]));
+      addSheetSection('SUM INSURED', [
+        ...sumSubFields.map(f => [f.label, getRiskVal(f)]),
+        ['Sum Insured (Total)', client.sum_insured],
+      ]);
+      if (coverItems.length) addSheetSection('COVERS REQUIRED', coverItems.map(([k, v]) => [fieldNameToLabel(k), v]));
+      if (clauseItems.length) addSheetSection('ADDITIONAL CLAUSES', clauseItems.map(([k, v]) => [fieldNameToLabel(k), v]));
+      addSheetSection('PREMIUM', [
+        ['Basic Premium', client.basic_premium], ['SRCC Premium', client.srcc_premium], ['TC Premium', client.tc_premium],
+        ['Cess', client.cess], ['NBL', client.nbl], ['SSC Levy', client.ssc_levy], ['Other Premium', client.other_premium],
+        ['Net Premium', client.net_premium], ['Stamp Duty', client.stamp_duty], ['Admin Fees', client.admin_fees],
+        ['Road Safety Fee', client.road_safety_fee], ['Policy Fee', client.policy_fee], ['VAT', client.vat_fee],
+        ['Total Invoice', client.total_invoice], ['Deductible', client.deductible], ['Excesses', client.excesses],
+      ]);
+      addSheetSection('COMMISSION', [
+        ['Commission Type', client.commission_type], ['Basic Commission %', client.commission_pct],
+        ['Special Rate (+/- %)', client.commission_special_rate], ['Commission Basic', client.commission_basic],
+        ['Commission SRCC', client.commission_srcc], ['Commission TC', client.commission_tc],
+        ['Special Adjustment', client.commission_special_amount], ['Total Commission', client.commission_total],
+        ['Commission Method', client.commission_paid_method], ['Receive Date', client.commission_receive_date],
+        ['Commission Amount Paid', client.commission_amount_paid], ['Commission VAT', client.commission_vat],
+      ]);
+      addSheetSection('PAYMENT', [
+        ['Payment Status', client.payment_status], ['Amount Received', client.amount_received], ['Payment Date', client.payment_date],
+        ['Payment Method', client.payment_method], ['Cheque / Slip No.', client.cheque_slip_no], ['Receipt No.', client.receipt_no],
+      ]);
+      addSheetSection('CLAIMS', [
+        ['Claim Paid?', client.claim_paid], ['Date of Claim', client.claim_date], ['Claim Amount', client.claim_amount],
+        ['Settled Amount', client.claim_settled], ['Repudiation Reasons', client.repudiation_reasons], ['Partial Payment Reasons', client.partial_payment_reasons],
+      ]);
+
+      // Endorsements sheet
+      if (endorsements.length > 0) {
+        const es = wb.addWorksheet('Endorsements');
+        es.columns = [
+          { header: '#', width: 6 }, { header: 'Effective Date', width: 16 }, { header: 'Type', width: 24 },
+          { header: 'Description', width: 50 }, { header: 'Sum Insured Δ', width: 16 }, { header: 'Premium Δ', width: 16 },
+          { header: 'Commission Δ', width: 16 }, { header: 'Recorded By', width: 20 },
+        ];
+        es.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        es.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } };
+        endorsements.forEach(e => {
+          es.addRow([
+            e.endorsement_no, e.effective_date || '', e.type || '', e.description || '',
+            endoNum(e.sum_insured_change) || '', endoNum(e.premium_change) || '', endoNum(e.commission_change) || '', e.created_by || '',
+          ]);
+        });
+        es.addRow([]);
+        const totalsHdr = es.addRow(['REVISED TOTALS', '', '', '', 'Original', 'Change', 'Revised', '']);
+        totalsHdr.font = { bold: true };
+        es.addRow(['Sum Insured', '', '', '', endoNum(client.sum_insured), sumDelta, revisedSum, '']);
+        es.addRow(['Total Invoice', '', '', '', endoNum(client.total_invoice), premDelta, revisedPrem, '']);
+        es.addRow(['Total Commission', '', '', '', endoNum(client.commission_total), commDelta, revisedComm, '']);
+      }
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const safeName = (client.client_name || 'Client').replace(/\s+/g, '_').replace(/[^\w-]/g, '');
+      const safeRef = (client.policy_no || client.ceilao_ib_file_no || 'Record').replace(/[^\w-]/g, '');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `CeilaoIB_${safeName}_${safeRef}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch (err) {
+      console.error('Excel export error:', err);
+    }
+    setExportingXlsx(false);
   };
 
   const fmtLKR = v => v ? `LKR ${Number(v).toLocaleString()}` : null;
@@ -710,10 +968,12 @@ const ClientDetailsModal = ({ client, onClose }) => {
           <Grid container spacing={2.5}>
             <SubHeader title="Commission" />
             <Grid item xs={12} sm={6} md={4}><Field label="Commission Type"         value={client.commission_type} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Commission %"            value={client.commission_pct} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Basic Commission %"      value={client.commission_pct} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Special Rate (+/- %)"    value={client.commission_special_rate} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission Basic"        value={fmtLKR(client.commission_basic)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission SRCC"         value={fmtLKR(client.commission_srcc)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission TC"           value={fmtLKR(client.commission_tc)} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Special Adjustment"      value={fmtLKR(client.commission_special_amount)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Total Commission"        value={fmtLKR(client.commission_total)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission Method"       value={client.commission_paid_method} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Receive Date"            value={client.commission_receive_date} /></Grid>
@@ -739,7 +999,108 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12}             ><Field label="Partial Payment Reasons"   value={client.partial_payment_reasons} /></Grid>
           </Grid>
         );
-      case 8: /* Documents — quotation-form docs + standard UW docs */
+      case 8: /* Endorsements — recorded changes to the in-force policy */
+        return (
+          <Box>
+            {/* Revised totals after all endorsements */}
+            <Box sx={{ display:'grid', gridTemplateColumns:{ xs:'1fr', sm:'1fr 1fr 1fr' }, gap:2, mb:2.5 }}>
+              {[
+                { label:'Sum Insured',     orig: endoNum(client.sum_insured),     delta: sumDelta,  revised: revisedSum,  color:'#059669' },
+                { label:'Total Invoice',   orig: endoNum(client.total_invoice),   delta: premDelta, revised: revisedPrem, color:'#FF5A5A' },
+                { label:'Total Commission',orig: endoNum(client.commission_total),delta: commDelta, revised: revisedComm, color:'#ec4899' },
+              ].map(c => (
+                <Box key={c.label} sx={{ p:1.8, borderRadius:'12px', border:`1px solid ${c.color}22`, bgcolor:`${c.color}08` }}>
+                  <Typography sx={{ fontSize:10.5, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:0.6 }}>{c.label}</Typography>
+                  <Typography sx={{ fontSize:20, fontWeight:800, color:c.color, mt:0.3 }}>LKR {Math.round(c.revised).toLocaleString()}</Typography>
+                  <Typography sx={{ fontSize:11, color:'#6B7280', mt:0.2 }}>
+                    Original LKR {Math.round(c.orig).toLocaleString()}
+                    {c.delta !== 0 && <Box component="span" sx={{ color:c.delta < 0 ? '#dc2626' : '#059669', fontWeight:700 }}> · {fmtSigned(c.delta)}</Box>}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+
+            <SubHeader title={`Endorsement History (${endorsements.length})`} />
+            {endorsements.length === 0 ? (
+              <Typography sx={{ color:'#9CA3AF', fontSize:13, mb:2 }}>No endorsements recorded yet.</Typography>
+            ) : (
+              <Box sx={{ mb:2 }}>
+                {endorsements.map(e => (
+                  <Box key={e.id} sx={{ display:'flex', gap:1.5, alignItems:'flex-start', p:1.5, mb:1, borderRadius:'10px', border:'1px solid rgba(124,58,237,0.18)', bgcolor:'rgba(124,58,237,0.04)' }}>
+                    <Box sx={{ width:26, height:26, flexShrink:0, borderRadius:'50%', bgcolor:'#7c3aed', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800 }}>
+                      {e.endorsement_no}
+                    </Box>
+                    <Box sx={{ flex:1, minWidth:0 }}>
+                      <Box sx={{ display:'flex', gap:1, alignItems:'center', flexWrap:'wrap' }}>
+                        <Chip label={e.type} size="small" sx={{ height:20, fontSize:10.5, fontWeight:700, bgcolor:'rgba(124,58,237,0.12)', color:'#7c3aed' }} />
+                        {e.effective_date && <Typography sx={{ fontSize:11.5, color:'#6B7280' }}>Effective {e.effective_date}</Typography>}
+                      </Box>
+                      {e.description && <Typography sx={{ fontSize:13, color:'#1A1A2E', mt:0.5 }}>{e.description}</Typography>}
+                      <Stack direction="row" spacing={2} sx={{ mt:0.6, flexWrap:'wrap' }}>
+                        {endoNum(e.sum_insured_change) !== 0 && <Typography sx={{ fontSize:11.5, fontWeight:600, color:'#059669' }}>Sum Insured {fmtSigned(endoNum(e.sum_insured_change))}</Typography>}
+                        {endoNum(e.premium_change) !== 0 && <Typography sx={{ fontSize:11.5, fontWeight:600, color:'#FF5A5A' }}>Premium {fmtSigned(endoNum(e.premium_change))}</Typography>}
+                        {endoNum(e.commission_change) !== 0 && <Typography sx={{ fontSize:11.5, fontWeight:600, color:'#ec4899' }}>Commission {fmtSigned(endoNum(e.commission_change))}</Typography>}
+                      </Stack>
+                      {e.created_by && <Typography sx={{ fontSize:10, color:'#9CA3AF', mt:0.4 }}>Recorded by {e.created_by}</Typography>}
+                    </Box>
+                    <IconButton size="small" onClick={() => deleteEndorsement(e.id)} disabled={endoSaving}
+                      sx={{ color:'#dc2626' }}>
+                      <DeleteOutlineIcon sx={{ fontSize:18 }} />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            <SubHeader title="Add Endorsement" />
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField type="date" label="Effective Date" InputLabelProps={{ shrink:true }} fullWidth size="small"
+                  value={endoDraft.effective_date} onChange={e => setEndoDraft(d => ({ ...d, effective_date: e.target.value }))}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel sx={{ fontSize:13 }}>Type</InputLabel>
+                  <Select label="Type" value={endoDraft.type} onChange={e => setEndoDraft(d => ({ ...d, type: e.target.value }))}
+                    sx={{ borderRadius:'10px', fontSize:13 }}>
+                    {ENDORSEMENT_TYPES.map(t => <MenuItem key={t} value={t} sx={{ fontSize:13 }}>{t}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField label="Description of Change" fullWidth size="small"
+                  value={endoDraft.description} onChange={e => setEndoDraft(d => ({ ...d, description: e.target.value }))}
+                  placeholder="e.g. Sum insured increased; new location added at…"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField label="Sum Insured Change (+/-)" fullWidth size="small"
+                  value={endoDraft.sum_insured_change} onChange={e => setEndoDraft(d => ({ ...d, sum_insured_change: e.target.value }))}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField label="Premium Change (+/-)" fullWidth size="small"
+                  value={endoDraft.premium_change} onChange={e => setEndoDraft(d => ({ ...d, premium_change: e.target.value }))}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField label="Commission Change (+/-)" fullWidth size="small"
+                  value={endoDraft.commission_change} onChange={e => setEndoDraft(d => ({ ...d, commission_change: e.target.value }))}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius:'10px', fontSize:13 } }} />
+              </Grid>
+              {endoError && <Grid item xs={12}><Alert severity="error" sx={{ borderRadius:'10px', py:0 }}>{endoError}</Alert></Grid>}
+              <Grid item xs={12}>
+                <Button onClick={addEndorsement} disabled={endoSaving}
+                  startIcon={endoSaving ? <CircularProgress size={14} color="inherit" /> : <AddCircleOutlineIcon />}
+                  variant="contained" sx={{ background:'linear-gradient(135deg,#7c3aed,#a855f7)', fontSize:13 }}>
+                  {endoSaving ? 'Saving…' : 'Add Endorsement'}
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
+        );
+      case 9: /* Documents — quotation-form docs + standard UW docs */
         return (
           <Grid container spacing={1.5}>
             {extraDocCards.length > 0 && (
@@ -806,10 +1167,28 @@ const ClientDetailsModal = ({ client, onClose }) => {
         <Box className="anim-fade-in">{renderTab()}</Box>
       </DialogContent>
 
-      <DialogActions sx={{ px:3, py:2, borderTop:'1px solid rgba(255,139,90,0.10)' }}>
+      <DialogActions sx={{ px:3, py:2, borderTop:'1px solid rgba(255,139,90,0.10)', flexWrap:'wrap', gap:1 }}>
         <Button onClick={onClose} variant="outlined"
           sx={{ borderColor:'#e0e0e0', color:'#6B7280', '&:hover':{ borderColor:'#aaa' } }}>
           Close
+        </Button>
+        <Box sx={{ flex:1 }} />
+        <Button
+          variant="outlined"
+          startIcon={<HistoryEduOutlinedIcon />}
+          onClick={() => setTab(8)}
+          sx={{ borderColor:'rgba(124,58,237,0.4)', color:'#7c3aed', fontSize:13,
+                '&:hover':{ borderColor:'#7c3aed', bgcolor:'rgba(124,58,237,0.04)' } }}>
+          Endorsements{endorsements.length ? ` (${endorsements.length})` : ''}
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={exportingXlsx ? <CircularProgress size={14} color="inherit" /> : <TableChartOutlinedIcon />}
+          onClick={exportExcel}
+          disabled={exportingXlsx}
+          sx={{ borderColor:'rgba(22,163,74,0.4)', color:'#16a34a', fontSize:13,
+                '&:hover':{ borderColor:'#16a34a', bgcolor:'rgba(22,163,74,0.04)' } }}>
+          {exportingXlsx ? 'Exporting…' : 'Export Excel'}
         </Button>
         <Button
           variant="contained"

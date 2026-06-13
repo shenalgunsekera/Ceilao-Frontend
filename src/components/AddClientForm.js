@@ -74,16 +74,29 @@ const dropdowns = {
     'LOLC General Insurance', 'LOLC Life Assurance',
     'National Insurance Trust Fund', 'Orient Insurance',
     'Sanasa Life Assurance', 'Softlogic Life Insurance',
-    'Sri Lanka Insurance Corporation', 'Sunshine Insurance',
+    'Sri Lanka Insurance Corporation',
     'Union Assurance', 'Other',
   ],
   branch: ['Colombo', 'Kandy', 'Galle', 'Kurunegala', 'Jaffna', 'Negombo', 'Matara', 'Other'],
-  commission_type: ['Flat', 'Percentage', 'Other'],
+  commission_type: ['Standard', 'Special'],
   payment_status: ['Unpaid', 'Partial', 'Paid', 'Overdue'],
   payment_method: ['Cash', 'Cheque', 'Bank Transfer', 'Online', 'Other'],
   commission_paid_method: ['Cash', 'Cheque', 'Bank Transfer', 'Online', 'Other'],
   claim_paid: ['Yes', 'No', 'Partial', 'Repudiated'],
 };
+
+/* ── Commission rate table (by Main Class) ──────────────────────────────────
+   Standard commission = basic premium × basic rate + SRCC × 7.5% + TC × 7.5%.
+   For a "Special" commission, an additional special rate (+/-) is applied to the
+   BASIC premium only; SRCC and TC rates remain fixed.                          */
+const COMMISSION_BASIC_RATES = {
+  Motor: 20, Fire: 20, Marine: 15, Engineering: 20,
+  Liability: 20, People: 20, Miscellaneous: 20,
+};
+const COMMISSION_SRCC_RATE = 7.5;
+const COMMISSION_TC_RATE   = 7.5;
+const num = (v) => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
+const roundMoney = (n) => (Number.isFinite(n) && n !== 0 ? String(Math.round(n * 100) / 100) : '');
 
 /* ── Field definitions ─────────────────────────────────────────────────────
    Exported so TableSection can use it for CSV template generation           */
@@ -153,10 +166,12 @@ export const textFields = [
   { label: 'Receipt No.',        name: 'receipt_no',         section: 'Payment' },
   // Commission
   { label: 'Commission Type',    name: 'commission_type',    section: 'Commission', dropdown: true },
-  { label: 'Commission %',       name: 'commission_pct',     section: 'Commission', type: 'number' },
+  { label: 'Basic Commission %', name: 'commission_pct',     section: 'Commission', type: 'number', readOnly: true },
+  { label: 'Special Rate (+/- %)', name: 'commission_special_rate', section: 'Commission', type: 'number' },
   { label: 'Commission Basic',   name: 'commission_basic',   section: 'Commission', type: 'number' },
   { label: 'Commission SRCC',    name: 'commission_srcc',    section: 'Commission', type: 'number' },
   { label: 'Commission TC',      name: 'commission_tc',      section: 'Commission', type: 'number' },
+  { label: 'Special Adjustment', name: 'commission_special_amount', section: 'Commission', type: 'number', readOnly: true },
   { label: 'Total Commission',   name: 'commission_total',   section: 'Commission', type: 'number', readOnly: true },
   { label: 'Commission Method',  name: 'commission_paid_method', section: 'Commission', dropdown: true },
   { label: 'Commission Receive Date', name: 'commission_receive_date', section: 'Commission', date: true },
@@ -382,13 +397,36 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     }));
   }, [dates.policy_period_from, dates.policy_period_to]);
 
+  /* Auto-calculate Standard / Special commission from the rate table.
+     Runs only when a commission type is selected; manual edits are left alone
+     when no type is set. SRCC and TC rates are fixed; Special adds a +/- rate
+     applied to the basic premium only. */
+  const autoCommission = fields.commission_type === 'Standard' || fields.commission_type === 'Special';
   useEffect(() => {
-    const b = parseFloat(fields.commission_basic || 0);
-    const s = parseFloat(fields.commission_srcc  || 0);
-    const t = parseFloat(fields.commission_tc    || 0);
-    const total = b + s + t;
-    setFields(f => ({ ...f, commission_total: total > 0 ? String(total) : '' }));
-  }, [fields.commission_basic, fields.commission_srcc, fields.commission_tc]);
+    if (!autoCommission) return;
+    const basicRate = COMMISSION_BASIC_RATES[fields.main_class] ?? 20;
+    const cb = num(fields.basic_premium) * basicRate / 100;
+    const cs = num(fields.srcc_premium)  * COMMISSION_SRCC_RATE / 100;
+    const ct = num(fields.tc_premium)    * COMMISSION_TC_RATE   / 100;
+    const specialAmt = fields.commission_type === 'Special'
+      ? num(fields.basic_premium) * num(fields.commission_special_rate) / 100
+      : 0;
+    setFields(f => ({
+      ...f,
+      commission_pct:            String(basicRate),
+      commission_basic:          roundMoney(cb),
+      commission_srcc:           roundMoney(cs),
+      commission_tc:             roundMoney(ct),
+      commission_special_amount: fields.commission_type === 'Special' ? roundMoney(specialAmt) : '',
+    }));
+  }, [autoCommission, fields.commission_type, fields.main_class, fields.basic_premium,
+      fields.srcc_premium, fields.tc_premium, fields.commission_special_rate]);
+
+  useEffect(() => {
+    const total = num(fields.commission_basic) + num(fields.commission_srcc)
+                + num(fields.commission_tc) + num(fields.commission_special_amount);
+    setFields(f => ({ ...f, commission_total: total !== 0 ? String(Math.round(total * 100) / 100) : '' }));
+  }, [fields.commission_basic, fields.commission_srcc, fields.commission_tc, fields.commission_special_amount]);
 
   /* ── auto-fill main_class when product changes ───────────────────────── */
   useEffect(() => {
@@ -475,6 +513,17 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     return rv;
   });
   const setRisk = (name, val) => setRiskValues(r => ({ ...r, [name]: val }));
+
+  /* Honour product-config `showIf` rules (e.g. NCB % vs No. of NCB Years are
+     mutually exclusive — only the one matching the chosen NCB type shows). */
+  const isRiskFieldVisible = (f) => {
+    if (!f.showIf) return true;
+    if (f.showIf.notZero) {
+      const v = riskValues[f.showIf.field];
+      return v !== undefined && v !== '' && num(v) !== 0;
+    }
+    return riskValues[f.showIf.field] === f.showIf.value;
+  };
 
   // Parse insurer's per-cover and per-clause responses (stored as JSON strings in riskValues)
   const coverResponses = useMemo(() => {
@@ -697,7 +746,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Financial Interest" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {financialInterestFields.map(f => (
+              {financialInterestFields.filter(isRiskFieldVisible).map(f => (
                 <Grid item xs={12} sm={6} md={4} key={f.name}>
                   {renderRiskField(f)}
                 </Grid>
@@ -724,7 +773,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 } }} />
                 </Grid>
               )}
-              {riskFields.map(f => (
+              {riskFields.filter(isRiskFieldVisible).map(f => (
                 <Grid item xs={12} sm={6} md={4} key={f.name}>
                   {renderRiskField(f)}
                 </Grid>
@@ -738,7 +787,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Claims History" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {claimsHistoryFields.map(f => (
+              {claimsHistoryFields.filter(isRiskFieldVisible).map(f => (
                 <Grid item xs={12} sm={6} md={4} key={f.name}>
                   {renderRiskField(f)}
                 </Grid>
@@ -752,7 +801,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Underwriting Information" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {underwritingInfoFields.map(f => (
+              {underwritingInfoFields.filter(isRiskFieldVisible).map(f => (
                 <Grid item xs={12} sm={6} md={4} key={f.name}>
                   {renderRiskField(f)}
                 </Grid>
@@ -764,7 +813,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         {/* ── Sum Insured ───────────────────────────────────── */}
         <SectionHeader title="Sum Insured" />
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {sumInsuredSubFields.map(f => (
+          {sumInsuredSubFields.filter(isRiskFieldVisible).map(f => (
             <Grid item xs={12} sm={6} md={4} key={f.name}>
               {renderRiskField(f)}
             </Grid>
@@ -781,7 +830,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Covers Required" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {coversFields.map(f => {
+              {coversFields.filter(isRiskFieldVisible).map(f => {
                 const ir = coverResponses[f.name] || {};
                 const irColor = ir.status === 'Accepted' ? '#10B981'
                   : ir.status === 'Declined' ? '#EF4444' : '#F59E0B';
@@ -807,7 +856,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
           <>
             <SectionHeader title="Additional Clauses" />
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
-              {clausesFields.map(f => {
+              {clausesFields.filter(isRiskFieldVisible).map(f => {
                 const ir = clauseResponses[f.name] || {};
                 const irColor = ir.status === 'Included' ? '#10B981'
                   : ir.status === 'Not included' ? '#EF4444' : '#F59E0B';
@@ -856,12 +905,29 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
 
         {/* ── Commission ───────────────────────────────────── */}
         <SectionHeader title="Commission" />
+        {autoCommission && (
+          <Box sx={{ mb: 1.5, px: 1.5, py: 1, borderRadius: '8px', bgcolor: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
+            <Typography sx={{ fontSize: 12, color: '#9d174d', fontWeight: 600 }}>
+              {fields.commission_type === 'Special'
+                ? `Auto-calculated: Standard (${fields.main_class || '—'} basic ${COMMISSION_BASIC_RATES[fields.main_class] ?? 20}%, SRCC ${COMMISSION_SRCC_RATE}%, TC ${COMMISSION_TC_RATE}%) with the Special Rate applied to the basic premium.`
+                : `Auto-calculated from the rate table: ${fields.main_class || '—'} basic ${COMMISSION_BASIC_RATES[fields.main_class] ?? 20}%, SRCC ${COMMISSION_SRCC_RATE}%, TC ${COMMISSION_TC_RATE}% (× the entered premiums).`}
+            </Typography>
+          </Box>
+        )}
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {textFields.filter(f => f.section === 'Commission').map(f => (
-            <Grid item xs={12} sm={6} md={4} key={f.name}>
-              {renderStaticField(f)}
-            </Grid>
-          ))}
+          {textFields.filter(f => f.section === 'Commission')
+            // Special-only fields hidden unless a Special commission is selected
+            .filter(f => (f.name === 'commission_special_rate' || f.name === 'commission_special_amount')
+              ? fields.commission_type === 'Special' : true)
+            .map(f => {
+              // When a commission type is chosen the breakdown is auto-derived, so lock those inputs
+              const locked = autoCommission && ['commission_basic', 'commission_srcc', 'commission_tc'].includes(f.name);
+              return (
+                <Grid item xs={12} sm={6} md={4} key={f.name}>
+                  {renderStaticField(locked ? { ...f, readOnly: true } : f)}
+                </Grid>
+              );
+            })}
         </Grid>
 
         {/* ── Payment ──────────────────────────────────────── */}

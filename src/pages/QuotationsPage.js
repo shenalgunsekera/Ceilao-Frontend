@@ -10,6 +10,7 @@ import { PRODUCTS as STATIC_PRODUCTS } from '../config/products';
 import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
 import { uploadFile as uploadToCloudinary, openFile } from '../storage';
+import { generateComparisonPdf } from '../utils/comparisonPdf';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import Box from '@mui/material/Box';
@@ -919,20 +920,9 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
     setSending(false);
   };
 
-  // ── helpers shared by both exports ─────────────────────────────────────────
+  // ── helpers shared by the Excel export ─────────────────────────────────────
   const colCount = responses.length + 1;
   const today    = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const fetchBase64 = async (url) => {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
 
   // ── Export Excel ────────────────────────────────────────────────────────────
   const exportExcel = async () => {
@@ -1126,219 +1116,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
     setExportingPdf(true);
     setExportError('');
     try {
-    const { default: jsPDF }     = await import('jspdf');
-    const { default: autoTable } = await import('jspdf-autotable');
-
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const pw  = pdf.internal.pageSize.getWidth();
-    const ph  = pdf.internal.pageSize.getHeight();
-
-    const drawHeader = () => {
-      // Dark top band
-      pdf.setFillColor(26, 26, 46);
-      pdf.rect(0, 0, pw, 20, 'F');
-      // Red accent line
-      pdf.setFillColor(255, 90, 90);
-      pdf.rect(0, 20, pw, 3, 'F');
-      pdf.setTextColor(255, 139, 90);
-      pdf.setFontSize(13); pdf.setFont('helvetica', 'bold');
-      pdf.text('CEILAO INSURANCE BROKERS (PVT) LTD', pw / 2, 9, { align: 'center' });
-      pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('INSURANCE BROKING & RISK MANAGEMENT  ·  SRI LANKA', pw / 2, 15, { align: 'center' });
-    };
-
-    const drawFooter = () => {
-      const pn = pdf.internal.getCurrentPageInfo().pageNumber;
-      const tp = pdf.internal.getNumberOfPages();
-      pdf.setFillColor(26, 26, 46);
-      pdf.rect(0, ph - 14, pw, 14, 'F');
-      pdf.setFillColor(255, 90, 90);
-      pdf.rect(0, ph - 14, pw, 1, 'F');
-      // left: company
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(255, 139, 90);
-      pdf.text('Ceilao Insurance Brokers (Pvt) Ltd', 12, ph - 8);
-      // centre: confidential
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(148, 163, 184);
-      pdf.text('CONFIDENTIAL  ·  Commission details for internal broker use only', pw / 2, ph - 8, { align: 'center' });
-      // right: page
-      pdf.setTextColor(107, 114, 128);
-      pdf.text(`Page ${pn} / ${tp}`, pw - 12, ph - 8, { align: 'right' });
-      // bottom line
-      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(100, 116, 139);
-      pdf.text(`Generated: ${today}`, 12, ph - 3.5);
-      pdf.text('Insurance Broking & Risk Management  ·  Sri Lanka', pw - 12, ph - 3.5, { align: 'right' });
-    };
-
-    drawHeader();
-
-    // Info band (page 1 only)
-    pdf.setFillColor(249, 250, 251);
-    pdf.rect(0, 23, pw, 12, 'F');
-    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(26, 26, 46);
-    pdf.text('QUOTE COMPARISON REPORT', 14, 31);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
-    pdf.setTextColor(107, 114, 128);
-    pdf.text(`Ref: ${quote.reference}   ·   ${product?.label || ''}   ·   ${today}`, pw - 14, 31, { align: 'right' });
-
-    // Build table body
-    const mkSectionRow = (label) => [{ content: label, colSpan: colCount, styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } } }];
-    const mkRow = (label, vals, isTotal = false, isInternal = false, i = 0) => [
-      { content: label, styles: { fontStyle: isTotal ? 'bold' : 'normal', fontSize: isTotal ? 9 : 8.5, fillColor: isTotal ? [255,90,90] : isInternal ? [232,232,255] : i%2===0 ? [255,255,255] : [255,248,245], textColor: isTotal ? [255,255,255] : isInternal ? [67,56,202] : [26,26,46] } },
-      ...vals.map(v => ({ content: v, styles: { halign: 'center', fontStyle: isTotal ? 'bold' : 'normal', fontSize: isTotal ? 9 : 8.5, fillColor: isTotal ? [255,90,90] : isInternal ? [232,232,255] : i%2===0 ? [255,255,255] : [255,248,245], textColor: isTotal ? [255,255,255] : isInternal ? [67,56,202] : [55,65,81] } })),
-    ];
-
-    const premiumPdfRows = isPlansProduct
-      ? (() => {
-          const rows = [];
-          for (let pi = 0; pi < planCount; pi++) {
-            rows.push([{ content: `Plan ${pi + 1}`, colSpan: colCount, styles: { fillColor: [8,145,178], textColor: [255,255,255], fontStyle: 'bold', fontSize: 8, cellPadding: { top: 2, bottom: 2, left: 8, right: 4 } } }]);
-            [
-              ['Basic Premium (LKR)', r => r.plan_premiums?.[pi]?.basic ? `LKR ${Number(r.plan_premiums[pi].basic).toLocaleString()}` : '—'],
-              ['Tax (LKR)',           r => r.plan_premiums?.[pi]?.tax   ? `LKR ${Number(r.plan_premiums[pi].tax).toLocaleString()}`   : '—'],
-              ['Plan Total (LKR)',    r => `LKR ${Number(r.plan_premiums?.[pi]?.total || 0).toLocaleString()}`],
-            ].forEach(([label, getter], i) => rows.push(mkRow(label, responses.map(getter), label.startsWith('Plan Total'), false, i)));
-          }
-          rows.push(mkRow('GRAND TOTAL (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true));
-          return rows;
-        })()
-      : [
-          ...([
-            ['basic_premium',     'Basic Premium (LKR)'],
-            ['srcc_premium',      'SRCC (LKR)'],
-            ['tc_premium',        'TC (LKR)'],
-            ['policy_fees',       'Policy Fees (LKR)'],
-            ['cess',              'Cess (LKR)'],
-            ['road_safety_tax',   'Road Safety Tax (LKR)'],
-            ['stamp_fee',         'Stamp Fee (LKR)'],
-            ['nbl',               'NBL (LKR)'],
-            ['ssc_levy',          'SSC Levy (LKR)'],
-            ['admin_fee',         'Admin Fee (LKR)'],
-            ['vat_amount',        'VAT (LKR)'],
-            ['other_premium',     'Other (LKR)'],
-          ].map(([k, label], i) =>
-            mkRow(label, responses.map(r => r[k] ? `LKR ${Number(r[k]).toLocaleString()}` : '—'), false, false, i)
-          )),
-          mkRow('TOTAL PREMIUM (LKR)', responses.map(r => `LKR ${Number(r.premium||0).toLocaleString()}`), true),
-        ];
-
-    const body = [
-      mkSectionRow('PREMIUM BREAKDOWN'),
-      ...premiumPdfRows,
-
-      mkSectionRow('DEDUCTIBLES, EXCESSES & VALIDITY'),
-      mkRow('Deductibles',    responses.map(r => r.deductible   || '—'), false, false, 0),
-      mkRow('Excesses',       responses.map(r => r.excesses     || '—'), false, false, 1),
-      mkRow('Validity (days)',responses.map(r => r.validity_days || '—'), false, false, 2),
-
-      mkSectionRow('COMMISSION — INTERNAL USE ONLY'),
-      mkRow('Commission Type', responses.map(r => r.commission_type || '—'), false, true, 0),
-
-      ...(coverFields.length > 0 ? [
-        mkSectionRow('COVERS REQUIRED'),
-        ...coverFields.map((f,i) => mkRow(f.label, responses.map(r => {
-          const cr = r.cover_responses?.[f.name]; return cr?.provided ? `${cr.provided}${cr.terms ? `\n${cr.terms}` : ''}` : '—';
-        }), false, false, i)),
-      ] : []),
-
-      ...(clauseFields.length > 0 ? [
-        mkSectionRow('ADDITIONAL CLAUSES'),
-        ...clauseFields.map((f,i) => mkRow(f.label, responses.map(r => {
-          const cr = r.clause_responses?.[f.name]; return cr?.provided ? `${cr.provided}${cr.terms ? `\n${cr.terms}` : ''}` : '—';
-        }), false, false, i)),
-      ] : []),
-
-      mkSectionRow('NOTES / TERMS & CONDITIONS'),
-      mkRow('Notes', responses.map(r => r.notes || '—'), false, false, 0),
-    ];
-
-    autoTable(pdf, {
-      startY: 38,
-      head: [[
-        { content: 'Field', styles: { fillColor: [26,26,46], textColor: [255,139,90], fontStyle: 'bold', fontSize: 9 } },
-        ...responses.map(r => ({ content: r.company_name + (r.edited_by_broker ? '\n✎ Broker Edited' : ''), styles: { fillColor: [255,90,90], textColor: [255,255,255], fontStyle: 'bold', fontSize: 9, halign: 'center' } })),
-      ]],
-      body,
-      columnStyles: { 0: { cellWidth: 52 } },
-      styles: { fontSize: 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 }, overflow: 'linebreak', minCellHeight: 9 },
-      margin: { left: 10, right: 10, top: 28, bottom: 18 },
-      didDrawPage: (data) => {
-        if (data.pageNumber > 1) drawHeader();
-        drawFooter();
-      },
-    });
-
-    // ── Insurer Quote Documents Page ───────────────────────────────────────────
-    const insurerDocs = responses.filter(r => r.quote_file_url);
-    if (insurerDocs.length > 0) {
-      pdf.addPage();
-      drawHeader();
-
-      const margL = 12, usableW = pw - 24;
-      const cols  = Math.min(insurerDocs.length, 3);
-      const gap   = 8;
-      const colW  = (usableW - gap * (cols - 1)) / cols;
-      const imgMaxH = 140;
-      let curDocY = 30;
-
-      // Section header
-      pdf.setFillColor(26, 26, 46);
-      pdf.rect(margL, curDocY, usableW, 10, 'F');
-      pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 139, 90);
-      pdf.text('INSURER UPLOADED QUOTE DOCUMENTS', pw / 2, curDocY + 6.5, { align: 'center' });
-      curDocY += 14;
-
-      for (let di = 0; di < insurerDocs.length; di++) {
-        const r   = insurerDocs[di];
-        const url = r.quote_file_url;
-        const col = di % cols;
-        if (di > 0 && col === 0) curDocY += imgMaxH + 20;
-        const cx = margL + col * (colW + gap);
-
-        // Company name label
-        pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(26, 26, 46);
-        pdf.text(r.company_name, cx + colW / 2, curDocY + 6, { align: 'center', maxWidth: colW });
-
-        const imgBoxY = curDocY + 10;
-        const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
-
-        pdf.setFillColor(245, 247, 250);
-        pdf.rect(cx, imgBoxY, colW, imgMaxH, 'F');
-        pdf.setDrawColor(210, 215, 225); pdf.setLineWidth(0.3);
-        pdf.rect(cx, imgBoxY, colW, imgMaxH, 'S');
-
-        if (isImg) {
-          try {
-            const b64 = await fetchBase64(url);
-            if (!b64.startsWith('data:image/')) throw new Error('not an image');
-            const dims = await new Promise(res => {
-              const img = new window.Image();
-              img.onload  = () => res({ w: img.naturalWidth, h: img.naturalHeight });
-              img.onerror = () => res({ w: 4, h: 3 });
-              img.src = b64;
-            });
-            const aspect = dims.w / dims.h;
-            const bW = colW - 6, bH = imgMaxH - 6;
-            let dw = bW, dh = dw / aspect;
-            if (dh > bH) { dh = bH; dw = dh * aspect; }
-            const fmt = /\.png(\?|$)/i.test(url) ? 'PNG' : 'JPEG';
-            pdf.addImage(b64, fmt, cx + (colW - dw) / 2, imgBoxY + (imgMaxH - dh) / 2, dw, dh, undefined, 'FAST');
-          } catch {
-            pdf.setFontSize(7.5); pdf.setTextColor(180, 180, 190);
-            pdf.text('Image unavailable', cx + colW / 2, imgBoxY + imgMaxH / 2, { align: 'center' });
-          }
-        } else {
-          pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(99, 102, 241);
-          pdf.text('PDF DOCUMENT', cx + colW / 2, imgBoxY + imgMaxH / 2 - 4, { align: 'center' });
-          pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(120, 124, 180);
-          pdf.text('Open via digital copy', cx + colW / 2, imgBoxY + imgMaxH / 2 + 4, { align: 'center' });
-        }
-      }
-      drawFooter();
-    }
-
-    pdf.save(`CeilaoIB_Comparison_${quote.reference}.pdf`);
+      await generateComparisonPdf({ quote, product, responses, audience: 'broker' });
     } catch (err) {
       console.error('PDF export error:', err);
       setExportError(err?.message || 'PDF export failed — please try again.');
