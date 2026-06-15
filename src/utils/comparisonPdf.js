@@ -214,37 +214,46 @@ export async function generateComparisonPdf({ quote, product, responses, audienc
   });
 
   /* ── Insurer uploaded quote documents (clickable images + pdf links) ─────── */
+  // Every received document is rendered (paginated across as many pages as
+  // needed) and every cell is a clickable link to open the original.
   const insurerDocs = responses.filter(r => r.quote_file_url);
   if (insurerDocs.length > 0) {
     const margL = 12, usableW = pw - 24;
     const cols = Math.min(3, Math.max(insurerDocs.length, 1));
     const gap = 8;
     const colW = (usableW - gap * (cols - 1)) / cols;
-    const imgMaxH = 120;
-    const rowH = imgMaxH + 24; // label + image box + spacing
+    const imgMaxH = 58;              // ~2 rows (6 documents) per page
+    const labelH = 7;
+    const rowH = labelH + imgMaxH + 9;
+    const bottomLimit = ph - 18;
 
-    pdf.addPage();
-    drawHeader();
-    let curY = 30;
-    pdf.setFillColor(...NAVY); pdf.rect(margL, curY, usableW, 10, 'F');
-    pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ORANGE);
-    pdf.text('INSURER UPLOADED QUOTE DOCUMENTS', pw / 2, curY + 6.5, { align: 'center' });
-    pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...GREY);
-    pdf.text('Tap any document to open the original online', pw / 2, curY + 9.4, { align: 'center' });
-    curY += 16;
+    // Draws the section band and returns the y where the first row starts.
+    const startDocsPage = (cont) => {
+      pdf.addPage();
+      drawHeader();
+      let y = 26;
+      pdf.setFillColor(...NAVY); pdf.rect(margL, y, usableW, 9, 'F');
+      pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ORANGE);
+      pdf.text(`INSURER UPLOADED QUOTE DOCUMENTS${cont ? ' (cont.)' : ''}`, pw / 2, y + 5, { align: 'center' });
+      pdf.setFontSize(6.8); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...GREY);
+      pdf.text('Click any document below to open the original online', pw / 2, y + 8, { align: 'center' });
+      return y + 13;
+    };
+
+    let curY = startDocsPage(false);
 
     for (let di = 0; di < insurerDocs.length; di++) {
       const r = insurerDocs[di];
       const url = r.quote_file_url;
       const col = di % cols;
-      if (di > 0 && col === 0) curY += rowH;
-      if (curY + rowH > ph - 18) { pdf.addPage(); drawHeader(); curY = 30; }
+      if (di > 0 && col === 0) curY += rowH;          // start of a new row
+      if (col === 0 && curY + rowH > bottomLimit) curY = startDocsPage(true);
       const cx = margL + col * (colW + gap);
 
-      pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...NAVY);
+      pdf.setFontSize(8.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...NAVY);
       pdf.text(r.company_name, cx + colW / 2, curY + 5, { align: 'center', maxWidth: colW });
 
-      const boxY = curY + 9;
+      const boxY = curY + labelH;
       const isImg = /\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i.test(url);
       pdf.setFillColor(245, 247, 250); pdf.rect(cx, boxY, colW, imgMaxH, 'F');
       pdf.setDrawColor(210, 215, 225); pdf.setLineWidth(0.3); pdf.rect(cx, boxY, colW, imgMaxH, 'S');
@@ -261,11 +270,11 @@ export async function generateComparisonPdf({ quote, product, responses, audienc
             img.src = b64;
           });
           const aspect = dims.w / dims.h;
-          const bW = colW - 6, bH = imgMaxH - 14;
+          const bW = colW - 6, bH = imgMaxH - 12;
           let dw = bW, dh = dw / aspect;
           if (dh > bH) { dh = bH; dw = dh * aspect; }
           const fmt = /\.png(\?|$)/i.test(url) ? 'PNG' : 'JPEG';
-          pdf.addImage(b64, fmt, cx + (colW - dw) / 2, boxY + 4, dw, dh, undefined, 'FAST');
+          pdf.addImage(b64, fmt, cx + (colW - dw) / 2, boxY + 3, dw, dh, undefined, 'FAST');
           embedded = true;
         } catch {
           embedded = false;
@@ -274,18 +283,19 @@ export async function generateComparisonPdf({ quote, product, responses, audienc
 
       if (!embedded) {
         // PDF document, or an image that couldn't be embedded — show an icon.
-        pdf.setFillColor(238, 242, 255); pdf.roundedRect(cx + colW / 2 - 18, boxY + imgMaxH / 2 - 24, 36, 16, 3, 3, 'F');
-        pdf.setFontSize(10); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(99, 102, 241);
-        pdf.text(isImg ? 'IMAGE' : 'PDF', cx + colW / 2, boxY + imgMaxH / 2 - 13, { align: 'center' });
-        pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(120, 124, 180);
-        pdf.text(isImg ? 'Preview unavailable' : 'Document', cx + colW / 2, boxY + imgMaxH / 2, { align: 'center' });
+        pdf.setFillColor(238, 242, 255); pdf.roundedRect(cx + colW / 2 - 14, boxY + 8, 28, 13, 2.5, 2.5, 'F');
+        pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(99, 102, 241);
+        pdf.text(isImg ? 'IMAGE' : 'PDF', cx + colW / 2, boxY + 16.5, { align: 'center' });
+        pdf.setFontSize(7); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(120, 124, 180);
+        pdf.text(isImg ? 'Preview unavailable' : 'Document', cx + colW / 2, boxY + 27, { align: 'center' });
       }
 
-      // Always-clickable "Open" link strip at the bottom of the box.
-      const linkY = boxY + imgMaxH - 8;
-      pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(99, 102, 241);
-      pdf.textWithLink('Open document ↗', cx + colW / 2, linkY, { align: 'center', url });
-      // Make the whole box clickable too.
+      // Prominent, always-clickable "Open" link at the bottom of the box.
+      const linkY = boxY + imgMaxH - 4;
+      pdf.setFillColor(99, 102, 241); pdf.roundedRect(cx + colW / 2 - 24, linkY - 5.5, 48, 7, 1.5, 1.5, 'F');
+      pdf.setFontSize(7.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255);
+      pdf.textWithLink('Open document', cx + colW / 2, linkY - 0.8, { align: 'center', url });
+      // Make the whole cell clickable too.
       pdf.link(cx, boxY, colW, imgMaxH, { url });
     }
   }
