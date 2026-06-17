@@ -642,6 +642,21 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   /* ── risk field renderer (from products.js field definitions) ──────── */
   const renderRiskField = (f) => {
     const val = riskValues[f.name] ?? '';
+    // Auto-calculated total (e.g. autoCalc: 'sum:market_value,extra_fittings_value').
+    // Mirrors the quotation form so custom-product equations also compute here.
+    if (f.autoCalc) {
+      const parts = f.autoCalc.replace('sum:', '').split(',').map(s => s.trim()).filter(Boolean);
+      const total = parts.reduce((acc, fn) => acc + num(riskValues[fn]), 0);
+      const desired = total > 0 ? String(total) : '';
+      if (desired !== String(val)) setTimeout(() => setRisk(f.name, desired), 0);
+      return (
+        <NumericField key={f.name} label={`${f.label} (Auto-calculated)`} value={desired}
+          readOnly fullWidth size="small"
+          helperText={`Sum of: ${parts.join(', ')}`}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 },
+                '& .MuiInputBase-input': { color: '#FF5A5A', fontWeight: 700 } }} />
+      );
+    }
     if (f.type === 'select') return (
       <FormControl fullWidth size="small" key={f.name}>
         <InputLabel sx={{ fontSize: 13 }}>{f.label}</InputLabel>

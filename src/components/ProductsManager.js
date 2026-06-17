@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
@@ -19,13 +19,15 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
+import Stepper from '@mui/material/Stepper';
+import Step from '@mui/material/Step';
+import StepLabel from '@mui/material/StepLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Switch from '@mui/material/Switch';
+import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
@@ -40,6 +42,9 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FunctionsIcon from '@mui/icons-material/Functions';
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
 
 const FIELD_TYPES = [
   'text', 'number', 'date', 'email', 'select', 'multiselect',
@@ -62,6 +67,48 @@ const DEFAULT_COMPARISON_ROWS = [
   'Validity (days)', 'Special Conditions',
 ];
 
+// Common section names suggested while building (the underwriting form reads the
+// product-specific ones: Risk Information, Sum Insured, Covers Required, etc.).
+const SECTION_SUGGESTIONS = [
+  'Proposer Details', 'Period of Insurance', 'Risk Information', 'Sum Insured',
+  'Covers Required', 'Additional Clauses', 'Underwriting Information', 'Premium',
+];
+
+// One-click starter section bundles — drop a ready-made section + common fields.
+const STARTER_SECTIONS = [
+  { name: 'Risk Information', icon: '🛡️', fields: [
+    { label: 'Risk Description', type: 'textarea' },
+    { label: 'Location / Address', type: 'text' },
+  ]},
+  { name: 'Sum Insured', icon: '💰', fields: [
+    { label: 'Sum Insured (LKR)', type: 'currency', required: true },
+  ]},
+  { name: 'Covers Required', icon: '✅', fields: [
+    { label: 'Basic Cover', type: 'yesno' },
+    { label: 'Extended Cover', type: 'yesno' },
+  ]},
+  { name: 'Additional Clauses', icon: '📎', fields: [
+    { label: 'Special Clause', type: 'yesno' },
+  ]},
+  { name: 'Underwriting Information', icon: '📋', fields: [
+    { label: 'Claims History (3 yrs)', type: 'textarea' },
+    { label: 'Previous Insurer', type: 'text' },
+  ]},
+];
+
+// Single quick-add fields.
+const QUICK_FIELDS = [
+  { label: 'Sum Insured (LKR)', section: 'Sum Insured',        type: 'currency', required: true },
+  { label: 'Basic Premium (LKR)', section: 'Premium',          type: 'currency' },
+  { label: 'Period From',        section: 'Period of Insurance', type: 'date' },
+  { label: 'Period To',          section: 'Period of Insurance', type: 'date' },
+  { label: 'Name of Insured',    section: 'Proposer Details',   type: 'text', required: true },
+  { label: 'Mobile No',          section: 'Proposer Details',   type: 'text' },
+  { label: 'Email',              section: 'Proposer Details',   type: 'email' },
+];
+
+const WIZARD_STEPS = ['Basics', 'Sections & Fields', 'Auto-calculations', 'Review'];
+
 const EMPTY_PRODUCT = {
   label: '', prefix: '', icon: '📋', color: '#6366f1',
   customerNameField: 'proposer_name',
@@ -79,6 +126,8 @@ function slugify(str) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
 }
 
+const NUMERIC_TYPES = ['number', 'currency'];
+
 /* ── Small badge ──────────────────────────────────────────────────────────── */
 function Badge({ label, color, bg }) {
   return (
@@ -93,7 +142,7 @@ function Badge({ label, color, bg }) {
 }
 
 /* ── Product card ─────────────────────────────────────────────────────────── */
-function ProductCard({ product, onView, onEdit, onDelete, isAdmin }) {
+function ProductCard({ product, onView, onEdit, onDelete, onClone, isAdmin }) {
   const sectionCount = [...new Set((product.fields || []).map(f => f.section).filter(Boolean))].length;
   return (
     <Card sx={{
@@ -129,12 +178,21 @@ function ProductCard({ product, onView, onEdit, onDelete, isAdmin }) {
               <Chip label={`${sectionCount} sections`} size="small"
                 sx={{ fontSize: 10.5, height: 20, bgcolor: 'rgba(0,0,0,0.05)', color: '#6B7280' }} />
             </Stack>
-            <Stack direction="row" spacing={0.8}>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
               <Button size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon sx={{ fontSize: 13 }} />}
                 onClick={() => onView(product)}
                 sx={{ fontSize: 11, py: 0.3, px: 1, borderColor: 'rgba(0,0,0,0.15)', color: '#6B7280', minWidth: 0 }}>
                 View
               </Button>
+              {isAdmin && (
+                <Tooltip title="Start a new product from a copy of this one">
+                  <Button size="small" variant="outlined" startIcon={<ContentCopyIcon sx={{ fontSize: 13 }} />}
+                    onClick={() => onClone(product)}
+                    sx={{ fontSize: 11, py: 0.3, px: 1, borderColor: 'rgba(99,102,241,0.35)', color: '#6366f1', minWidth: 0 }}>
+                    Clone
+                  </Button>
+                </Tooltip>
+              )}
               {!product.isBuiltIn && isAdmin && (
                 <>
                   <Button size="small" variant="outlined" startIcon={<EditOutlinedIcon sx={{ fontSize: 13 }} />}
@@ -165,11 +223,19 @@ function FieldRow({ field, idx, onEdit, onRemove }) {
     }}>
       <DragIndicatorIcon sx={{ fontSize: 15, color: '#CBD5E1', cursor: 'grab', flexShrink: 0 }} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: '#1A1A2E' }}>{field.label}</Typography>
+        <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: '#1A1A2E' }}>
+          {field.label}
+          {field.autoCalc && (
+            <Box component="span" sx={{ ml: 0.6, fontSize: 9.5, fontWeight: 700, color: '#FF5A5A', bgcolor: 'rgba(255,90,90,0.10)', px: 0.6, py: 0.1, borderRadius: '5px' }}>
+              ƒ auto
+            </Box>
+          )}
+        </Typography>
         <Typography sx={{ fontSize: 10.5, color: '#9CA3AF' }}>
           {field.name} · {TYPE_LABEL[field.type] || field.type}
           {field.required ? ' · Required' : ''}
           {field.showIf ? ` · if ${field.showIf.field}=${field.showIf.value}` : ''}
+          {field.autoCalc ? ` · = ${field.autoCalc.replace('sum:', 'sum ')}` : ''}
         </Typography>
       </Box>
       <Chip label={TYPE_LABEL[field.type] || field.type} size="small"
@@ -194,7 +260,7 @@ const ProductsManager = () => {
   const [editOpen,   setEditOpen]     = useState(false);
   const [editKey,    setEditKey]      = useState(null);
   const [form,       setForm]         = useState(EMPTY_PRODUCT);
-  const [dlgTab,     setDlgTab]       = useState(0);
+  const [wizStep,    setWizStep]      = useState(0);
   const [fieldDlg,   setFieldDlg]     = useState(false);
   const [editFldIdx, setEditFldIdx]   = useState(-1);
   const [fieldForm,  setFieldForm]    = useState(EMPTY_FIELD);
@@ -203,8 +269,9 @@ const ProductsManager = () => {
   const [saving,     setSaving]       = useState(false);
   const [snack,      setSnack]        = useState({ open: false, msg: '', severity: 'success' });
   const [openSections, setOpenSections] = useState({});
+  const [autoOn,     setAutoOn]       = useState({}); // field name → auto-calc switch state
 
-  useEffect(() => {
+  React.useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'products'),
       snap => { setCustomList(snap.docs.map(d => ({ key: d.id, ...d.data() }))); setLoading(false); },
@@ -219,11 +286,12 @@ const ProductsManager = () => {
 
   const toast = (msg, severity = 'success') => setSnack({ open: true, msg, severity });
 
+  const resetWizard = () => { setWizStep(0); setOpenSections({}); setAutoOn({}); };
+
   const openAdd = () => {
     setEditKey(null);
     setForm({ ...EMPTY_PRODUCT, comparisonRows: [...DEFAULT_COMPARISON_ROWS], fields: [] });
-    setDlgTab(0);
-    setOpenSections({});
+    resetWizard();
     setEditOpen(true);
   };
 
@@ -236,15 +304,29 @@ const ProductsManager = () => {
       comparisonRows: [...(p.comparisonRows || [])],
       fields: (p.fields || []).map(f => ({ ...f })),
     });
-    setDlgTab(0);
-    setOpenSections({});
+    resetWizard();
     setEditOpen(true);
   };
 
+  // Clone — start a brand-new product pre-loaded from an existing one.
+  const cloneFrom = (p) => {
+    setEditKey(null);
+    setForm({
+      label: '', prefix: '',
+      icon: p.icon || '📋', color: p.color || '#6366f1',
+      customerNameField: p.customerNameField || 'proposer_name',
+      comparisonRows: [...(p.comparisonRows || DEFAULT_COMPARISON_ROWS)],
+      fields: (p.fields || []).map(f => ({ ...f })),
+    });
+    resetWizard();
+    setEditOpen(true);
+    toast(`Cloned from “${p.label}” — give it a new name & prefix`, 'info');
+  };
+
   const handleSave = async () => {
-    if (!form.label.trim()) return toast('Product name is required', 'error');
-    if (!form.prefix.trim()) return toast('Prefix is required (e.g. TRV)', 'error');
-    if (form.fields.length === 0) return toast('Add at least one form field', 'error');
+    if (!form.label.trim()) { setWizStep(0); return toast('Product name is required', 'error'); }
+    if (!form.prefix.trim()) { setWizStep(0); return toast('Prefix is required (e.g. TRV)', 'error'); }
+    if (form.fields.length === 0) { setWizStep(1); return toast('Add at least one form field', 'error'); }
     setSaving(true);
     try {
       const key = editKey || slugify(form.label) || `product_${Date.now()}`;
@@ -292,6 +374,13 @@ const ProductsManager = () => {
     groupedFields[sec].push({ ...f, _idx: i });
   });
 
+  const uniqueName = (base, taken) => {
+    let name = base || `field_${Date.now()}`;
+    let n = 2;
+    while (taken.has(name)) { name = `${base}_${n}`; n++; }
+    return name;
+  };
+
   const openAddField = (defaultSection = '') => {
     setEditFldIdx(-1);
     setFieldForm({ ...EMPTY_FIELD, section: defaultSection });
@@ -326,8 +415,11 @@ const ProductsManager = () => {
     };
     setForm(f => {
       const fields = [...f.fields];
-      if (editFldIdx >= 0) fields[editFldIdx] = newField;
-      else fields.push(newField);
+      if (editFldIdx >= 0) {
+        // preserve any auto-calc already configured for this field
+        if (f.fields[editFldIdx]?.autoCalc && NUMERIC_TYPES.includes(newField.type)) newField.autoCalc = f.fields[editFldIdx].autoCalc;
+        fields[editFldIdx] = newField;
+      } else fields.push(newField);
       return { ...f, fields };
     });
     setFieldDlg(false);
@@ -335,8 +427,80 @@ const ProductsManager = () => {
 
   const removeField = (idx) => setForm(f => ({ ...f, fields: f.fields.filter((_, i) => i !== idx) }));
 
+  // ── Shortcuts ──────────────────────────────────────────────────────────────
+  const addStarterSection = (tpl) => {
+    setForm(f => {
+      const taken = new Set(f.fields.map(x => x.name));
+      const added = [];
+      tpl.fields.forEach(tf => {
+        const base = slugify(tf.label);
+        if ([...taken].some(n => n === base)) return; // skip dup label in same product
+        const name = uniqueName(base, taken);
+        taken.add(name);
+        added.push({ name, label: tf.label, section: tpl.name, type: tf.type, ...(tf.required ? { required: true } : {}) });
+      });
+      if (!added.length) return f;
+      return { ...f, fields: [...f.fields, ...added] };
+    });
+    setOpenSections(s => ({ ...s, [tpl.name]: true }));
+    toast(`Added “${tpl.name}” section`);
+  };
+
+  const addQuickField = (qf) => {
+    setForm(f => {
+      const taken = new Set(f.fields.map(x => x.name));
+      const base = slugify(qf.label);
+      if (taken.has(base)) { return f; }
+      const name = uniqueName(base, taken);
+      return { ...f, fields: [...f.fields, { name, label: qf.label, section: qf.section, type: qf.type, ...(qf.required ? { required: true } : {}) }] };
+    });
+    toast(`Added “${qf.label}”`);
+  };
+
+  // ── Auto-calc helpers ──────────────────────────────────────────────────────
+  const numericFields = (form.fields || []).map((f, i) => ({ ...f, _idx: i })).filter(f => NUMERIC_TYPES.includes(f.type));
+  const isAutoOn = (f) => !!f.autoCalc || !!autoOn[f.name];
+  const autoSources = (f) => (f.autoCalc ? f.autoCalc.replace('sum:', '').split(',').map(s => s.trim()).filter(Boolean) : []);
+
+  const setAutoEnabled = (f, on) => {
+    setAutoOn(s => ({ ...s, [f.name]: on }));
+    if (!on) setForm(fm => ({ ...fm, fields: fm.fields.map(x => x.name === f.name ? (() => { const c = { ...x }; delete c.autoCalc; return c; })() : x) }));
+  };
+
+  const toggleAutoSource = (targetName, srcName) => {
+    setForm(fm => ({
+      ...fm,
+      fields: fm.fields.map(x => {
+        if (x.name !== targetName) return x;
+        const cur = x.autoCalc ? x.autoCalc.replace('sum:', '').split(',').filter(Boolean) : [];
+        const next = cur.includes(srcName) ? cur.filter(n => n !== srcName) : [...cur, srcName];
+        const c = { ...x };
+        if (next.length) c.autoCalc = 'sum:' + next.join(',');
+        else delete c.autoCalc;
+        return c;
+      }),
+    }));
+  };
+
+  // ── Wizard navigation ──────────────────────────────────────────────────────
+  const stepValid = (step) => {
+    if (step === 0) return form.label.trim() && form.prefix.trim();
+    if (step === 1) return form.fields.length > 0;
+    return true;
+  };
+  const goNext = () => {
+    if (!stepValid(wizStep)) {
+      if (wizStep === 0) return toast('Enter a product name and prefix first', 'error');
+      if (wizStep === 1) return toast('Add at least one field to continue', 'error');
+    }
+    setWizStep(s => Math.min(s + 1, WIZARD_STEPS.length - 1));
+  };
+  const goBack = () => setWizStep(s => Math.max(s - 1, 0));
+
   // ── View product details ───────────────────────────────────────────────────
   const viewSections = viewProd ? [...new Set((viewProd.fields || []).map(f => f.section).filter(Boolean))] : [];
+
+  const inputSx = { '& .MuiInputBase-root': { fontSize: 13 } };
 
   return (
     <Box>
@@ -364,7 +528,7 @@ const ProductsManager = () => {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 1fr' }, gap: 1.5 }}>
           {all.map(p => (
             <ProductCard key={p.key} product={p} isAdmin={isAdmin}
-              onView={setViewProd} onEdit={openEdit} onDelete={setDeleteTgt} />
+              onView={setViewProd} onEdit={openEdit} onDelete={setDeleteTgt} onClone={cloneFrom} />
           ))}
         </Box>
       )}
@@ -407,7 +571,7 @@ const ProductsManager = () => {
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#374151', mb: 0.8 }}>{sec} ({sFields.length})</Typography>
                 {sFields.slice(0, 4).map(f => (
                   <Typography key={f.name} sx={{ fontSize: 11.5, color: '#6B7280', py: 0.2 }}>
-                    {f.label} <span style={{ color: '#9CA3AF' }}>({TYPE_LABEL[f.type] || f.type}{f.required ? ', req' : ''})</span>
+                    {f.label} <span style={{ color: '#9CA3AF' }}>({TYPE_LABEL[f.type] || f.type}{f.required ? ', req' : ''}{f.autoCalc ? ', auto' : ''})</span>
                   </Typography>
                 ))}
                 {sFields.length > 4 && <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>+{sFields.length - 4} more…</Typography>}
@@ -416,30 +580,43 @@ const ProductsManager = () => {
           })}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
+          {isAdmin && (
+            <Button onClick={() => { const p = viewProd; setViewProd(null); cloneFrom(p); }}
+              startIcon={<ContentCopyIcon sx={{ fontSize: 15 }} />} sx={{ color: '#6366f1' }}>
+              Clone
+            </Button>
+          )}
+          <Box sx={{ flex: 1 }} />
           <Button onClick={() => setViewProd(null)}>Close</Button>
         </DialogActions>
       </Dialog>
 
-      {/* ── Add / Edit dialog ── */}
-      <Dialog open={editOpen} onClose={() => !saving && setEditOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editKey ? 'Edit Product' : 'Add New Product'}
+      {/* ── Add / Edit WIZARD ── */}
+      <Dialog open={editOpen} onClose={() => !saving && setEditOpen(false)} maxWidth="md" fullWidth
+        PaperProps={{ sx: { borderRadius: '16px' } }}>
+        <DialogTitle sx={{ pb: 1 }}>
+          {editKey ? 'Edit Product' : 'Create a Product'}
+          <Typography sx={{ fontSize: 12.5, color: '#9CA3AF', fontWeight: 400 }}>
+            Build the form your team fills in for this product. It flows straight to quotations and the underwriting page.
+          </Typography>
         </DialogTitle>
+        <Box sx={{ px: 3 }}>
+          <Stepper activeStep={wizStep} alternativeLabel
+            sx={{ '& .MuiStepLabel-label': { fontSize: 12, fontWeight: 600 },
+                  '& .Mui-active .MuiStepIcon-root': { color: '#FF5A5A' },
+                  '& .Mui-completed .MuiStepIcon-root': { color: '#10B981' } }}>
+            {WIZARD_STEPS.map((s, i) => (
+              <Step key={s} completed={wizStep > i && stepValid(i)}>
+                <StepLabel onClick={() => (i < wizStep || stepValid(wizStep)) && setWizStep(i)}
+                  sx={{ cursor: 'pointer' }}>{s}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        </Box>
         <DialogContent sx={{ p: 0 }}>
-          <Tabs value={dlgTab} onChange={(_, v) => setDlgTab(v)}
-            sx={{
-              px: 3, borderBottom: '1px solid rgba(255,139,90,0.12)',
-              '& .MuiTab-root': { fontSize: 13, fontWeight: 600, textTransform: 'none', color: '#9CA3AF', minWidth: 0, px: 2 },
-              '& .Mui-selected': { color: '#FF5A5A' },
-              '& .MuiTabs-indicator': { background: 'linear-gradient(90deg,#FF5A5A,#FF8B5A)', height: 2.5 },
-            }}>
-            <Tab label="Basic Info" />
-            <Tab label={`Comparison Rows (${form.comparisonRows.length})`} />
-            <Tab label={`Form Fields (${form.fields.length})`} />
-          </Tabs>
 
-          {/* ── Tab 0: Basic ── */}
-          {dlgTab === 0 && (
+          {/* ── Step 0: Basics ── */}
+          {wizStep === 0 && (
             <Box sx={{ p: 3 }}>
               <Stack spacing={2}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -476,6 +653,29 @@ const ProductsManager = () => {
                 <TextField fullWidth label="Customer Name Field" size="small" value={form.customerNameField}
                   onChange={e => setForm(f => ({ ...f, customerNameField: e.target.value }))}
                   helperText="The field name that holds the customer's name (default: proposer_name)" />
+
+                {/* Start-from shortcut */}
+                {!editKey && (
+                  <Box sx={{ p: 2, borderRadius: '12px', bgcolor: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)' }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                      <ContentCopyIcon sx={{ fontSize: 16, color: '#6366f1' }} />
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: '#4338ca' }}>Shortcut — start from an existing product</Typography>
+                    </Stack>
+                    <FormControl size="small" fullWidth>
+                      <InputLabel>Copy fields from…</InputLabel>
+                      <Select label="Copy fields from…" value=""
+                        onChange={e => { const p = all.find(x => x.key === e.target.value); if (p) cloneFrom(p); }}>
+                        {all.map(p => <MenuItem key={p.key} value={p.key} sx={{ fontSize: 13 }}>{p.icon} {p.label} ({(p.fields || []).length} fields)</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                    {form.fields.length > 0 && (
+                      <Typography sx={{ fontSize: 11.5, color: '#6B7280', mt: 1 }}>
+                        {form.fields.length} field{form.fields.length !== 1 ? 's' : ''} loaded — continue to edit them in the next step.
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+
                 {/* Preview */}
                 {form.label && (
                   <Box sx={{ p: 2, borderRadius: '10px', bgcolor: `${form.color}10`, border: `1.5px solid ${form.color}25`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -492,35 +692,30 @@ const ProductsManager = () => {
             </Box>
           )}
 
-          {/* ── Tab 1: Comparison Rows ── */}
-          {dlgTab === 1 && (
+          {/* ── Step 1: Sections & Fields ── */}
+          {wizStep === 1 && (
             <Box sx={{ p: 3 }}>
-              <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 2 }}>
-                These are the row labels shown in the quote comparison table sent to customers.
-              </Typography>
-              <Stack spacing={1} sx={{ mb: 2 }}>
-                {form.comparisonRows.map((row, i) => (
-                  <Stack key={i} direction="row" spacing={1} alignItems="center">
-                    <TextField fullWidth size="small" value={row} placeholder="e.g. Annual Premium (LKR)"
-                      onChange={e => updateRow(i, e.target.value)}
-                      sx={{ '& .MuiInputBase-root': { fontSize: 13 } }} />
-                    <IconButton size="small" onClick={() => removeRow(i)} sx={{ color: '#FF5A5A', flexShrink: 0 }}>
-                      <DeleteOutlineIcon sx={{ fontSize: 17 }} />
-                    </IconButton>
-                  </Stack>
-                ))}
-              </Stack>
-              <Button size="small" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 15 }} />}
-                onClick={addRow}
-                sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.35)', color: '#FF8B5A' }}>
-                Add Row
-              </Button>
-            </Box>
-          )}
+              {/* Shortcuts */}
+              <Box sx={{ mb: 2, p: 1.5, borderRadius: '12px', bgcolor: 'rgba(255,139,90,0.05)', border: '1px solid rgba(255,139,90,0.18)' }}>
+                <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 1 }}>
+                  <BoltOutlinedIcon sx={{ fontSize: 16, color: '#FF8B5A' }} />
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#b45309' }}>Quick add — starter sections</Typography>
+                </Stack>
+                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                  {STARTER_SECTIONS.map(tpl => (
+                    <Chip key={tpl.name} label={`${tpl.icon} ${tpl.name}`} size="small" onClick={() => addStarterSection(tpl)}
+                      sx={{ fontSize: 11.5, cursor: 'pointer', bgcolor: '#fff', border: '1px solid rgba(255,139,90,0.4)', color: '#b45309', '&:hover': { bgcolor: 'rgba(255,139,90,0.12)' } }} />
+                  ))}
+                </Stack>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#b45309', mb: 0.8 }}>Quick add — common fields</Typography>
+                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                  {QUICK_FIELDS.map(qf => (
+                    <Chip key={qf.label} label={`+ ${qf.label}`} size="small" onClick={() => addQuickField(qf)}
+                      sx={{ fontSize: 11, cursor: 'pointer', bgcolor: '#fff', border: '1px solid rgba(99,102,241,0.35)', color: '#6366f1', '&:hover': { bgcolor: 'rgba(99,102,241,0.10)' } }} />
+                  ))}
+                </Stack>
+              </Box>
 
-          {/* ── Tab 2: Fields ── */}
-          {dlgTab === 2 && (
-            <Box sx={{ p: 3 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Typography sx={{ fontSize: 13, color: '#6B7280' }}>
                   {form.fields.length} field{form.fields.length !== 1 ? 's' : ''} across {Object.keys(groupedFields).length} section{Object.keys(groupedFields).length !== 1 ? 's' : ''}
@@ -528,7 +723,7 @@ const ProductsManager = () => {
                 <Button size="small" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 15 }} />}
                   onClick={() => openAddField()}
                   sx={{ fontSize: 12, borderColor: 'rgba(255,90,90,0.35)', color: '#FF5A5A' }}>
-                  Add Field
+                  Add Custom Field
                 </Button>
               </Stack>
 
@@ -563,18 +758,162 @@ const ProductsManager = () => {
 
               {form.fields.length === 0 && (
                 <Box sx={{ textAlign: 'center', py: 4, color: '#9CA3AF' }}>
-                  <Typography sx={{ fontSize: 13 }}>No fields yet. Click "Add Field" to start building the form.</Typography>
+                  <Typography sx={{ fontSize: 13 }}>No fields yet. Use a starter section above, or "Add Custom Field".</Typography>
                 </Box>
               )}
             </Box>
           )}
+
+          {/* ── Step 2: Auto-calculations ── */}
+          {wizStep === 2 && (
+            <Box sx={{ p: 3 }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                <FunctionsIcon sx={{ fontSize: 18, color: '#FF5A5A' }} />
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>Auto-calculated totals</Typography>
+              </Stack>
+              <Typography sx={{ fontSize: 12.5, color: '#6B7280', mb: 2 }}>
+                Make a number field add up other fields automatically — no formulas to type. Turn one on, then tick the fields to add.
+                It fills in by itself on both the quotation and underwriting forms.
+              </Typography>
+
+              {numericFields.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4, color: '#9CA3AF' }}>
+                  <Typography sx={{ fontSize: 13 }}>
+                    No number or currency fields yet. Add some in the previous step (e.g. a "Sum Insured" total and the values that make it up).
+                  </Typography>
+                </Box>
+              ) : (
+                <Stack spacing={1.5}>
+                  {numericFields.map(f => {
+                    const sources = autoSources(f);
+                    const others = numericFields.filter(o => o.name !== f.name);
+                    const on = isAutoOn(f);
+                    return (
+                      <Box key={f.name} sx={{ p: 1.5, borderRadius: '12px', border: `1px solid ${on ? 'rgba(255,90,90,0.30)' : 'rgba(0,0,0,0.08)'}`, bgcolor: on ? 'rgba(255,90,90,0.03)' : '#fff' }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Box>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>{f.label}</Typography>
+                            <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>{f.section} · {TYPE_LABEL[f.type]}</Typography>
+                          </Box>
+                          <FormControlLabel
+                            control={<Switch size="small" checked={on} onChange={e => setAutoEnabled(f, e.target.checked)} />}
+                            label={<Typography sx={{ fontSize: 12, fontWeight: 600, color: on ? '#FF5A5A' : '#6B7280' }}>Auto-sum</Typography>}
+                            sx={{ mr: 0 }} />
+                        </Stack>
+                        <Collapse in={on}>
+                          {others.length === 0 ? (
+                            <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', mt: 1 }}>Add more number/currency fields to sum into this one.</Typography>
+                          ) : (
+                            <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
+                              <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: '#6B7280', mb: 0.5 }}>Add up these fields:</Typography>
+                              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0 }}>
+                                {others.map(o => (
+                                  <FormControlLabel key={o.name}
+                                    control={<Checkbox size="small" checked={sources.includes(o.name)} onChange={() => toggleAutoSource(f.name, o.name)} />}
+                                    label={<Typography sx={{ fontSize: 12 }}>{o.label}</Typography>} />
+                                ))}
+                              </Box>
+                              {sources.length > 0 && (
+                                <Typography sx={{ fontSize: 11.5, color: '#FF5A5A', fontWeight: 600, mt: 0.5 }}>
+                                  {f.label} = {sources.map(sn => numericFields.find(x => x.name === sn)?.label || sn).join(' + ')}
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                        </Collapse>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* ── Step 3: Review ── */}
+          {wizStep === 3 && (
+            <Box sx={{ p: 3 }}>
+              <Box sx={{ p: 2, borderRadius: '12px', bgcolor: `${form.color}0D`, border: `1.5px solid ${form.color}25`, display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                <Box sx={{ fontSize: 28 }}>{form.icon}</Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography sx={{ fontWeight: 800, fontSize: 15, color: form.color }}>{form.label || 'Untitled product'}</Typography>
+                  <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
+                    Prefix <strong>{form.prefix || '—'}</strong> · {form.fields.length} fields · {Object.keys(groupedFields).length} sections
+                    {numericFields.some(f => f.autoCalc) ? ` · ${numericFields.filter(f => f.autoCalc).length} auto-calc` : ''}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Sections summary */}
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#6B7280', mb: 0.8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Sections</Typography>
+              <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+                {Object.entries(groupedFields).map(([sec, fields]) => (
+                  <Chip key={sec} label={`${sec} · ${fields.length}`} size="small"
+                    sx={{ fontSize: 11.5, bgcolor: 'rgba(0,0,0,0.05)', color: '#374151' }} />
+                ))}
+                {Object.keys(groupedFields).length === 0 && (
+                  <Typography sx={{ fontSize: 12.5, color: '#ef4444' }}>No fields added — go back to step 2.</Typography>
+                )}
+              </Stack>
+
+              {/* Auto-calc summary */}
+              {numericFields.some(f => f.autoCalc) && (
+                <>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#6B7280', mb: 0.8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Auto-calculations</Typography>
+                  <Box sx={{ mb: 2 }}>
+                    {numericFields.filter(f => f.autoCalc).map(f => (
+                      <Typography key={f.name} sx={{ fontSize: 12.5, color: '#374151', py: 0.3 }}>
+                        <strong style={{ color: '#FF5A5A' }}>{f.label}</strong> = {autoSources(f).map(sn => numericFields.find(x => x.name === sn)?.label || sn).join(' + ')}
+                      </Typography>
+                    ))}
+                  </Box>
+                </>
+              )}
+
+              {/* Comparison rows */}
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#6B7280', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Comparison Rows
+              </Typography>
+              <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', mb: 1 }}>
+                Row labels shown in the quote comparison table sent to customers.
+              </Typography>
+              <Stack spacing={1} sx={{ mb: 1.5 }}>
+                {form.comparisonRows.map((row, i) => (
+                  <Stack key={i} direction="row" spacing={1} alignItems="center">
+                    <TextField fullWidth size="small" value={row} placeholder="e.g. Annual Premium (LKR)"
+                      onChange={e => updateRow(i, e.target.value)} sx={inputSx} />
+                    <IconButton size="small" onClick={() => removeRow(i)} sx={{ color: '#FF5A5A', flexShrink: 0 }}>
+                      <DeleteOutlineIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                  </Stack>
+                ))}
+              </Stack>
+              <Button size="small" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 15 }} />}
+                onClick={addRow}
+                sx={{ fontSize: 12, borderColor: 'rgba(255,139,90,0.35)', color: '#FF8B5A' }}>
+                Add Row
+              </Button>
+            </Box>
+          )}
         </DialogContent>
+
         <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid rgba(255,139,90,0.10)' }}>
-          <Button onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}
-            sx={{ background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)' }}>
-            {saving ? 'Saving…' : editKey ? 'Save Changes' : 'Create Product'}
-          </Button>
+          <Button onClick={() => setEditOpen(false)} disabled={saving} sx={{ color: '#6B7280' }}>Cancel</Button>
+          <Box sx={{ flex: 1 }} />
+          {wizStep > 0 && (
+            <Button onClick={goBack} disabled={saving} variant="outlined"
+              sx={{ borderColor: 'rgba(0,0,0,0.15)', color: '#6B7280' }}>Back</Button>
+          )}
+          {wizStep < WIZARD_STEPS.length - 1 ? (
+            <Button variant="contained" onClick={goNext}
+              sx={{ background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)', minWidth: 110 }}>
+              Next
+            </Button>
+          ) : (
+            <Button variant="contained" onClick={handleSave} disabled={saving}
+              sx={{ background: 'linear-gradient(135deg,#10B981,#059669)', minWidth: 130 }}>
+              {saving ? 'Saving…' : editKey ? 'Save Changes' : 'Create Product'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
@@ -609,6 +948,15 @@ const ProductsManager = () => {
                 </Select>
               </FormControl>
             </Stack>
+            {/* Section suggestions */}
+            <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
+              {SECTION_SUGGESTIONS.map(s => (
+                <Chip key={s} label={s} size="small" onClick={() => setFieldForm(f => ({ ...f, section: s }))}
+                  variant={fieldForm.section === s ? 'filled' : 'outlined'}
+                  sx={{ fontSize: 10.5, cursor: 'pointer', height: 22,
+                        ...(fieldForm.section === s ? { bgcolor: 'rgba(99,102,241,0.12)', color: '#6366f1' } : { color: '#6B7280' }) }} />
+              ))}
+            </Stack>
             <FormControlLabel control={
               <Switch checked={fieldForm.required}
                 onChange={e => setFieldForm(f => ({ ...f, required: e.target.checked }))} size="small" />
@@ -636,6 +984,11 @@ const ProductsManager = () => {
                   helperText="e.g. Individual" />
               </Stack>
             </Box>
+            {NUMERIC_TYPES.includes(fieldForm.type) && (
+              <Typography sx={{ fontSize: 11.5, color: '#9CA3AF' }}>
+                Tip: to make this a total of other fields, finish here and use the <strong>Auto-calculations</strong> step.
+              </Typography>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
