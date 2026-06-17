@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { uploadFile as uploadToCloudinary } from '../storage';
 import { useAuth } from '../App';
 import { PRODUCTS } from '../config/products';
+import { evaluateAutoCalc, describeAutoCalc } from '../utils/autoCalc';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -673,17 +674,17 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   /* ── risk field renderer (from products.js field definitions) ──────── */
   const renderRiskField = (f) => {
     const val = riskValues[f.name] ?? '';
-    // Auto-calculated total (e.g. autoCalc: 'sum:market_value,extra_fittings_value').
+    // Auto-calculated total (sum or percentage — e.g. 'sum:a,b' or 'pct:basic_premium:18').
     // Mirrors the quotation form so custom-product equations also compute here.
     if (f.autoCalc) {
-      const parts = f.autoCalc.replace('sum:', '').split(',').map(s => s.trim()).filter(Boolean);
-      const total = parts.reduce((acc, fn) => acc + num(riskValues[fn]), 0);
-      const desired = total > 0 ? String(total) : '';
+      const total = evaluateAutoCalc(f.autoCalc, riskValues);
+      const desired = total ? String(total) : '';
       if (desired !== String(val)) setTimeout(() => setRisk(f.name, desired), 0);
+      const labelFor = (n) => (allProducts[productKey]?.fields || []).find(x => x.name === n)?.label || n;
       return (
         <NumericField key={f.name} label={`${f.label} (Auto-calculated)`} value={desired}
           readOnly fullWidth size="small"
-          helperText={`Sum of: ${parts.join(', ')}`}
+          helperText={describeAutoCalc(f.autoCalc, labelFor)}
           sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 13 },
                 '& .MuiInputBase-input': { color: '#FF5A5A', fontWeight: 700 } }} />
       );

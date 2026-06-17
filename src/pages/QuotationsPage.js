@@ -11,6 +11,7 @@ import { COUNTRIES } from '../config/countries';
 import emailjs from '@emailjs/browser';
 import { uploadFile as uploadToCloudinary, openFile } from '../storage';
 import { generateComparisonPdf } from '../utils/comparisonPdf';
+import { evaluateAutoCalc, describeAutoCalc } from '../utils/autoCalc';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import Box from '@mui/material/Box';
@@ -261,18 +262,19 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
       );
     }
 
-    // Auto-calculated
+    // Auto-calculated (sum or percentage)
     if (f.autoCalc) {
-      const fields = f.autoCalc.replace('sum:', '').split(',');
-      const total = fields.reduce((acc, fn) => acc + (Number(values[fn.trim()]) || 0), 0);
-      if (total !== Number(values[f.name] || 0)) {
-        setTimeout(() => onChange(f.name, String(total)), 0);
+      const total = evaluateAutoCalc(f.autoCalc, values);
+      if (String(total) !== String(Number(values[f.name] || 0))) {
+        setTimeout(() => onChange(f.name, total ? String(total) : ''), 0);
       }
+      const labelFor = (n) => def.fields.find(x => x.name === n)?.label || n;
       return (
         <TextField key={f.name} size="small" fullWidth
           label={f.label + ' (Auto-calculated)'}
-          value={total > 0 ? total.toLocaleString() : ''}
+          value={total ? total.toLocaleString() : ''}
           InputProps={{ readOnly: true }}
+          helperText={describeAutoCalc(f.autoCalc, labelFor)}
           sx={{ ...gridStyle, '& .MuiInputBase-input': { color: '#FF5A5A', fontWeight: 700 } }} />
       );
     }

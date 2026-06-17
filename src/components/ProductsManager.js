@@ -5,6 +5,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { PRODUCTS } from '../config/products';
+import { parseAutoCalc, buildAutoCalc, describeAutoCalc } from '../utils/autoCalc';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -235,7 +236,7 @@ function FieldRow({ field, idx, onEdit, onRemove }) {
           {field.name} · {TYPE_LABEL[field.type] || field.type}
           {field.required ? ' · Required' : ''}
           {field.showIf ? ` · if ${field.showIf.field}=${field.showIf.value}` : ''}
-          {field.autoCalc ? ` · = ${field.autoCalc.replace('sum:', 'sum ')}` : ''}
+          {field.autoCalc ? ` · = ${describeAutoCalc(field.autoCalc)}` : ''}
         </Typography>
       </Box>
       <Chip label={TYPE_LABEL[field.type] || field.type} size="small"
@@ -269,7 +270,7 @@ const ProductsManager = () => {
   const [saving,     setSaving]       = useState(false);
   const [snack,      setSnack]        = useState({ open: false, msg: '', severity: 'success' });
   const [openSections, setOpenSections] = useState({});
-  const [autoOn,     setAutoOn]       = useState({}); // field name → auto-calc switch state
+  const [autoCfg,    setAutoCfg]      = useState({}); // field name → { on, mode, sources, rate }
 
   React.useEffect(() => {
     const unsub = onSnapshot(
@@ -286,7 +287,7 @@ const ProductsManager = () => {
 
   const toast = (msg, severity = 'success') => setSnack({ open: true, msg, severity });
 
-  const resetWizard = () => { setWizStep(0); setOpenSections({}); setAutoOn({}); };
+  const resetWizard = () => { setWizStep(0); setOpenSections({}); setAutoCfg({}); };
 
   const openAdd = () => {
     setEditKey(null);
@@ -457,29 +458,36 @@ const ProductsManager = () => {
     toast(`Added “${qf.label}”`);
   };
 
-  // ── Auto-calc helpers ──────────────────────────────────────────────────────
+  // ── Auto-calc helpers (sum or percentage) ──────────────────────────────────
   const numericFields = (form.fields || []).map((f, i) => ({ ...f, _idx: i })).filter(f => NUMERIC_TYPES.includes(f.type));
-  const isAutoOn = (f) => !!f.autoCalc || !!autoOn[f.name];
-  const autoSources = (f) => (f.autoCalc ? f.autoCalc.replace('sum:', '').split(',').map(s => s.trim()).filter(Boolean) : []);
 
-  const setAutoEnabled = (f, on) => {
-    setAutoOn(s => ({ ...s, [f.name]: on }));
-    if (!on) setForm(fm => ({ ...fm, fields: fm.fields.map(x => x.name === f.name ? (() => { const c = { ...x }; delete c.autoCalc; return c; })() : x) }));
-  };
+  // Current editor config for a field — local override, else derived from its formula.
+  const getCfg = (f) => autoCfg[f.name] || { on: !!f.autoCalc, ...parseAutoCalc(f.autoCalc) };
 
-  const toggleAutoSource = (targetName, srcName) => {
+  // Merge a change and write the resulting formula back onto the field.
+  const updateAuto = (name, patch) => {
+    const cur = autoCfg[name] || (() => {
+      const fld = form.fields.find(x => x.name === name);
+      return { on: !!fld?.autoCalc, ...parseAutoCalc(fld?.autoCalc) };
+    })();
+    const next = { ...cur, ...patch };
+    setAutoCfg(prev => ({ ...prev, [name]: next }));
     setForm(fm => ({
       ...fm,
       fields: fm.fields.map(x => {
-        if (x.name !== targetName) return x;
-        const cur = x.autoCalc ? x.autoCalc.replace('sum:', '').split(',').filter(Boolean) : [];
-        const next = cur.includes(srcName) ? cur.filter(n => n !== srcName) : [...cur, srcName];
+        if (x.name !== name) return x;
         const c = { ...x };
-        if (next.length) c.autoCalc = 'sum:' + next.join(',');
-        else delete c.autoCalc;
+        const formula = next.on ? buildAutoCalc(next) : null;
+        if (formula) c.autoCalc = formula; else delete c.autoCalc;
         return c;
       }),
     }));
+  };
+
+  const toggleAutoSource = (field, srcName) => {
+    const cfg = getCfg(field);
+    const sources = cfg.sources.includes(srcName) ? cfg.sources.filter(n => n !== srcName) : [...cfg.sources, srcName];
+    updateAuto(field.name, { on: true, sources });
   };
 
   // ── Wizard navigation ──────────────────────────────────────────────────────
@@ -772,8 +780,9 @@ const ProductsManager = () => {
                 <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>Auto-calculated totals</Typography>
               </Stack>
               <Typography sx={{ fontSize: 12.5, color: '#6B7280', mb: 2 }}>
-                Make a number field add up other fields automatically — no formulas to type. Turn one on, then tick the fields to add.
-                It fills in by itself on both the quotation and underwriting forms.
+                Make a number field fill itself in — no formulas to type. Pick <strong>Add up</strong> (e.g. a Sum Insured total)
+                or <strong>Percentage</strong> (e.g. VAT = 18% of premium, or premium = 2.5% of sum insured), then tick the fields.
+                It computes by itself on both the quotation and underwriting forms.
               </Typography>
 
               {numericFields.length === 0 ? (
@@ -785,9 +794,11 @@ const ProductsManager = () => {
               ) : (
                 <Stack spacing={1.5}>
                   {numericFields.map(f => {
-                    const sources = autoSources(f);
+                    const cfg = getCfg(f);
+                    const on = cfg.on;
+                    const isPct = cfg.mode === 'pct';
                     const others = numericFields.filter(o => o.name !== f.name);
-                    const on = isAutoOn(f);
+                    const labelFor = (n) => numericFields.find(x => x.name === n)?.label || n;
                     return (
                       <Box key={f.name} sx={{ p: 1.5, borderRadius: '12px', border: `1px solid ${on ? 'rgba(255,90,90,0.30)' : 'rgba(0,0,0,0.08)'}`, bgcolor: on ? 'rgba(255,90,90,0.03)' : '#fff' }}>
                         <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -796,26 +807,43 @@ const ProductsManager = () => {
                             <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>{f.section} · {TYPE_LABEL[f.type]}</Typography>
                           </Box>
                           <FormControlLabel
-                            control={<Switch size="small" checked={on} onChange={e => setAutoEnabled(f, e.target.checked)} />}
-                            label={<Typography sx={{ fontSize: 12, fontWeight: 600, color: on ? '#FF5A5A' : '#6B7280' }}>Auto-sum</Typography>}
+                            control={<Switch size="small" checked={on} onChange={e => updateAuto(f.name, { on: e.target.checked })} />}
+                            label={<Typography sx={{ fontSize: 12, fontWeight: 600, color: on ? '#FF5A5A' : '#6B7280' }}>Auto-calculate</Typography>}
                             sx={{ mr: 0 }} />
                         </Stack>
                         <Collapse in={on}>
                           {others.length === 0 ? (
-                            <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', mt: 1 }}>Add more number/currency fields to sum into this one.</Typography>
+                            <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', mt: 1 }}>Add more number/currency fields to calculate from.</Typography>
                           ) : (
                             <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
-                              <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: '#6B7280', mb: 0.5 }}>Add up these fields:</Typography>
+                              {/* Mode toggle */}
+                              <Stack direction="row" spacing={0.8} sx={{ mb: 1 }}>
+                                {[['sum', 'Add up'], ['pct', 'Percentage']].map(([m, lbl]) => (
+                                  <Chip key={m} label={lbl} size="small" onClick={() => updateAuto(f.name, { on: true, mode: m })}
+                                    sx={{ fontSize: 11.5, cursor: 'pointer', fontWeight: 600,
+                                          ...(cfg.mode === m ? { bgcolor: 'rgba(255,90,90,0.12)', color: '#FF5A5A', border: '1px solid rgba(255,90,90,0.4)' }
+                                                             : { bgcolor: '#fff', color: '#6B7280', border: '1px solid rgba(0,0,0,0.15)' }) }} />
+                                ))}
+                                {isPct && (
+                                  <TextField size="small" type="number" placeholder="Rate" value={cfg.rate}
+                                    onChange={e => updateAuto(f.name, { on: true, mode: 'pct', rate: e.target.value })}
+                                    InputProps={{ endAdornment: <Typography sx={{ fontSize: 12, color: '#6B7280' }}>%</Typography> }}
+                                    sx={{ width: 110, '& .MuiInputBase-root': { fontSize: 12.5 } }} />
+                                )}
+                              </Stack>
+                              <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: '#6B7280', mb: 0.5 }}>
+                                {isPct ? 'Take the percentage of:' : 'Add up these fields:'}
+                              </Typography>
                               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0 }}>
                                 {others.map(o => (
                                   <FormControlLabel key={o.name}
-                                    control={<Checkbox size="small" checked={sources.includes(o.name)} onChange={() => toggleAutoSource(f.name, o.name)} />}
+                                    control={<Checkbox size="small" checked={cfg.sources.includes(o.name)} onChange={() => toggleAutoSource(f, o.name)} />}
                                     label={<Typography sx={{ fontSize: 12 }}>{o.label}</Typography>} />
                                 ))}
                               </Box>
-                              {sources.length > 0 && (
+                              {cfg.sources.length > 0 && (
                                 <Typography sx={{ fontSize: 11.5, color: '#FF5A5A', fontWeight: 600, mt: 0.5 }}>
-                                  {f.label} = {sources.map(sn => numericFields.find(x => x.name === sn)?.label || sn).join(' + ')}
+                                  {f.label} = {describeAutoCalc(buildAutoCalc(cfg), labelFor)}
                                 </Typography>
                               )}
                             </Box>
@@ -862,7 +890,7 @@ const ProductsManager = () => {
                   <Box sx={{ mb: 2 }}>
                     {numericFields.filter(f => f.autoCalc).map(f => (
                       <Typography key={f.name} sx={{ fontSize: 12.5, color: '#374151', py: 0.3 }}>
-                        <strong style={{ color: '#FF5A5A' }}>{f.label}</strong> = {autoSources(f).map(sn => numericFields.find(x => x.name === sn)?.label || sn).join(' + ')}
+                        <strong style={{ color: '#FF5A5A' }}>{f.label}</strong> = {describeAutoCalc(f.autoCalc, (n) => numericFields.find(x => x.name === n)?.label || n)}
                       </Typography>
                     ))}
                   </Box>
