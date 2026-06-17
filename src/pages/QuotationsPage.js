@@ -692,7 +692,11 @@ function parseDynamicExtras(formData, storeKey) {
 /* ── comparison view ──────────────────────────────────────────────────────── */
 function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCTS }) {
   const product   = allProducts[quote?.product_key];
-  const responses = quote?.responses || [];
+  const allResponses = quote?.responses || [];
+  // Insurers who declined the request are kept out of the comparison/premium math
+  // and selection — they're listed separately so the broker sees why.
+  const responses        = allResponses.filter(r => !r.declined);
+  const declinedResponses = allResponses.filter(r => r.declined);
   const extraCovers  = parseDynamicExtras(quote?.form_data, 'extra_covers');
   const extraClauses = parseDynamicExtras(quote?.form_data, 'extra_clauses');
   const coverFields  = [
@@ -1473,6 +1477,27 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {/* ── Declined insurers ──────────────────────────────────────────────── */}
+      {declinedResponses.length > 0 && (
+        <Box sx={{ mb: 3, p: 2, borderRadius: '14px', border: '1px solid rgba(107,114,128,0.25)', bgcolor: 'rgba(107,114,128,0.04)' }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#4B5563', textTransform: 'uppercase', letterSpacing: 1, mb: 1.5 }}>
+            Declined to Quote ({declinedResponses.length})
+          </Typography>
+          <Stack spacing={1}>
+            {declinedResponses.map(r => (
+              <Box key={r.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 1.2, borderRadius: '10px', bgcolor: '#fff', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <Chip label="Declined" size="small"
+                  sx={{ fontWeight: 700, fontSize: 11, bgcolor: 'rgba(239,68,68,0.10)', color: '#dc2626', flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>{r.company_name}</Typography>
+                  <Typography sx={{ fontSize: 12.5, color: '#6B7280' }}>{r.decline_reason || 'Outside underwriting guidelines'}</Typography>
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
       )}
 
       {/* ── Broker edit dialog ─────────────────────────────────────────────── */}

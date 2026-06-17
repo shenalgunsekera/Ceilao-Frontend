@@ -153,6 +153,11 @@ const QuoteResponsePage = () => {
   const [clauseResponses, setClauseResponses] = useState({});
   const [planPremiums,    setPlanPremiums]    = useState([]);
 
+  // Decline — an insurer can reject the request (e.g. outside underwriting guidelines)
+  const [declineOpen,   setDeclineOpen]   = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declining,     setDeclining]     = useState(false);
+
   const [submittedData,  setSubmittedData]  = useState(null);
   const [editing,        setEditing]        = useState(false);
   const [fieldErrors,    setFieldErrors]    = useState({});
@@ -407,6 +412,38 @@ const QuoteResponsePage = () => {
     setSaving(false);
   };
 
+  // Insurer declines the request (cannot quote — e.g. outside underwriting guidelines).
+  const handleDecline = async () => {
+    setDeclining(true);
+    try {
+      const response = {
+        id:             `${cid}_${Date.now()}`,
+        company_id:     cid,
+        company_name:   companyName,
+        declined:       true,
+        decline_reason: declineReason.trim() || 'Outside our underwriting guidelines',
+        premium:        0,
+        submitted_at:   new Date().toISOString(),
+      };
+      const snap = await getDoc(doc(db, 'quotes', qid));
+      if (snap.exists()) {
+        const prev = (snap.data().responses || []).filter(r => r.company_id !== cid);
+        await updateDoc(doc(db, 'quotes', qid), {
+          responses: [...prev, response],
+          status: 'partial',
+          updated_at: serverTimestamp(),
+        });
+      }
+      setSubmittedData(response);
+      setSubmitted(true);
+      setEditing(false);
+      setDeclineOpen(false);
+    } catch (err) {
+      setError(err.message);
+    }
+    setDeclining(false);
+  };
+
   const downloadReceipt = async () => {
     const { default: jsPDF }     = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
@@ -576,6 +613,38 @@ const QuoteResponsePage = () => {
   );
 
   // ── Success / submitted view ─────────────────────────────────────────────────
+  if (submitted && submittedData?.declined) return (
+    <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', py: 4, px: 2 }}>
+      <Box sx={{ maxWidth: 540, mx: 'auto' }}>
+        <Card sx={{ overflow: 'hidden' }}>
+          <Box sx={{ background: 'linear-gradient(135deg,#6B7280,#4B5563)', p: 3, textAlign: 'center' }}>
+            <WarningAmberRoundedIcon sx={{ fontSize: 48, color: '#fff', mb: 1 }} />
+            <Typography sx={{ fontWeight: 800, fontSize: 20, color: '#fff' }}>Request Declined</Typography>
+            <Typography sx={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', mt: 0.5 }}>
+              {companyName} · Ref: {quote?.reference}
+            </Typography>
+          </Box>
+          <CardContent sx={{ p: 3 }}>
+            <Typography sx={{ fontSize: 13.5, color: '#374151', mb: 2 }}>
+              You have declined to quote on this request. Ceilao Insurance Brokers has been notified.
+            </Typography>
+            <Box sx={{ p: 2, borderRadius: '10px', bgcolor: 'rgba(107,114,128,0.06)', border: '1px solid rgba(0,0,0,0.08)', mb: 2.5 }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, mb: 0.5 }}>Reason</Typography>
+              <Typography sx={{ fontSize: 13.5, color: '#1A1A2E' }}>{submittedData.decline_reason}</Typography>
+            </Box>
+            <Button fullWidth variant="outlined" onClick={() => { setSubmitted(false); setSubmittedData(null); }}
+              sx={{ py: 1.1, fontSize: 13, borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A' }}>
+              Changed your mind? Submit a quotation instead
+            </Button>
+          </CardContent>
+        </Card>
+        <Typography sx={{ fontSize: 11.5, color: '#9CA3AF', textAlign: 'center', mt: 3 }}>
+          Ceilao Insurance Brokers (Pvt) Ltd — Confidential Quotation Portal
+        </Typography>
+      </Box>
+    </Box>
+  );
+
   if (submitted) return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#F9F9FB', py: 4, px: 2 }}>
       <Box sx={{ maxWidth: 560, mx: 'auto' }}>
@@ -1039,10 +1108,17 @@ const QuoteResponsePage = () => {
 
             </Stack>
 
-            <Button fullWidth variant="contained" onClick={handleSubmit} disabled={saving || uploading}
+            <Button fullWidth variant="contained" onClick={handleSubmit} disabled={saving || uploading || declining}
               sx={{ mt: 3, py: 1.3, fontSize: 14, fontWeight: 700, background: 'linear-gradient(135deg,#FF5A5A,#FF8B5A)' }}>
               {saving ? 'Submitting…' : editing ? 'Update Quotation' : 'Submit Quotation'}
             </Button>
+
+            {!editing && (
+              <Button fullWidth variant="text" onClick={() => setDeclineOpen(true)} disabled={saving || uploading || declining}
+                sx={{ mt: 1.2, py: 1, fontSize: 13, fontWeight: 600, color: '#6B7280', '&:hover': { bgcolor: 'rgba(107,114,128,0.06)' } }}>
+                Can't quote this risk? Decline the request
+              </Button>
+            )}
 
             <Typography sx={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', mt: 2 }}>
               Your submission is securely transmitted to Ceilao Insurance Brokers and tracked in real-time.
@@ -1054,6 +1130,31 @@ const QuoteResponsePage = () => {
           Ceilao Insurance Brokers (Pvt) Ltd — Confidential Quotation Portal
         </Typography>
       </Box>
+
+      {/* Decline dialog */}
+      <Dialog open={declineOpen} onClose={() => !declining && setDeclineOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+          <WarningAmberRoundedIcon sx={{ color: '#6B7280', fontSize: 22 }} />
+          <span>Decline this request</span>
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 13, color: '#6B7280', mb: 2 }}>
+            Let Ceilao Insurance Brokers know you cannot offer terms for this risk. This is recorded against your company for this request.
+          </Typography>
+          <TextField fullWidth size="small" multiline rows={3}
+            label="Reason for declining"
+            placeholder="e.g. Outside our underwriting guidelines / risk not accepted"
+            value={declineReason}
+            onChange={e => setDeclineReason(e.target.value)} />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeclineOpen(false)} disabled={declining} sx={{ color: '#6B7280' }}>Cancel</Button>
+          <Button variant="contained" onClick={handleDecline} disabled={declining}
+            sx={{ background: 'linear-gradient(135deg,#6B7280,#4B5563)' }}>
+            {declining ? 'Submitting…' : 'Decline Request'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Validation dialog */}
       <Dialog open={valOpen} onClose={() => setValOpen(false)} maxWidth="xs" fullWidth>
