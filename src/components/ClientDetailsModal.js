@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { viewUrl } from '../storage';
 import { PRODUCTS } from '../config/products';
 import { db } from '../firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { useAuth } from '../App';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -170,7 +170,23 @@ const ClientDetailsModal = ({ client, onClose }) => {
   const [endoSaving, setEndoSaving] = useState(false);
   const [endoError, setEndoError] = useState('');
 
+  // Custom products (Firestore) merged with built-ins so a custom-product policy
+  // shows its own Risk / Coverage / Underwriting fields here and in the PDF/Excel.
+  const [customProducts, setCustomProducts] = useState({});
+  React.useEffect(() => {
+    let alive = true;
+    getDocs(collection(db, 'products')).then(snap => {
+      if (!alive) return;
+      const map = {};
+      snap.forEach(d => { map[d.id] = { ...d.data() }; });
+      setCustomProducts(map);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   if (!client) return null;
+
+  const ALL_PRODUCTS = { ...PRODUCTS, ...customProducts };
 
   // Revised totals = original policy value + cumulative endorsement deltas
   const sumDelta  = endorsements.reduce((a, e) => a + endoNum(e.sum_insured_change), 0);
@@ -230,9 +246,11 @@ const ClientDetailsModal = ({ client, onClose }) => {
   const coverResponses  = (() => { try { return JSON.parse(client.cover_responses  || '{}'); } catch { return {}; } })();
   const clauseResponses = (() => { try { return JSON.parse(client.clause_responses || '{}'); } catch { return {}; } })();
 
-  // Dynamic product field lookup — resolves all product-specific fields for this client's product
-  const productKey    = Object.entries(PRODUCTS).find(([, v]) => v.label === client.product)?.[0];
-  const productFields = productKey ? (PRODUCTS[productKey].fields || []) : [];
+  // Dynamic product field lookup — resolves all product-specific fields for this
+  // client's product (built-in OR custom).
+  const productKey    = Object.entries(ALL_PRODUCTS).find(([, v]) => v.label === client.product)?.[0]
+                       || (ALL_PRODUCTS[client.product_key] ? client.product_key : undefined);
+  const productFields = productKey ? (ALL_PRODUCTS[productKey].fields || []) : [];
 
   const riskInfoFields  = productFields.filter(f => f.section === 'Risk Information');
   const claimsHistFields = productFields.filter(f => f.section === 'Claims History');

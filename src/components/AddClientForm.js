@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadFile as uploadToCloudinary } from '../storage';
 import { useAuth } from '../App';
@@ -428,21 +428,51 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
     setFields(f => ({ ...f, commission_total: total !== 0 ? String(Math.round(total * 100) / 100) : '' }));
   }, [fields.commission_basic, fields.commission_srcc, fields.commission_tc, fields.commission_special_amount]);
 
+  /* ── custom products (Firestore) merged with built-ins ───────────────────
+     Without this, a quote built on a custom product would not render any of its
+     product-specific fields here — the underwriting form would only know the
+     built-in products. Merging keeps custom-product fields mapping correctly. */
+  const [customProducts, setCustomProducts] = useState({});
+  useEffect(() => {
+    let alive = true;
+    getDocs(collection(db, 'products')).then(snap => {
+      if (!alive) return;
+      const map = {};
+      snap.forEach(d => { map[d.id] = { ...d.data() }; });
+      setCustomProducts(map);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const allProducts   = useMemo(() => ({ ...PRODUCTS, ...customProducts }), [customProducts]);
+  const productKeyMap  = useMemo(
+    () => Object.fromEntries(Object.entries(allProducts).map(([k, v]) => [v.label, k])),
+    [allProducts]);
+  const productOptions = useMemo(() => Object.values(allProducts).map(p => p.label), [allProducts]);
+
+  // Once custom products load, resolve a custom product that the static map missed.
+  useEffect(() => {
+    if (fields.product) return;
+    const raw = initialData.product, key = initialData.product_key;
+    let resolved = '';
+    if (raw && productKeyMap[raw]) resolved = raw;
+    else if (key && allProducts[key]) resolved = allProducts[key].label;
+    if (resolved) setFields(f => ({ ...f, product: resolved }));
+  }, [productKeyMap, allProducts]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── auto-fill main_class when product changes ───────────────────────── */
   useEffect(() => {
-    const key = PRODUCT_KEY_MAP[fields.product];
-    if (key && PRODUCT_MAIN_CLASS[key]) {
-      setFields(f => ({ ...f, main_class: PRODUCT_MAIN_CLASS[key] }));
-    }
-  }, [fields.product]);
+    const key = productKeyMap[fields.product];
+    const mc = (key && PRODUCT_MAIN_CLASS[key]) || allProducts[key]?.mainClass;
+    if (mc) setFields(f => ({ ...f, main_class: mc }));
+  }, [fields.product, productKeyMap, allProducts]);
 
 
   /* ── product-specific risk fields ────────────────────────────────────── */
-  const productKey = useMemo(() => PRODUCT_KEY_MAP[fields.product] || null, [fields.product]);
+  const productKey = useMemo(() => productKeyMap[fields.product] || null, [productKeyMap, fields.product]);
 
   const riskFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       RISK_SECTIONS.includes(f.section) &&
       f.type !== 'file' &&
       f.type !== 'plantable' &&
@@ -451,58 +481,58 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       f.name !== 'extra_fittings_value' &&
       f.name !== 'vehicle_no'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const financialInterestFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       f.section === 'Financial Interest' && f.type !== 'file' && f.type !== 'plantable'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const claimsHistoryFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       f.section === 'Claims History' && f.type !== 'file' && f.type !== 'plantable'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const underwritingInfoFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       f.section === 'Underwriting Information' && f.type !== 'file' && f.type !== 'plantable'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const coversFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       (f.section === 'Covers Required' || f.section === 'Cover Required') &&
       f.type !== 'file' && f.type !== 'plantable'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const clausesFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       f.section === 'Additional Clauses' && f.type !== 'file' && f.type !== 'plantable'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const sumInsuredSubFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       f.section === 'Sum Insured' && f.type !== 'file' && f.type !== 'plantable' &&
       f.name !== 'sum_insured'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   const prodDocFields = useMemo(() => {
-    if (!productKey || !PRODUCTS[productKey]) return [];
-    return (PRODUCTS[productKey].fields || []).filter(f =>
+    if (!productKey || !allProducts[productKey]) return [];
+    return (allProducts[productKey].fields || []).filter(f =>
       f.section === 'Document Uploads' && f.type === 'file'
     );
-  }, [productKey]);
+  }, [productKey, allProducts]);
 
   /* Extra risk field values */
   const [riskValues, setRiskValues] = useState(() => {
@@ -609,7 +639,8 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       <Select label={`${f.label}${f.required ? ' *' : ''}`} value={val}
         onChange={e => onChangeFn(f.name, e.target.value)} required={!!f.required}
         sx={{ borderRadius: '10px', fontSize: 13 }}>
-        {(dropdowns[f.name] || []).map(opt => <MenuItem key={opt} value={opt} sx={{ fontSize: 13 }}>{opt}</MenuItem>)}
+        {/* Product list includes custom products so custom-product quotes resolve here */}
+        {(f.name === 'product' ? productOptions : (dropdowns[f.name] || [])).map(opt => <MenuItem key={opt} value={opt} sx={{ fontSize: 13 }}>{opt}</MenuItem>)}
       </Select>
       {f.required && !val && <FormHelperText error>{f.label} is required</FormHelperText>}
     </FormControl>
@@ -696,7 +727,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   };
 
   /* ── file no hint ────────────────────────────────────────────────────── */
-  const productPrefix = productKey ? (PRODUCTS[productKey]?.prefix || '') : '';
+  const productPrefix = productKey ? (allProducts[productKey]?.prefix || '') : '';
   const fileNoHint = productPrefix ? `Format: ${productPrefix}-YYYYMMDD-XXXX-NAME` : '';
 
   return (
@@ -774,10 +805,10 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
         {(riskFields.length > 0 || fields.main_class === 'Motor' || productKey === 'motor') && (
           <>
             <SectionHeader title="Risk Information" />
-            {productKey && PRODUCTS[productKey] && (
-              <Chip label={PRODUCTS[productKey].label} size="small"
+            {productKey && allProducts[productKey] && (
+              <Chip label={allProducts[productKey].label} size="small"
                 sx={{ mb: 1.5, fontSize: 11, fontWeight: 700,
-                      bgcolor: `${PRODUCTS[productKey].color}18`, color: PRODUCTS[productKey].color }} />
+                      bgcolor: `${allProducts[productKey].color}18`, color: allProducts[productKey].color }} />
             )}
             <Grid container spacing={2} sx={{ mb: 2.5 }}>
               {(fields.main_class === 'Motor' || productKey === 'motor') && (
