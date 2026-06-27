@@ -704,6 +704,10 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
   const [removedIds,   setRemovedIds]   = useState(() => new Set());
   const [deleteResp,   setDeleteResp]   = useState(null);
   const [deletingResp, setDeletingResp] = useState(false);
+  // "Not finalised" = broker manually marks that the customer went with another
+  // company NOT through us (so we never auto-select / convert this quote).
+  const [notFinalised, setNotFinalised] = useState(!!quote?.not_finalised);
+  const [markingNF,    setMarkingNF]    = useState(false);
   const allResponses = (quote?.responses || []).filter(r => !removedIds.has(r.id));
   // Insurers who declined the request are kept out of the comparison/premium math
   // and selection — they're listed separately so the broker sees why.
@@ -812,6 +816,23 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
       console.error('Delete response failed:', err);
     }
     setDeletingResp(false);
+  };
+
+  // Toggle the manual "not finalised" mark (customer went with another company not through us).
+  const toggleNotFinalised = async () => {
+    setMarkingNF(true);
+    const next = !notFinalised;
+    try {
+      await updateDoc(doc(db, 'quotes', quote.id), {
+        not_finalised:    next,
+        not_finalised_at: next ? new Date().toISOString() : null,
+        updated_at:       serverTimestamp(),
+      });
+      setNotFinalised(next);
+    } catch (err) {
+      console.error('Mark not finalised failed:', err);
+    }
+    setMarkingNF(false);
   };
 
   const [custEmail,  setCustEmail]  = useState('');
@@ -1185,7 +1206,21 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
           sx={{ fontSize: 12, borderColor: 'rgba(99,102,241,0.3)', color: '#6366f1' }}>
           {exportingPdf ? 'Generating PDF…' : 'Export PDF'}
         </Button>
+        <Button variant={notFinalised ? 'contained' : 'outlined'} size="small"
+          onClick={toggleNotFinalised} disabled={markingNF}
+          startIcon={<span style={{ fontSize: 13 }}>⏳</span>}
+          sx={{ fontSize: 12, ...(notFinalised
+            ? { bgcolor: '#d97706', '&:hover': { bgcolor: '#b45309' } }
+            : { borderColor: 'rgba(245,158,11,0.4)', color: '#d97706' }) }}>
+          {markingNF ? 'Saving…' : notFinalised ? 'Not Finalised ✓' : 'Mark Not Finalised'}
+        </Button>
       </Stack>
+      {notFinalised && (
+        <Alert severity="warning" sx={{ mb: 2, fontSize: 12.5 }}
+          action={<Button color="inherit" size="small" onClick={toggleNotFinalised} disabled={markingNF}>Undo</Button>}>
+          Marked as <strong>Not Finalised</strong> — the customer proceeded with another company, not through us.
+        </Alert>
+      )}
       {exportError && (
         <Alert severity="error" sx={{ mb: 2, fontSize: 12 }} onClose={() => setExportError('')}>
           {exportError}
@@ -1811,8 +1846,8 @@ const QuotationsPage = () => {
       }
       if (filterProduct !== 'all' && q.product_key !== filterProduct) return false;
       if (filterStatus  !== 'all' && (q.status || 'sent') !== filterStatus) return false;
-      // "Not finalised" = never converted to a policy (status not 'confirmed')
-      if (unfinalisedOnly && q.status === 'confirmed') return false;
+      // "Not finalised" = manually marked (customer went with another company not through us)
+      if (unfinalisedOnly && !q.not_finalised) return false;
       if (term) {
         const product = allP[q.product_key];
         const insurers = [
@@ -1832,9 +1867,9 @@ const QuotationsPage = () => {
     });
   }, [quotes, dateFrom, dateTo, filterProduct, filterStatus, searchText, unfinalisedOnly, allP]);
 
-  // Count of quotes that were sent but never converted to a policy
+  // Count of quotes manually marked as not finalised (customer went elsewhere)
   const unfinalisedCount = useMemo(
-    () => quotes.filter(q => (q.sent_to?.length || 0) > 0 && q.status !== 'confirmed').length,
+    () => quotes.filter(q => q.not_finalised === true).length,
     [quotes]);
 
   const sentQuotes     = filteredQuotes.filter(q => (q.sent_to?.length || 0) > 0);

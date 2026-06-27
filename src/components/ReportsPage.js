@@ -122,7 +122,8 @@ const QUOTE_FIELDS = [
   { key: 'client_name',      label: 'Client',           type: 'string' },
   { key: 'mobile',           label: 'Mobile',           type: 'string' },
   { key: 'status',           label: 'Status',           type: 'string' },
-  { key: 'finalised',        label: 'Finalised',        type: 'string' },
+  { key: 'not_finalised',    label: 'Not Finalised',    type: 'string' },
+  { key: 'not_finalised_at', label: 'Marked On',        type: 'date'   },
   { key: 'sent_count',       label: 'Insurers Sent',    type: 'number' },
   { key: 'response_count',   label: 'Responses',        type: 'number' },
   { key: 'declined_count',   label: 'Declined',         type: 'number' },
@@ -144,7 +145,7 @@ const BUILTIN_TEMPLATES = [
   { id:'expiry_report',    name:'Policy Expiry Report', description:'Policies expiring in the next 90 days', icon:'📅', source:'clients', fields:['client_name','policy_no','policy_period_to','insurance_provider','product','mobile_no','net_premium'], groupBy:'', aggregations:[], filters:[{field:'policy_period_to',op:'between',value:'__next90__'}], sortBy:'policy_period_to', sortDir:'asc', viewMode:'flat', charts:[] },
   { id:'commission_report',name:'Commission Report',   description:'Commission earned by insurer',          icon:'📊', source:'clients', fields:['insurance_provider','commission_basic','commission_srcc','commission_tc'], groupBy:'insurance_provider', aggregations:[{field:'commission_basic',op:'sum'},{field:'commission_srcc',op:'sum'},{field:'commission_tc',op:'sum'}], filters:[], sortBy:'commission_basic_sum', sortDir:'desc', viewMode:'subtotals', charts:[{id:'c1',type:'bar',field:'commission_basic_sum',label:'Basic Commission by Insurer'}] },
   { id:'claims_summary',   name:'Claims Summary',      description:'Claims by status and insurer',          icon:'🛡️', source:'claims',  fields:['insurer','status','claim_amount','settled_amount','client_name'], groupBy:'status', aggregations:[{field:'claim_amount',op:'sum'},{field:'settled_amount',op:'sum'},{field:'client_name',op:'count'}], filters:[], sortBy:'client_name_count', sortDir:'desc', viewMode:'aggregated', charts:[{id:'c1',type:'pie',field:'client_name_count',label:'Claims by Status'}] },
-  { id:'unfinalised_quotes', name:'Unfinalised Quotations', description:'Quotes that were not converted to a policy', icon:'⏳', source:'quotes', fields:['reference','product','client_name','mobile','status','sent_count','response_count','days_outstanding','created_by_name','created_at'], groupBy:'', aggregations:[], filters:[{field:'finalised',op:'equals',value:'No'}], sortBy:'created_at', sortDir:'desc', viewMode:'flat', charts:[] },
+  { id:'unfinalised_quotes', name:'Not Finalised Quotations', description:'Quotes where the customer went with another company (marked not finalised)', icon:'⏳', source:'quotes', fields:['reference','product','client_name','mobile','status','sent_count','response_count','not_finalised_at','created_by_name','created_at'], groupBy:'', aggregations:[], filters:[{field:'not_finalised',op:'equals',value:'Yes'}], sortBy:'not_finalised_at', sortDir:'desc', viewMode:'flat', charts:[] },
 ];
 
 /* ── Pure helpers ────────────────────────────────────────────────────────── */
@@ -872,7 +873,8 @@ const ReportsPage = () => {
         client_name:fd.proposer_name||fd.company_name||fd.full_name||fd.client_name||'',
         mobile:fd.mobile||'',
         status:x.status||'',
-        finalised:x.status==='confirmed'?'Yes':'No',
+        not_finalised:x.not_finalised?'Yes':'No',
+        not_finalised_at:x.not_finalised_at||'',
         sent_count:(x.sent_to||[]).length,
         response_count:resp.filter(r=>!r.declined).length,
         declined_count:resp.filter(r=>r.declined).length,
