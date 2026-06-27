@@ -632,7 +632,7 @@ const QuoteResponsePage = () => {
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, mb: 0.5 }}>Reason</Typography>
               <Typography sx={{ fontSize: 13.5, color: '#1A1A2E' }}>{submittedData.decline_reason}</Typography>
             </Box>
-            <Button fullWidth variant="outlined" onClick={() => { setSubmitted(false); setSubmittedData(null); }}
+            <Button fullWidth variant="outlined" onClick={() => { setSubmitted(false); setSubmittedData(null); setEditing(true); }}
               sx={{ py: 1.1, fontSize: 13, borderColor: 'rgba(255,90,90,0.3)', color: '#FF5A5A' }}>
               Changed your mind? Submit a quotation instead
             </Button>
