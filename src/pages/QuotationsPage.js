@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Papa from 'papaparse';
 import {
-  collection, addDoc, getDocs, query, orderBy, onSnapshot,
+  collection, addDoc, getDoc, getDocs, query, orderBy, onSnapshot,
   doc, updateDoc, deleteDoc, serverTimestamp, writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -49,6 +49,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Checkbox from '@mui/material/Checkbox';
 
 import Pagination from '@mui/material/Pagination';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import InputAdornment from '@mui/material/InputAdornment';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
@@ -61,6 +64,8 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import PendingOutlinedIcon from '@mui/icons-material/PendingOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
 
 const EMAILJS_SERVICE           = process.env.REACT_APP_EMAILJS_SERVICE_ID           || '';
 const EMAILJS_TEMPLATE          = process.env.REACT_APP_EMAILJS_TEMPLATE_ID          || '';
@@ -565,7 +570,7 @@ function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProd
                 }}
               />
             )}
-            {tab === 'compare' && (
+            {(tab === 'compare' || (tab === 'sent' && respondedCount > 0)) && (
               <Button size="small" variant="outlined" startIcon={<CompareArrowsIcon />}
                 onClick={e => { e.stopPropagation(); onSelect(quote); }}
                 sx={{ fontSize: 11, py: 0.4, borderColor: 'rgba(255,139,90,0.3)', color: '#FF8B5A', flexShrink: 0 }}>
@@ -694,7 +699,12 @@ function parseDynamicExtras(formData, storeKey) {
 /* ── comparison view ──────────────────────────────────────────────────────── */
 function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCTS }) {
   const product   = allProducts[quote?.product_key];
-  const allResponses = quote?.responses || [];
+  // Locally removed responses (deleted by the broker) — filtered out immediately
+  // while the Firestore write propagates.
+  const [removedIds,   setRemovedIds]   = useState(() => new Set());
+  const [deleteResp,   setDeleteResp]   = useState(null);
+  const [deletingResp, setDeletingResp] = useState(false);
+  const allResponses = (quote?.responses || []).filter(r => !removedIds.has(r.id));
   // Insurers who declined the request are kept out of the comparison/premium math
   // and selection — they're listed separately so the broker sees why.
   const responses        = allResponses.filter(r => !r.declined);
@@ -785,6 +795,25 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
     } catch (err) { console.error('Edit save failed:', err); }
     setEditSaving(false);
   };
+
+  // Remove a single insurer's response from this comparison (persisted).
+  const deleteResponse = async () => {
+    if (!deleteResp) return;
+    setDeletingResp(true);
+    try {
+      const snap = await getDoc(doc(db, 'quotes', quote.id));
+      if (snap.exists()) {
+        const next = (snap.data().responses || []).filter(r => r.id !== deleteResp.id);
+        await updateDoc(doc(db, 'quotes', quote.id), { responses: next, updated_at: serverTimestamp() });
+      }
+      setRemovedIds(prev => new Set(prev).add(deleteResp.id));
+      setDeleteResp(null);
+    } catch (err) {
+      console.error('Delete response failed:', err);
+    }
+    setDeletingResp(false);
+  };
+
   const [custEmail,  setCustEmail]  = useState('');
   const [sending,    setSending]    = useState(false);
   const [sendDone,   setSendDone]   = useState(false);
@@ -1210,7 +1239,13 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
                   const isSelected = quote.customer_selection?.company_id === r.company_id;
                   return (
                   <TableCell key={r.id} align="center" sx={{ fontWeight: 700, minWidth: 160, bgcolor: isSelected ? 'rgba(16,185,129,0.06)' : 'transparent' }}>
-                    <Box>
+                    <Box sx={{ position: 'relative' }}>
+                      <Tooltip title={`Remove ${r.company_name}'s quote`}>
+                        <IconButton size="small" onClick={() => setDeleteResp(r)}
+                          sx={{ position: 'absolute', top: -6, right: -6, color: '#9CA3AF', '&:hover': { color: '#ef4444', bgcolor: 'rgba(239,68,68,0.08)' } }}>
+                          <CloseIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                      </Tooltip>
                       <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{r.company_name}</Typography>
                       {isSelected && <Box component="span" sx={{ fontSize: 10, color: '#059669', fontWeight: 700, bgcolor: 'rgba(16,185,129,0.12)', px: 1, py: 0.2, borderRadius: '10px', display: 'inline-block', mt: 0.3 }}>🏆 Customer's Choice</Box>}
 
@@ -1502,6 +1537,23 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
         </Box>
       )}
 
+      {/* ── Delete response confirm ────────────────────────────────────────── */}
+      <Dialog open={!!deleteResp} onClose={() => !deletingResp && setDeleteResp(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>Remove this quote?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 14, color: '#374151' }}>
+            Remove <strong>{deleteResp?.company_name}</strong>'s quote from this comparison? This permanently
+            deletes their response from the request and cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setDeleteResp(null)} disabled={deletingResp} sx={{ color: '#6B7280' }}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={deleteResponse} disabled={deletingResp}>
+            {deletingResp ? 'Removing…' : 'Remove Quote'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* ── Broker edit dialog ─────────────────────────────────────────────── */}
       <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="md" fullWidth
         PaperProps={{ sx: { maxHeight: '90vh' } }}>
@@ -1671,6 +1723,7 @@ const QuotationsPage = () => {
   const [toast,         setToast]         = useState({ open: false, msg: '', severity: 'success' });
   const [filterProduct,  setFilterProduct]  = useState('all');
   const [filterStatus,   setFilterStatus]   = useState('all');
+  const [searchText,     setSearchText]     = useState('');
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [deleting,       setDeleting]       = useState(false);
   const [fieldErrors,    setFieldErrors]    = useState({});
@@ -1734,13 +1787,47 @@ const QuotationsPage = () => {
   }, []);
 
   const filteredQuotes = useMemo(() => {
-    let list = quotes;
-    if (dateFrom) list = list.filter(q => q.created_at?.toDate?.() >= dateFrom);
-    if (dateTo)   list = list.filter(q => q.created_at?.toDate?.() <= dateTo);
-    if (filterProduct !== 'all') list = list.filter(q => q.product_key === filterProduct);
-    if (filterStatus  !== 'all') list = list.filter(q => q.status === filterStatus);
-    return list;
-  }, [quotes, dateFrom, dateTo, filterProduct, filterStatus]);
+    // Resolve a quote's created date robustly (Firestore Timestamp, ISO string, or
+    // optimistic Date) — quotes without a parseable date are never filtered out by date.
+    const quoteDate = (q) => {
+      const c = q.created_at;
+      if (c?.toDate) return c.toDate();
+      if (c) { const d = new Date(c); return isNaN(d) ? null : d; }
+      return null;
+    };
+    // Normalise the range to whole days so "To" includes the entire end day.
+    const from = dateFrom ? new Date(new Date(dateFrom).setHours(0, 0, 0, 0)) : null;
+    const to   = dateTo   ? new Date(new Date(dateTo).setHours(23, 59, 59, 999)) : null;
+    const term = searchText.trim().toLowerCase();
+
+    return quotes.filter(q => {
+      if (from || to) {
+        const d = quoteDate(q);
+        if (d) {
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+        }
+      }
+      if (filterProduct !== 'all' && q.product_key !== filterProduct) return false;
+      if (filterStatus  !== 'all' && (q.status || 'sent') !== filterStatus) return false;
+      if (term) {
+        const product = allP[q.product_key];
+        const insurers = [
+          ...(q.sent_to   || []).map(c => c.company_name),
+          ...(q.responses || []).map(r => r.company_name),
+        ];
+        const fd = q.form_data || {};
+        const haystack = [
+          q.reference, q.product_key, product?.label,
+          fd.proposer_name, fd.company_name, fd.full_name, fd.client_name,
+          fd.vehicle_no, fd.mobile, q.created_by_name,
+          ...insurers,
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [quotes, dateFrom, dateTo, filterProduct, filterStatus, searchText, allP]);
 
   const sentQuotes     = filteredQuotes.filter(q => (q.sent_to?.length || 0) > 0);
   const receivedQuotes = filteredQuotes.filter(q => (q.responses?.length || 0) > 0);
@@ -2287,8 +2374,21 @@ const QuotationsPage = () => {
           </Box>
         </Stack>
 
-        {/* Product + Status filters */}
-        <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+        {/* Search + Product + Status filters */}
+        <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+          <TextField
+            size="small" placeholder="Search ref, client, vehicle, insurer…"
+            value={searchText} onChange={e => setSearchText(e.target.value)}
+            sx={{ minWidth: 260, flex: 1, maxWidth: 420 }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} /></InputAdornment>,
+              endAdornment: searchText ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchText('')}><CloseIcon sx={{ fontSize: 16 }} /></IconButton>
+                </InputAdornment>
+              ) : null,
+            }}
+          />
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Product Type</InputLabel>
             <Select value={filterProduct} label="Product Type" onChange={e => setFilterProduct(e.target.value)}>
@@ -2306,9 +2406,9 @@ const QuotationsPage = () => {
               <MenuItem value="confirmed">Confirmed</MenuItem>
             </Select>
           </FormControl>
-          {(filterProduct !== 'all' || filterStatus !== 'all') && (
-            <Button size="small" onClick={() => { setFilterProduct('all'); setFilterStatus('all'); }}
-              sx={{ fontSize: 12, color: '#9CA3AF' }}>Clear Filters</Button>
+          {(filterProduct !== 'all' || filterStatus !== 'all' || searchText || dateFrom || dateTo) && (
+            <Button size="small" onClick={() => { setFilterProduct('all'); setFilterStatus('all'); setSearchText(''); setDateFrom(null); setDateTo(null); }}
+              sx={{ fontSize: 12, color: '#9CA3AF' }}>Clear All</Button>
           )}
         </Stack>
 
