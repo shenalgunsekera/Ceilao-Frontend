@@ -516,19 +516,36 @@ function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProd
     ? quote.created_at.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
 
-  const hasSelection = !!quote.customer_selection;
+  const hasCustomerSel = !!quote.customer_selection;            // customer picked (green)
+  const hasBrokerSel   = quote.status === 'confirmed' || !!quote.selected_company; // broker confirmed (blue)
+  const hasSelection   = hasCustomerSel || hasBrokerSel;
+  const brokerCompany  = quote.selected_company || quote.customer_selection?.company_name || '';
 
   return (
     <Card sx={{ mb: 1.5, border: `1px solid ${hasSelection ? 'rgba(16,185,129,0.35)' : 'rgba(255,139,90,0.12)'}`, boxShadow: hasSelection ? '0 0 0 2px rgba(16,185,129,0.08)' : 'none' }}>
       {hasSelection && (
-        <Box sx={{ background: 'linear-gradient(90deg,#059669,#10B981)', px: 2.5, py: 0.9, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box sx={{ fontSize: 16 }}>🏆</Box>
-          <Typography sx={{ fontWeight: 700, fontSize: 12.5, color: '#fff' }}>
-            Customer selected <strong>{quote.customer_selection.company_name}</strong>
-          </Typography>
-          <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', ml: 'auto' }}>
-            {new Date(quote.customer_selection.selected_at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
-          </Typography>
+        // When both the broker has confirmed AND the customer has selected, the two
+        // banners sit side-by-side (half each); otherwise the single banner is full width.
+        <Box sx={{ display: 'flex', width: '100%' }}>
+          {hasBrokerSel && (
+            <Box sx={{ flex: 1, minWidth: 0, background: 'linear-gradient(90deg,#2563eb,#3b82f6)', px: 2.5, py: 0.9, display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <Box sx={{ fontSize: 15 }}>✅</Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Insurance company selected by broker{brokerCompany && <> — <strong>{brokerCompany}</strong></>}
+              </Typography>
+            </Box>
+          )}
+          {hasCustomerSel && (
+            <Box sx={{ flex: 1, minWidth: 0, background: 'linear-gradient(90deg,#059669,#10B981)', px: 2.5, py: 0.9, display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <Box sx={{ fontSize: 15 }}>🏆</Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Customer selected <strong>{quote.customer_selection.company_name}</strong>
+              </Typography>
+              <Typography sx={{ fontSize: 10.5, color: 'rgba(255,255,255,0.8)', ml: 'auto', flexShrink: 0, whiteSpace: 'nowrap', pl: 1 }}>
+                {new Date(quote.customer_selection.selected_at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+              </Typography>
+            </Box>
+          )}
         </Box>
       )}
       <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
