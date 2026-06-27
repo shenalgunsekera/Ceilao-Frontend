@@ -177,7 +177,7 @@ function applyFilters(rows, filters) {
         const d=rawVal?.toDate?rawVal.toDate():new Date(rawVal);
         if (isNaN(d)||d<now||d>end) return false; continue;
       }
-      const field=[...CLIENT_FIELDS,...CLAIM_FIELDS].find(f2=>f2.key===f.field);
+      const field=[...CLIENT_FIELDS,...CLAIM_FIELDS,...QUOTE_FIELDS].find(f2=>f2.key===f.field);
       if (!field) continue;
       if (field.type==='string') {
         const val=(rawVal||'').toLowerCase(); const cmp=(f.value||'').toLowerCase();
