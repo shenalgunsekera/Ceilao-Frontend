@@ -117,20 +117,39 @@ const CLAIM_FIELDS = [
 
 // Quotation report fields — these map to the flattened quote rows built in loadData().
 const QUOTE_FIELDS = [
-  { key: 'reference',        label: 'Reference',        type: 'string' },
-  { key: 'product',          label: 'Product',          type: 'string' },
-  { key: 'client_name',      label: 'Client',           type: 'string' },
-  { key: 'mobile',           label: 'Mobile',           type: 'string' },
-  { key: 'status',           label: 'Status',           type: 'string' },
-  { key: 'not_finalised',    label: 'Not Finalised',    type: 'string' },
-  { key: 'not_finalised_at', label: 'Marked On',        type: 'date'   },
-  { key: 'sent_count',       label: 'Insurers Sent',    type: 'number' },
-  { key: 'response_count',   label: 'Responses',        type: 'number' },
-  { key: 'declined_count',   label: 'Declined',         type: 'number' },
-  { key: 'selected_company', label: 'Selected Insurer', type: 'string' },
-  { key: 'days_outstanding', label: 'Days Outstanding', type: 'number' },
-  { key: 'created_by_name',  label: 'Created By',        type: 'string' },
-  { key: 'created_at',       label: 'Date Created',      type: 'date'   },
+  { key: 'reference',          label: 'Reference',          type: 'string' },
+  { key: 'product',            label: 'Product',            type: 'string' },
+  // Proposer / client
+  { key: 'client_name',        label: 'Client',             type: 'string' },
+  { key: 'customer_type',      label: 'Customer Type',      type: 'string' },
+  { key: 'mobile',             label: 'Mobile',             type: 'string' },
+  { key: 'email',              label: 'Email',              type: 'string' },
+  { key: 'nic_no',             label: 'NIC / Reg No',       type: 'string' },
+  { key: 'address',            label: 'Address',            type: 'string' },
+  { key: 'city',               label: 'City',               type: 'string' },
+  { key: 'district',           label: 'District',           type: 'string' },
+  // Risk basics
+  { key: 'sum_insured',        label: 'Sum Insured',        type: 'number' },
+  { key: 'vehicle_no',         label: 'Vehicle No',         type: 'string' },
+  { key: 'period_from',        label: 'Period From',        type: 'date'   },
+  { key: 'period_to',          label: 'Period To',          type: 'date'   },
+  // Status / outcome
+  { key: 'status',             label: 'Status',             type: 'string' },
+  { key: 'not_finalised',      label: 'Not Finalised',      type: 'string' },
+  { key: 'not_finalised_at',   label: 'Marked On',          type: 'date'   },
+  { key: 'selected_company',   label: 'Selected Insurer',   type: 'string' },
+  { key: 'selected_premium',   label: 'Selected Premium',   type: 'number' },
+  // Insurers & responses
+  { key: 'insurers_sent',      label: 'Insurers Sent',      type: 'string' },
+  { key: 'sent_count',         label: 'No. Sent',           type: 'number' },
+  { key: 'insurers_responded', label: 'Insurers Responded', type: 'string' },
+  { key: 'response_count',     label: 'No. Responses',      type: 'number' },
+  { key: 'declined_count',     label: 'No. Declined',       type: 'number' },
+  { key: 'lowest_premium',     label: 'Lowest Premium',     type: 'number' },
+  // Audit
+  { key: 'days_outstanding',   label: 'Days Outstanding',   type: 'number' },
+  { key: 'created_by_name',    label: 'Created By',          type: 'string' },
+  { key: 'created_at',         label: 'Date Created',        type: 'date'   },
 ];
 
 const NUMBER_OPS = ['sum','avg','min','max','count'];
@@ -141,7 +160,7 @@ const FILTER_OPS = {
 };
 
 const BUILTIN_TEMPLATES = [
-  { id:'unfinalised_quotes', name:'Not Finalised Quotations', description:'Quotes where the customer went with another company (marked not finalised)', icon:'⏳', source:'quotes', fields:['reference','product','client_name','mobile','status','sent_count','response_count','not_finalised_at','created_by_name','created_at'], groupBy:'', aggregations:[], filters:[{field:'not_finalised',op:'equals',value:'Yes'}], sortBy:'not_finalised_at', sortDir:'desc', viewMode:'flat', charts:[] },
+  { id:'unfinalised_quotes', name:'Not Finalised Quotations', description:'Quotes where the customer went with another company (marked not finalised) — full quote detail', icon:'⏳', source:'quotes', fields:['reference','product','client_name','customer_type','mobile','email','nic_no','address','city','district','sum_insured','vehicle_no','period_from','period_to','status','not_finalised_at','selected_company','selected_premium','insurers_sent','sent_count','insurers_responded','response_count','declined_count','lowest_premium','days_outstanding','created_by_name','created_at'], groupBy:'', aggregations:[], filters:[{field:'not_finalised',op:'equals',value:'Yes'}], sortBy:'not_finalised_at', sortDir:'desc', viewMode:'flat', charts:[] },
 ];
 
 /* ── Pure helpers ────────────────────────────────────────────────────────── */
@@ -862,19 +881,40 @@ const ReportsPage = () => {
       const x=d.data(); const fd=x.form_data||{};
       const created=x.created_at?.toDate?x.created_at.toDate():(x.created_at?new Date(x.created_at):null);
       const resp=x.responses||[];
+      const active=resp.filter(r=>!r.declined);
+      const premiums=active.map(r=>Number(r.premium)||0).filter(n=>n>0);
       return {
         id:d.id,
         reference:x.reference||'',
         product:x.product_label||x.product_key||'',
+        // Proposer / client
         client_name:fd.proposer_name||fd.company_name||fd.full_name||fd.client_name||'',
-        mobile:fd.mobile||'',
+        customer_type:fd.customer_type||'',
+        mobile:fd.mobile||fd.mobile_no||'',
+        email:fd.email||'',
+        nic_no:fd.nic_no||fd.business_reg||fd.nic_proof||'',
+        address:fd.address||fd.property_address||fd.address_of_risk||fd.premises_address||'',
+        city:fd.city||'',
+        district:fd.district||'',
+        // Risk basics
+        sum_insured:Number(fd.sum_insured||fd.total_value||fd.market_value||fd.sum_assured||0)||'',
+        vehicle_no:fd.vehicle_no||'',
+        period_from:fd.period_from||fd.departure_date||fd.commencement_date||fd.loan_start||'',
+        period_to:fd.period_to||fd.return_date||fd.expiry_date||fd.loan_end||'',
+        // Status / outcome
         status:x.status||'',
         not_finalised:x.not_finalised?'Yes':'No',
         not_finalised_at:x.not_finalised_at||'',
-        sent_count:(x.sent_to||[]).length,
-        response_count:resp.filter(r=>!r.declined).length,
-        declined_count:resp.filter(r=>r.declined).length,
         selected_company:x.selected_company||x.customer_selection?.company_name||'',
+        selected_premium:Number(x.selected_premium||0)||'',
+        // Insurers & responses
+        insurers_sent:(x.sent_to||[]).map(c=>c.company_name).filter(Boolean).join(', '),
+        sent_count:(x.sent_to||[]).length,
+        insurers_responded:active.map(r=>r.company_name).filter(Boolean).join(', '),
+        response_count:active.length,
+        declined_count:resp.filter(r=>r.declined).length,
+        lowest_premium:premiums.length?Math.min(...premiums):'',
+        // Audit
         days_outstanding:created?Math.max(0,Math.round((Date.now()-created.getTime())/86400000)):'',
         created_by_name:x.created_by_name||'',
         created_at:x.created_at,
