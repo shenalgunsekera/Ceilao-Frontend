@@ -565,9 +565,13 @@ function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProd
               </Typography>
               <Chip label={product?.label || quote.product_key} size="small"
                 sx={{ bgcolor: 'rgba(255,90,90,0.08)', color: '#FF5A5A', fontWeight: 600, fontSize: 10 }} />
-              {hasSelection && (
+              {hasCustomerSel && (
                 <Chip label={`🏆 ${quote.customer_selection.company_name}`} size="small"
                   sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#059669', fontWeight: 700, fontSize: 10 }} />
+              )}
+              {hasBrokerSel && !hasCustomerSel && brokerCompany && (
+                <Chip label={`✅ ${brokerCompany}`} size="small"
+                  sx={{ bgcolor: 'rgba(37,99,235,0.12)', color: '#2563eb', fontWeight: 700, fontSize: 10 }} />
               )}
             </Stack>
             <Typography sx={{ fontSize: 11.5, color: '#9CA3AF' }}>
@@ -2119,6 +2123,7 @@ const QuotationsPage = () => {
 
         // Insurance Company
         product:            productLabel,
+        product_key:        quote.product_key || '',
         insurance_provider: response.company_name,
 
         // Proposer Details (quotation uses different field names)
