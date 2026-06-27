@@ -896,9 +896,11 @@ const ReportsPage = () => {
 
   const sourceFields = source==='clients'?CLIENT_FIELDS:source==='claims'?CLAIM_FIELDS:QUOTE_FIELDS;
 
-  const runReport = useCallback(()=>{
-    const base = source==='clients'?clients:source==='claims'?claims:quotes;
-    // Time-period filter — by record creation date.
+  // Compute report results from an explicit config + the current datasets/period.
+  // Used by both the Run button and by running a template directly, so a template
+  // run never depends on React state that hasn't updated yet.
+  const buildResults = (cfg) => {
+    const base = cfg.source==='clients'?clients:cfg.source==='claims'?claims:quotes;
     const from = periodFrom ? new Date(new Date(periodFrom).setHours(0,0,0,0)) : null;
     const to   = periodTo   ? new Date(new Date(periodTo).setHours(23,59,59,999)) : null;
     const raw = (from||to) ? base.filter(r=>{
@@ -908,40 +910,56 @@ const ReportsPage = () => {
       if(to   && d>to)   return false;
       return true;
     }) : base;
-    const filtered = applyFilters(raw, filters);
-    if (viewMode==='pivot') {
-      setPivotData(buildPivot(filtered,groupBy,pivotColField,pivotValField,pivotValOp));
-      setResults(filtered);
-    } else if (viewMode==='aggregated') {
-      setResults(sortRows(aggregated(filtered,groupBy,aggregations),sortBy,sortDir));
-      setPivotData(null);
-    } else if (viewMode==='subtotals') {
-      setResults(withSubtotals(filtered,groupBy,aggregations));
-      setPivotData(null);
-    } else {
-      setResults(sortRows(filtered,sortBy,sortDir));
-      setPivotData(null);
-    }
-    setRPage(1);
-  },[source,clients,claims,quotes,periodFrom,periodTo,filters,viewMode,groupBy,pivotColField,pivotValField,pivotValOp,aggregations,sortBy,sortDir]);
+    const filtered = applyFilters(raw, cfg.filters||[]);
+    if (cfg.viewMode==='pivot')
+      return { results: filtered, pivot: buildPivot(filtered,cfg.groupBy,cfg.pivotColField,cfg.pivotValField,cfg.pivotValOp) };
+    if (cfg.viewMode==='aggregated')
+      return { results: sortRows(aggregated(filtered,cfg.groupBy,cfg.aggregations),cfg.sortBy,cfg.sortDir), pivot: null };
+    if (cfg.viewMode==='subtotals')
+      return { results: withSubtotals(filtered,cfg.groupBy,cfg.aggregations), pivot: null };
+    return { results: sortRows(filtered,cfg.sortBy,cfg.sortDir), pivot: null };
+  };
 
+  const runReport = () => {
+    const { results, pivot } = buildResults({ source, filters, viewMode, groupBy, aggregations, sortBy, sortDir, pivotColField, pivotValField, pivotValOp });
+    setResults(results); setPivotData(pivot); setRPage(1);
+  };
+
+  // Load a template into the builder AND run it immediately, then switch to the
+  // Report Builder view so the results are shown without a second click.
   const loadTemplate = (tpl) => {
-    setSource(tpl.source||'clients');
-    setSelFields(tpl.fields||[]);
-    setGroupBy(tpl.groupBy||'');
-    setAggregations(tpl.aggregations||[]);
-    setFilters((tpl.filters||[]).filter(f=>f.value!=='__next90__'));
-    setSortBy(tpl.sortBy||'');
-    setSortDir(tpl.sortDir||'desc');
-    setViewMode(tpl.viewMode||'flat');
-    setCharts(tpl.charts||[]);
-    setResults(null); setPivotData(null); setTab(0);
+    const cfg = {
+      source: tpl.source||'clients',
+      fields: tpl.fields||[],
+      groupBy: tpl.groupBy||'',
+      aggregations: tpl.aggregations||[],
+      filters: (tpl.filters||[]).filter(f=>f.value!=='__next90__'),
+      sortBy: tpl.sortBy||'',
+      sortDir: tpl.sortDir||'desc',
+      viewMode: tpl.viewMode||'flat',
+      charts: tpl.charts||[],
+      pivotColField: tpl.pivotColField||'',
+      pivotValField: tpl.pivotValField||'',
+      pivotValOp: tpl.pivotValOp||'sum',
+    };
+    // reflect the template in the builder controls
+    setSource(cfg.source); setSelFields(cfg.fields); setGroupBy(cfg.groupBy);
+    setAggregations(cfg.aggregations); setFilters(cfg.filters); setSortBy(cfg.sortBy);
+    setSortDir(cfg.sortDir); setViewMode(cfg.viewMode); setCharts(cfg.charts);
+    setPivotColField(cfg.pivotColField); setPivotValField(cfg.pivotValField); setPivotValOp(cfg.pivotValOp);
+    setSaveName(tpl.name||''); setSaveDesc(tpl.description||'');
+    // compute + show results immediately
     if (tpl.id==='expiry_report') {
       const now=new Date(); now.setHours(0,0,0,0);
       const end=new Date(now); end.setDate(end.getDate()+90);
       const ex=clients.filter(r=>{const v=r.policy_period_to;const d=v?.toDate?v.toDate():new Date(v);return !isNaN(d)&&d>=now&&d<=end;});
-      setResults(sortRows(ex,'policy_period_to','asc'));
+      setResults(sortRows(ex,'policy_period_to','asc')); setPivotData(null);
+    } else {
+      const { results, pivot } = buildResults(cfg);
+      setResults(results); setPivotData(pivot);
     }
+    setRPage(1);
+    setTab(1); // jump to Report Builder where results render
   };
 
   const handleSaveTpl = async()=>{
@@ -1095,28 +1113,12 @@ const ReportsPage = () => {
         </Stack>
       </Stack>
 
-      {/* Quick templates */}
-      <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1,mb:1.5}}>Quick Templates</Typography>
-      <Stack direction={{xs:'column',sm:'row'}} spacing={1.5} sx={{mb:3}} flexWrap="wrap">
-        {BUILTIN_TEMPLATES.map(tpl=>(
-          <Card key={tpl.id} onClick={()=>loadTemplate(tpl)} sx={{flex:1,minWidth:160,cursor:'pointer',border:'1px solid rgba(255,139,90,0.12)',transition:'all 0.18s','&:hover':{transform:'translateY(-2px)',boxShadow:'0 6px 20px rgba(255,90,90,0.12)'}}}>
-            <CardContent sx={{p:2,'&:last-child':{pb:2}}}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{mb:0.5}}>
-                <Typography sx={{fontSize:20}}>{tpl.icon}</Typography>
-                <Typography sx={{fontWeight:700,fontSize:13}}>{tpl.name}</Typography>
-              </Stack>
-              <Typography sx={{fontSize:11.5,color:'#9CA3AF'}}>{tpl.description}</Typography>
-            </CardContent>
-          </Card>
-        ))}
-      </Stack>
-
       <Tabs value={tab} onChange={(_,v)=>setTab(v)} sx={{mb:2.5,borderBottom:'1px solid rgba(255,139,90,0.12)','& .MuiTab-root':{fontSize:13,fontWeight:600,textTransform:'none',color:'#9CA3AF'},'& .Mui-selected':{color:'#FF5A5A'},'& .MuiTabs-indicator':{background:'linear-gradient(90deg,#FF5A5A,#FF8B5A)',height:2.5}}}>
+        <Tab icon={<BookmarkIcon sx={{fontSize:17}}/>} iconPosition="start" label={`Templates (${BUILTIN_TEMPLATES.length+savedTemplates.length})`}/>
         <Tab icon={<TuneIcon sx={{fontSize:17}}/>} iconPosition="start" label="Report Builder"/>
-        <Tab icon={<BookmarkIcon sx={{fontSize:17}}/>} iconPosition="start" label={`Saved${savedTemplates.length?` (${savedTemplates.length})`:''}`}/>
       </Tabs>
 
-      {tab===0&&(
+      {tab===1&&(
         <Stack direction={{xs:'column',lg:'row'}} spacing={2.5} alignItems="flex-start">
 
           {/* ── Config panel ── */}
@@ -1487,14 +1489,36 @@ const ReportsPage = () => {
         </Stack>
       )}
 
-      {/* Saved templates tab */}
-      {tab===1&&(
+      {/* Templates tab — built-in + saved templates, each runs directly */}
+      {tab===0&&(
         <Box>
+          <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1,mb:1.5}}>Built-in Reports</Typography>
+          <Stack spacing={1.5} sx={{mb:3}}>
+            {BUILTIN_TEMPLATES.map(tpl=>(
+              <Card key={tpl.id} sx={{border:'1px solid rgba(255,139,90,0.12)'}}>
+                <CardContent sx={{p:0,'&:last-child':{pb:0}}}>
+                  <Box sx={{px:2.5,py:1.5,display:'flex',alignItems:'center',gap:1.5}}>
+                    <Typography sx={{fontSize:22}}>{tpl.icon}</Typography>
+                    <Box sx={{flex:1,minWidth:0}}>
+                      <Typography sx={{fontWeight:700,fontSize:14}}>{tpl.name}</Typography>
+                      <Typography sx={{fontSize:12,color:'#9CA3AF'}}>{tpl.description}</Typography>
+                    </Box>
+                    <Button size="small" variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>loadTemplate(tpl)} sx={{fontSize:12}}>Run</Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{mb:1.5}}>
+            <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1}}>My Saved Templates</Typography>
+            <Button size="small" variant="outlined" startIcon={<TuneIcon sx={{fontSize:15}}/>} onClick={()=>setTab(1)} sx={{fontSize:11.5,borderColor:'rgba(99,102,241,0.35)',color:'#6366f1'}}>Open Report Builder</Button>
+          </Stack>
           {savedTemplates.length===0?(
-            <Box sx={{textAlign:'center',py:8}}>
-              <BookmarkOutlinedIcon sx={{fontSize:48,color:'rgba(255,90,90,0.2)',mb:1}}/>
+            <Box sx={{textAlign:'center',py:6,border:'1px dashed rgba(0,0,0,0.12)',borderRadius:'12px'}}>
+              <BookmarkOutlinedIcon sx={{fontSize:42,color:'rgba(255,90,90,0.2)',mb:1}}/>
               <Typography sx={{fontWeight:700,color:'#374151',mb:0.5}}>No saved templates yet</Typography>
-              <Typography sx={{fontSize:13,color:'#9CA3AF'}}>Build a report and click "Save Template"</Typography>
+              <Typography sx={{fontSize:13,color:'#9CA3AF'}}>Open the Report Builder, design a report and click "Save Template" — it will appear here.</Typography>
             </Box>
           ):(
             <Stack spacing={1.5}>
@@ -1513,7 +1537,7 @@ const ReportsPage = () => {
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={0.8}>
-                        <Button size="small" variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>loadTemplate(tpl)} sx={{fontSize:12}}>Load & Run</Button>
+                        <Button size="small" variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>loadTemplate(tpl)} sx={{fontSize:12}}>Run</Button>
                         <Tooltip title="Delete"><IconButton size="small" onClick={()=>handleDelTpl(tpl.id)} sx={{color:'#9CA3AF','&:hover':{color:'#ef4444'}}}><DeleteOutlineIcon fontSize="small"/></IconButton></Tooltip>
                       </Stack>
                     </Box>
