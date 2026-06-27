@@ -115,6 +115,23 @@ const CLAIM_FIELDS = [
   { key: 'main_class',     label: 'Main Class',     type: 'string' },
 ];
 
+// Quotation report fields — these map to the flattened quote rows built in loadData().
+const QUOTE_FIELDS = [
+  { key: 'reference',        label: 'Reference',        type: 'string' },
+  { key: 'product',          label: 'Product',          type: 'string' },
+  { key: 'client_name',      label: 'Client',           type: 'string' },
+  { key: 'mobile',           label: 'Mobile',           type: 'string' },
+  { key: 'status',           label: 'Status',           type: 'string' },
+  { key: 'finalised',        label: 'Finalised',        type: 'string' },
+  { key: 'sent_count',       label: 'Insurers Sent',    type: 'number' },
+  { key: 'response_count',   label: 'Responses',        type: 'number' },
+  { key: 'declined_count',   label: 'Declined',         type: 'number' },
+  { key: 'selected_company', label: 'Selected Insurer', type: 'string' },
+  { key: 'days_outstanding', label: 'Days Outstanding', type: 'number' },
+  { key: 'created_by_name',  label: 'Created By',        type: 'string' },
+  { key: 'created_at',       label: 'Date Created',      type: 'date'   },
+];
+
 const NUMBER_OPS = ['sum','avg','min','max','count'];
 const FILTER_OPS = {
   string: ['equals','contains','starts with','not equals'],
@@ -127,6 +144,7 @@ const BUILTIN_TEMPLATES = [
   { id:'expiry_report',    name:'Policy Expiry Report', description:'Policies expiring in the next 90 days', icon:'📅', source:'clients', fields:['client_name','policy_no','policy_period_to','insurance_provider','product','mobile_no','net_premium'], groupBy:'', aggregations:[], filters:[{field:'policy_period_to',op:'between',value:'__next90__'}], sortBy:'policy_period_to', sortDir:'asc', viewMode:'flat', charts:[] },
   { id:'commission_report',name:'Commission Report',   description:'Commission earned by insurer',          icon:'📊', source:'clients', fields:['insurance_provider','commission_basic','commission_srcc','commission_tc'], groupBy:'insurance_provider', aggregations:[{field:'commission_basic',op:'sum'},{field:'commission_srcc',op:'sum'},{field:'commission_tc',op:'sum'}], filters:[], sortBy:'commission_basic_sum', sortDir:'desc', viewMode:'subtotals', charts:[{id:'c1',type:'bar',field:'commission_basic_sum',label:'Basic Commission by Insurer'}] },
   { id:'claims_summary',   name:'Claims Summary',      description:'Claims by status and insurer',          icon:'🛡️', source:'claims',  fields:['insurer','status','claim_amount','settled_amount','client_name'], groupBy:'status', aggregations:[{field:'claim_amount',op:'sum'},{field:'settled_amount',op:'sum'},{field:'client_name',op:'count'}], filters:[], sortBy:'client_name_count', sortDir:'desc', viewMode:'aggregated', charts:[{id:'c1',type:'pie',field:'client_name_count',label:'Claims by Status'}] },
+  { id:'unfinalised_quotes', name:'Unfinalised Quotations', description:'Quotes that were not converted to a policy', icon:'⏳', source:'quotes', fields:['reference','product','client_name','mobile','status','sent_count','response_count','days_outstanding','created_by_name','created_at'], groupBy:'', aggregations:[], filters:[{field:'finalised',op:'equals',value:'No'}], sortBy:'created_at', sortDir:'desc', viewMode:'flat', charts:[] },
 ];
 
 /* ── Pure helpers ────────────────────────────────────────────────────────── */
@@ -792,7 +810,11 @@ const ReportsPage = () => {
   const [tab, setTab] = useState(0);
   const [clients,    setClients]    = useState([]);
   const [claims,     setClaims]     = useState([]);
+  const [quotes,     setQuotes]     = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  // Time period (by record creation date) — applied to whichever source is active.
+  const [periodFrom, setPeriodFrom] = useState(null);
+  const [periodTo,   setPeriodTo]   = useState(null);
   const [loading,    setLoading]    = useState(false);
   const [savedTemplates, setSavedTemplates] = useState([]);
 
@@ -830,12 +852,36 @@ const ReportsPage = () => {
 
   const loadData = useCallback(async()=>{
     setLoading(true);
-    const [cS,clS]=await Promise.all([
+    const [cS,clS,qS]=await Promise.all([
       getDocs(query(collection(db,'clients'),orderBy('created_at','desc'))),
       getDocs(query(collection(db,'claims'), orderBy('created_at','desc'))),
+      getDocs(query(collection(db,'quotes'), orderBy('created_at','desc'))),
     ]);
     setClients(cS.docs.map(d=>({id:d.id,...d.data()})));
     setClaims(clS.docs.map(d=>({id:d.id,...d.data()})));
+    // Flatten quotes into report-friendly rows (a quote is "finalised" once
+    // the broker converts it — status 'confirmed').
+    setQuotes(qS.docs.map(d=>{
+      const x=d.data(); const fd=x.form_data||{};
+      const created=x.created_at?.toDate?x.created_at.toDate():(x.created_at?new Date(x.created_at):null);
+      const resp=x.responses||[];
+      return {
+        id:d.id,
+        reference:x.reference||'',
+        product:x.product_label||x.product_key||'',
+        client_name:fd.proposer_name||fd.company_name||fd.full_name||fd.client_name||'',
+        mobile:fd.mobile||'',
+        status:x.status||'',
+        finalised:x.status==='confirmed'?'Yes':'No',
+        sent_count:(x.sent_to||[]).length,
+        response_count:resp.filter(r=>!r.declined).length,
+        declined_count:resp.filter(r=>r.declined).length,
+        selected_company:x.selected_company||x.customer_selection?.company_name||'',
+        days_outstanding:created?Math.max(0,Math.round((Date.now()-created.getTime())/86400000)):'',
+        created_by_name:x.created_by_name||'',
+        created_at:x.created_at,
+      };
+    }));
     setDataLoaded(true); setLoading(false);
   },[]);
 
@@ -848,10 +894,20 @@ const ReportsPage = () => {
 
   useEffect(()=>{loadData();loadSaved();},[loadData,loadSaved]);
 
-  const sourceFields = source==='clients'?CLIENT_FIELDS:CLAIM_FIELDS;
+  const sourceFields = source==='clients'?CLIENT_FIELDS:source==='claims'?CLAIM_FIELDS:QUOTE_FIELDS;
 
   const runReport = useCallback(()=>{
-    const raw = source==='clients'?clients:claims;
+    const base = source==='clients'?clients:source==='claims'?claims:quotes;
+    // Time-period filter — by record creation date.
+    const from = periodFrom ? new Date(new Date(periodFrom).setHours(0,0,0,0)) : null;
+    const to   = periodTo   ? new Date(new Date(periodTo).setHours(23,59,59,999)) : null;
+    const raw = (from||to) ? base.filter(r=>{
+      const v=r.created_at; const d=v?.toDate?v.toDate():(v?new Date(v):null);
+      if(!d||isNaN(d)) return false;
+      if(from && d<from) return false;
+      if(to   && d>to)   return false;
+      return true;
+    }) : base;
     const filtered = applyFilters(raw, filters);
     if (viewMode==='pivot') {
       setPivotData(buildPivot(filtered,groupBy,pivotColField,pivotValField,pivotValOp));
@@ -867,7 +923,7 @@ const ReportsPage = () => {
       setPivotData(null);
     }
     setRPage(1);
-  },[source,clients,claims,filters,viewMode,groupBy,pivotColField,pivotValField,pivotValOp,aggregations,sortBy,sortDir]);
+  },[source,clients,claims,quotes,periodFrom,periodTo,filters,viewMode,groupBy,pivotColField,pivotValField,pivotValOp,aggregations,sortBy,sortDir]);
 
   const loadTemplate = (tpl) => {
     setSource(tpl.source||'clients');
@@ -1074,8 +1130,30 @@ const ReportsPage = () => {
                   <Select value={source} onChange={e=>{setSource(e.target.value);setSelFields([]);setGroupBy('');setAggregations([]);setFilters([]);setResults(null);setPivotData(null);}}>
                     <MenuItem value="clients">Underwriting (Clients)</MenuItem>
                     <MenuItem value="claims">Claims</MenuItem>
+                    <MenuItem value="quotes">Quotations</MenuItem>
                   </Select>
                 </FormControl>
+
+                {/* Time period (by date created) */}
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Time Period <span style={{fontWeight:400,textTransform:'none'}}>(by date created)</span></Typography>
+                <Stack direction="row" spacing={1} sx={{mb:1}}>
+                  <DatePicker label="From" value={periodFrom} onChange={setPeriodFrom}
+                    slotProps={{textField:{size:'small',fullWidth:true}}}/>
+                  <DatePicker label="To" value={periodTo} onChange={setPeriodTo}
+                    slotProps={{textField:{size:'small',fullWidth:true}}}/>
+                </Stack>
+                <Stack direction="row" spacing={0.7} sx={{mb:2.5,flexWrap:'wrap',gap:0.7}}>
+                  {[['This month',()=>{const n=new Date();return[new Date(n.getFullYear(),n.getMonth(),1),new Date(n.getFullYear(),n.getMonth()+1,0)];}],
+                    ['Last 30 days',()=>{const t=new Date();const f=new Date();f.setDate(f.getDate()-30);return[f,t];}],
+                    ['This year',()=>{const n=new Date();return[new Date(n.getFullYear(),0,1),new Date(n.getFullYear(),11,31)];}]].map(([lbl,fn])=>(
+                    <Chip key={lbl} label={lbl} size="small" onClick={()=>{const[f,t]=fn();setPeriodFrom(f);setPeriodTo(t);}}
+                      sx={{fontSize:10.5,cursor:'pointer',bgcolor:'rgba(99,102,241,0.08)',color:'#6366f1'}}/>
+                  ))}
+                  {(periodFrom||periodTo)&&(
+                    <Chip label="Clear" size="small" onClick={()=>{setPeriodFrom(null);setPeriodTo(null);}}
+                      sx={{fontSize:10.5,cursor:'pointer',bgcolor:'rgba(0,0,0,0.05)',color:'#6B7280'}}/>
+                  )}
+                </Stack>
 
                 {/* Fields */}
                 <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Fields to Show</Typography>

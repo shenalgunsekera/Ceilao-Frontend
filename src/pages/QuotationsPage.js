@@ -1724,6 +1724,7 @@ const QuotationsPage = () => {
   const [filterProduct,  setFilterProduct]  = useState('all');
   const [filterStatus,   setFilterStatus]   = useState('all');
   const [searchText,     setSearchText]     = useState('');
+  const [unfinalisedOnly, setUnfinalisedOnly] = useState(false);
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [deleting,       setDeleting]       = useState(false);
   const [fieldErrors,    setFieldErrors]    = useState({});
@@ -1810,6 +1811,8 @@ const QuotationsPage = () => {
       }
       if (filterProduct !== 'all' && q.product_key !== filterProduct) return false;
       if (filterStatus  !== 'all' && (q.status || 'sent') !== filterStatus) return false;
+      // "Not finalised" = never converted to a policy (status not 'confirmed')
+      if (unfinalisedOnly && q.status === 'confirmed') return false;
       if (term) {
         const product = allP[q.product_key];
         const insurers = [
@@ -1827,7 +1830,12 @@ const QuotationsPage = () => {
       }
       return true;
     });
-  }, [quotes, dateFrom, dateTo, filterProduct, filterStatus, searchText, allP]);
+  }, [quotes, dateFrom, dateTo, filterProduct, filterStatus, searchText, unfinalisedOnly, allP]);
+
+  // Count of quotes that were sent but never converted to a policy
+  const unfinalisedCount = useMemo(
+    () => quotes.filter(q => (q.sent_to?.length || 0) > 0 && q.status !== 'confirmed').length,
+    [quotes]);
 
   const sentQuotes     = filteredQuotes.filter(q => (q.sent_to?.length || 0) > 0);
   const receivedQuotes = filteredQuotes.filter(q => (q.responses?.length || 0) > 0);
@@ -2406,8 +2414,21 @@ const QuotationsPage = () => {
               <MenuItem value="confirmed">Confirmed</MenuItem>
             </Select>
           </FormControl>
-          {(filterProduct !== 'all' || filterStatus !== 'all' || searchText || dateFrom || dateTo) && (
-            <Button size="small" onClick={() => { setFilterProduct('all'); setFilterStatus('all'); setSearchText(''); setDateFrom(null); setDateTo(null); }}
+          <Chip
+            label={`Not Finalised${unfinalisedCount ? ` (${unfinalisedCount})` : ''}`}
+            onClick={() => setUnfinalisedOnly(v => !v)}
+            size="medium"
+            icon={<span style={{ fontSize: 13, marginLeft: 8 }}>⏳</span>}
+            sx={{
+              fontWeight: 700, fontSize: 12.5, cursor: 'pointer', height: 38, borderRadius: '8px',
+              bgcolor: unfinalisedOnly ? '#d97706' : 'rgba(245,158,11,0.10)',
+              color: unfinalisedOnly ? '#fff' : '#d97706',
+              border: `1.5px solid ${unfinalisedOnly ? '#d97706' : 'rgba(245,158,11,0.35)'}`,
+              '&:hover': { bgcolor: unfinalisedOnly ? '#b45309' : 'rgba(245,158,11,0.18)' },
+            }}
+          />
+          {(filterProduct !== 'all' || filterStatus !== 'all' || searchText || dateFrom || dateTo || unfinalisedOnly) && (
+            <Button size="small" onClick={() => { setFilterProduct('all'); setFilterStatus('all'); setSearchText(''); setDateFrom(null); setDateTo(null); setUnfinalisedOnly(false); }}
               sx={{ fontSize: 12, color: '#9CA3AF' }}>Clear All</Button>
           )}
         </Stack>
