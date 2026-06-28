@@ -28,7 +28,15 @@ const ComparisonPdfPage = () => {
           .then(snap => {
             if (!snap.exists()) { setError('Quote not found.'); setStatus('error'); return; }
             const data = snap.data();
-            setQuote({ id: snap.id, ...data });
+            // Strip broker-only commission fields before the customer page uses the
+            // data, so commission can never reach a customer-facing render.
+            const COMMISSION_KEYS = ['commission_type','commission_basic','commission_srcc',
+              'commission_tc','commission_total','commission_pct','commission_special_rate',
+              'commission_special_amount','commission_amount_paid','commission_vat'];
+            const cleanResponses = (data.responses || []).map(r => {
+              const c = { ...r }; COMMISSION_KEYS.forEach(k => delete c[k]); return c;
+            });
+            setQuote({ id: snap.id, ...data, responses: cleanResponses });
             // Resolve product definition (static or custom)
             const pKey = data.product_key;
             if (PRODUCTS[pKey]) {

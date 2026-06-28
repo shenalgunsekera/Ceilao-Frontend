@@ -494,11 +494,12 @@ const TableSection = () => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(c =>
-        (c.client_name  || '').toLowerCase().includes(q) ||
-        (c.mobile_no    || '').toLowerCase().includes(q) ||
-        (c.policy_no    || '').toLowerCase().includes(q) ||
-        (c.product      || '').toLowerCase().includes(q) ||
-        (c.email        || '').toLowerCase().includes(q)
+        (c.client_name       || '').toLowerCase().includes(q) ||
+        (c.mobile_no         || '').toLowerCase().includes(q) ||
+        (c.policy_no         || '').toLowerCase().includes(q) ||
+        (c.ceilao_ib_file_no || '').toLowerCase().includes(q) ||
+        (c.product           || '').toLowerCase().includes(q) ||
+        (c.email             || '').toLowerCase().includes(q)
       );
     }
     return list;
