@@ -64,6 +64,7 @@ const docFields = [
 
 /* ── Dropdowns ────────────────────────────────────────────────────────────── */
 const dropdowns = {
+  insurance_type: ['General', 'Life'],
   main_class: ['Motor', 'Fire', 'Marine', 'Engineering', 'Liability', 'People', 'Miscellaneous'],
   // Auto-generated from PRODUCTS config — if a product is added there, it appears here
   product: Object.values(PRODUCTS).map(p => p.label),
@@ -107,12 +108,13 @@ export const textFields = [
   { label: 'Manager',            name: 'manager',            section: 'Introducer' },
   { label: 'Introducer Code',    name: 'introducer_code',    section: 'Introducer' },
   // Insurance Company
+  { label: 'Insurance Type',     name: 'insurance_type',     section: 'Insurance Company', dropdown: true },
   { label: 'Main Class',         name: 'main_class',         section: 'Insurance Company', dropdown: true },
   { label: 'Product',            name: 'product',            section: 'Insurance Company', dropdown: true, required: true },
-  { label: 'Customer Type',      name: 'customer_type',      section: 'Insurance Company', dropdown: true, required: true },
   { label: 'Insurance Provider', name: 'insurance_provider', section: 'Insurance Company', dropdown: true, required: true },
   { label: 'Branch',             name: 'branch',             section: 'Insurance Company', dropdown: true },
   // Proposer Details
+  { label: 'Customer Type',      name: 'customer_type',      section: 'Proposer Details', dropdown: true, required: true },
   { label: 'Client Name',        name: 'client_name',        section: 'Proposer Details', required: true },
   { label: 'NIC / Passport No.', name: 'nic_proof',          section: 'Proposer Details' },
   { label: 'Business Registration', name: 'business_registration', section: 'Proposer Details' },

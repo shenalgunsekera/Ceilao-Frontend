@@ -144,6 +144,7 @@ async function buildClientWorkbook(client, logoBase64, ExcelJS) {
   const sections = [
     { title: 'GENERAL INFORMATION', fields: [
       ['Client Name',        client.client_name],
+      ['Insurance Type',     client.insurance_type],
       ['Customer Type',      client.customer_type],
       ['Product',            client.product],
       ['Insurance Provider', client.insurance_provider],
@@ -262,7 +263,7 @@ const DOC_FIELDS = [
 
 // CSV import columns — must match TableSection handleImportCSV exactly
 const CLIENT_IMPORT_COLS = [
-  'customer_type','product','insurance_provider','client_name','mobile_no',
+  'insurance_type','customer_type','product','insurance_provider','client_name','mobile_no',
   'ceilao_ib_file_no','vehicle_number','main_class','insurer','introducer_code',
   'branch','street1','street2','city','district','province','telephone',
   'contact_person','email','social_media','nic_proof','dob_proof',

@@ -69,6 +69,7 @@ const CHART_COLORS = ['#FF5A5A','#6366f1','#10B981','#f59e0b','#0ea5e9','#8b5cf6
 /* ── Field definitions ───────────────────────────────────────────────────── */
 const CLIENT_FIELDS = [
   { key: 'client_name',        label: 'Client Name',        type: 'string'  },
+  { key: 'insurance_type',     label: 'Insurance Type',     type: 'string'  },
   { key: 'customer_type',      label: 'Customer Type',      type: 'string'  },
   { key: 'product',            label: 'Product',            type: 'string'  },
   { key: 'main_class',         label: 'Main Class',         type: 'string'  },

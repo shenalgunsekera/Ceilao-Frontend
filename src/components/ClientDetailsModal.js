@@ -380,14 +380,15 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Introducer Code',    client.introducer_code],
       ]);
       addSection('overview', 'INSURANCE COMPANY', [
+        ['Insurance Type',     client.insurance_type],
         ['Main Class',         client.main_class],
         ['Product',            client.product],
-        ['Customer Type',      client.customer_type],
         ['Insurance Provider', client.insurance_provider],
         ['Branch',             client.branch],
       ]);
 
       addSection('proposer', 'PROPOSER DETAILS', [
+        ['Customer Type',         client.customer_type],
         ['Client Name',           client.client_name],
         ['NIC / Passport No.',    client.nic_proof],
         ['Business Registration', client.business_registration],
@@ -686,10 +687,11 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Ceilao IB File No.', client.ceilao_ib_file_no], ['Manager', client.manager], ['Introducer Code', client.introducer_code],
       ]);
       addSheetSection('INSURANCE COMPANY', [
-        ['Main Class', client.main_class], ['Product', client.product], ['Customer Type', client.customer_type],
+        ['Insurance Type', client.insurance_type], ['Main Class', client.main_class], ['Product', client.product],
         ['Insurance Provider', client.insurance_provider], ['Branch', client.branch],
       ]);
       addSheetSection('PROPOSER DETAILS', [
+        ['Customer Type', client.customer_type],
         ['Client Name', client.client_name], ['NIC / Passport No.', client.nic_proof], ['Business Registration', client.business_registration],
         ['SVAT / VAT No.', client.svat_proof], ['Street 1', client.street1], ['Street 2', client.street2],
         ['City', client.city], ['District', client.district], ['Province', client.province], ['Postal Code', client.postal_code],
@@ -787,9 +789,9 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12} sm={6} md={4}><Field label="Manager"            value={client.manager} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Introducer Code"    value={client.introducer_code} /></Grid>
             <SubHeader title="Insurance Company" />
+            <Grid item xs={12} sm={6} md={4}><Field label="Insurance Type"      value={client.insurance_type} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Main Class"         value={client.main_class} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Product"            value={client.product} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Customer Type"      value={client.customer_type} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Insurance Provider" value={client.insurance_provider} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Branch"             value={client.branch} /></Grid>
           </Grid>
@@ -797,6 +799,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
       case 1: /* Proposer Details */
         return (
           <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6} md={4}><Field label="Customer Type"         value={client.customer_type} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Client Name"           value={client.client_name} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="NIC / Passport No."    value={client.nic_proof} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Business Registration" value={client.business_registration} /></Grid>

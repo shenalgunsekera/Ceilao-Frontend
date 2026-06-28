@@ -541,7 +541,7 @@ const TableSection = () => {
       .map(f => f.name);
 
     const example = {
-      customer_type: 'Individual', product: 'Comprehensive',
+      insurance_type: 'General', customer_type: 'Individual', product: 'Comprehensive',
       insurance_provider: 'Ceylinco General Insurance',
       client_name: 'John Doe', mobile_no: '0771234567',
       ceilao_ib_file_no: 'MT-20250101-0001-JOHNDOE',
@@ -550,8 +550,8 @@ const TableSection = () => {
       policy_period_from: '2025-01-01', policy_period_to: '2026-01-01',
       basic_premium: '50000', net_premium: '58000', total_invoice: '64600',
       payment_status: 'Paid', payment_method: 'Bank Transfer',
-      commission_type: 'Percentage', commission_pct: '15',
-      commission_basic: '7500',
+      commission_type: 'Standard', commission_pct: '20',
+      commission_basic: '10000',
       date_added: new Date().toISOString().slice(0, 10),
     };
     const csv = Papa.unparse([allFields, allFields.map(h => example[h] ?? '')]);
