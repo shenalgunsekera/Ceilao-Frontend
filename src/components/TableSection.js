@@ -110,10 +110,12 @@ async function exportUnderwritingExcel(clients) {
     { key: 'introducer_code',    header: 'Agent / Introducer',     w: 18 },
     // Client
     { key: 'client_name',        header: 'Policyholder',           w: 24 },
+    { key: 'customer_type',      header: 'Customer Type',          w: 14 },
     { key: 'nic_proof',          header: 'NIC / PP No.',           w: 16 },
     { key: 'street1',            header: 'Address',                w: 28 },
     { key: '_contact',           header: 'Contact & Email',        w: 26, derived: c => [c.mobile_no, c.email].filter(Boolean).join(' / ') },
     // Policy
+    { key: 'insurance_type',     header: 'Insurance Type',         w: 14 },
     { key: 'insurance_provider', header: 'Insurer',                w: 24 },
     { key: 'sum_insured',        header: 'Sum Insured (Rs)',        w: 16, isNum: true },
     { key: 'vehicle_number',     header: 'Vehicle No.',            w: 14 },

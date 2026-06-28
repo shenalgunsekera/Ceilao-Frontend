@@ -2122,6 +2122,7 @@ const QuotationsPage = () => {
         manager:            fd.manager            || '',
 
         // Insurance Company
+        insurance_type:     'General',   // default; broker can switch to Life in the form
         product:            productLabel,
         product_key:        quote.product_key || '',
         insurance_provider: response.company_name,
