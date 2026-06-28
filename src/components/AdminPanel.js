@@ -184,6 +184,7 @@ async function buildClientWorkbook(client, logoBase64, ExcelJS) {
       ['Coverage',           client.coverage],
     ]},
     { title: 'FINANCIALS', fields: [
+      ['SI Currency',    client.sum_insured_currency || 'LKR'],
       ['Sum Insured',    client.sum_insured],
       ['Basic Premium',  client.basic_premium],
       ['SRCC Premium',   client.srcc_premium],
@@ -269,7 +270,7 @@ const CLIENT_IMPORT_COLS = [
   'contact_person','email','social_media','nic_proof','dob_proof',
   'business_registration','svat_proof','vat_proof',
   'policy_','policy_type','policy_no','policy_period_from','policy_period_to',
-  'coverage','sum_insured','basic_premium','srcc_premium','tc_premium','net_premium',
+  'coverage','sum_insured_currency','sum_insured','basic_premium','srcc_premium','tc_premium','net_premium',
   'stamp_duty','admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
   'commission_type','commission_basic','commission_srcc','commission_tc',
   'sales_rep_id','policies',

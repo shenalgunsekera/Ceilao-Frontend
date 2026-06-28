@@ -2143,6 +2143,7 @@ const QuotationsPage = () => {
         policy_period_to:   fd.period_to    || fd.return_date    || fd.loan_end   || fd.expiry_date       || '',
 
         // Sum Insured
+        sum_insured_currency: fd.sum_insured_currency || fd.currency || 'LKR',
         sum_insured: String(fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || fd.cover_limit || fd.hospitalization_cover || ''),
 
         // Motor-specific name remaps

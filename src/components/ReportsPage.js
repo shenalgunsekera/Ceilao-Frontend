@@ -84,6 +84,7 @@ const CLIENT_FIELDS = [
   { key: 'mobile_no',          label: 'Mobile',             type: 'string'  },
   { key: 'email',              label: 'Email',              type: 'string'  },
   { key: 'sales_rep_id',       label: 'Sales Rep',          type: 'string'  },
+  { key: 'sum_insured_currency', label: 'SI Currency',      type: 'string'  },
   { key: 'sum_insured',        label: 'Sum Insured',        type: 'number'  },
   { key: 'basic_premium',      label: 'Basic Premium',      type: 'number'  },
   { key: 'srcc_premium',       label: 'SRCC Premium',       type: 'number'  },

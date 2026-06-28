@@ -65,6 +65,7 @@ const docFields = [
 /* ── Dropdowns ────────────────────────────────────────────────────────────── */
 const dropdowns = {
   insurance_type: ['General', 'Life'],
+  sum_insured_currency: ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'JPY', 'INR', 'SGD', 'Other'],
   main_class: ['Motor', 'Fire', 'Marine', 'Engineering', 'Liability', 'People', 'Miscellaneous'],
   // Auto-generated from PRODUCTS config — if a product is added there, it appears here
   product: Object.values(PRODUCTS).map(p => p.label),
@@ -145,6 +146,7 @@ export const textFields = [
   // Vehicle (motor only — shown conditionally)
   { label: 'Vehicle Number',     name: 'vehicle_number',     section: 'Risk Information', motor: true },
   // Sum Insured (own section)
+  { label: 'Currency',           name: 'sum_insured_currency', section: 'Sum Insured', dropdown: true },
   { label: 'Sum Insured',        name: 'sum_insured',        section: 'Sum Insured', type: 'number' },
   { label: 'Basic Premium',      name: 'basic_premium',      section: 'Premium', type: 'number' },
   { label: 'SRCC Premium',       name: 'srcc_premium',       section: 'Premium', type: 'number' },
@@ -355,6 +357,7 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
       }
     });
     docFields.forEach(f => { obj[f.text] = initialData[f.text] || ''; });
+    if (!obj.sum_insured_currency) obj.sum_insured_currency = 'LKR'; // sensible default
     return obj;
   });
 

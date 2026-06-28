@@ -117,7 +117,8 @@ async function exportUnderwritingExcel(clients) {
     // Policy
     { key: 'insurance_type',     header: 'Insurance Type',         w: 14 },
     { key: 'insurance_provider', header: 'Insurer',                w: 24 },
-    { key: 'sum_insured',        header: 'Sum Insured (Rs)',        w: 16, isNum: true },
+    { key: 'sum_insured_currency', header: 'Currency',             w: 10 },
+    { key: 'sum_insured',        header: 'Sum Insured',             w: 16, isNum: true },
     { key: 'vehicle_number',     header: 'Vehicle No.',            w: 14 },
     { key: 'product',            header: 'Policy Class',           w: 20 },
     { key: 'policy_period_to',   header: 'Policy Expiry',          w: 14, isDate: true },
@@ -545,6 +546,7 @@ const TableSection = () => {
     const example = {
       insurance_type: 'General', customer_type: 'Individual', product: 'Comprehensive',
       insurance_provider: 'Ceylinco General Insurance',
+      sum_insured_currency: 'LKR', sum_insured: '5000000',
       client_name: 'John Doe', mobile_no: '0771234567',
       ceilao_ib_file_no: 'MT-20250101-0001-JOHNDOE',
       manager: 'Jane Smith', introducer_code: 'INT001',

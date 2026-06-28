@@ -188,6 +188,10 @@ const ClientDetailsModal = ({ client, onClose }) => {
 
   const ALL_PRODUCTS = { ...PRODUCTS, ...customProducts };
 
+  // Sum-insured currency (per policy) — format SI values with it.
+  const siCur = client.sum_insured_currency || 'LKR';
+  const fmtSI = v => (v || v === 0) && v !== '' ? `${siCur} ${Number(v).toLocaleString()}` : '—';
+
   // Revised totals = original policy value + cumulative endorsement deltas
   const sumDelta  = endorsements.reduce((a, e) => a + endoNum(e.sum_insured_change), 0);
   const premDelta = endorsements.reduce((a, e) => a + endoNum(e.premium_change), 0);
@@ -438,10 +442,10 @@ const ClientDetailsModal = ({ client, onClose }) => {
       const pdfUwRows = productFields.filter(f => f.section === 'Underwriting Information').map(f => [f.label, getRiskVal(f)]).filter(r => r[1]);
       if (pdfUwRows.length) addSection('risk', 'UNDERWRITING INFORMATION', pdfUwRows);
 
-      // Sum Insured breakdown then total
-      const pdfSumSubRows = productFields.filter(f => f.section === 'Sum Insured' && f.name !== 'sum_insured' && f.type !== 'file').map(f => [f.label, getRiskVal(f) ? fmtLKR(getRiskVal(f)) : null]).filter(r => r[1] && r[1] !== '—');
+      // Sum Insured breakdown then total (in the policy's currency)
+      const pdfSumSubRows = productFields.filter(f => f.section === 'Sum Insured' && f.name !== 'sum_insured' && f.type !== 'file').map(f => [f.label, getRiskVal(f) ? fmtSI(getRiskVal(f)) : null]).filter(r => r[1] && r[1] !== '—');
       if (pdfSumSubRows.length) addSection('coverage', 'SUM INSURED BREAKDOWN', pdfSumSubRows);
-      addSection('coverage', 'SUM INSURED', [['Sum Insured (Total)', fmtLKR(client.sum_insured)]]);
+      addSection('coverage', 'SUM INSURED', [['Currency', siCur], ['Sum Insured (Total)', fmtSI(client.sum_insured)]]);
       if (coverItems.length)  addSection('coverage', 'COVERS REQUIRED',   coverItems.map(([k,v]) => [fieldNameToLabel(k), String(v)]));
       if (clauseItems.length) addSection('coverage', 'ADDITIONAL CLAUSES', clauseItems.map(([k,v]) => [fieldNameToLabel(k), String(v)]));
 
@@ -709,6 +713,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
       addSheetSection('CLAIMS HISTORY', claimsHistFields.map(f => [f.label, getRiskVal(f)]));
       addSheetSection('UNDERWRITING INFORMATION', uwInfoFields.map(f => [f.label, getRiskVal(f)]));
       addSheetSection('SUM INSURED', [
+        ['Currency', siCur],
         ...sumSubFields.map(f => [f.label, getRiskVal(f)]),
         ['Sum Insured (Total)', client.sum_insured],
       ]);
@@ -880,11 +885,12 @@ const ClientDetailsModal = ({ client, onClose }) => {
         return (
           <Grid container spacing={2.5}>
             <SubHeader title="Sum Insured" />
+            <Grid item xs={12} sm={6} md={4}><Field label="Currency" value={siCur} /></Grid>
             {sumSubFields.map(f => {
               const v = getFieldValue(f);
               return v ? (
                 <Grid item xs={12} sm={6} md={4} key={f.name}>
-                  <Field label={f.label} value={`LKR ${Number(v).toLocaleString()}`} />
+                  <Field label={f.label} value={fmtSI(v)} />
                 </Grid>
               ) : null;
             })}
@@ -894,7 +900,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
                   {sumSubFields.length > 0 ? 'Total Sum Insured' : 'Sum Insured'}
                 </Typography>
                 <Typography sx={{ fontSize:20, fontWeight:800, color:'#059669' }}>
-                  {client.sum_insured ? `LKR ${Number(client.sum_insured).toLocaleString()}` : '—'}
+                  {client.sum_insured ? fmtSI(client.sum_insured) : '—'}
                 </Typography>
               </Box>
             </Grid>
