@@ -577,26 +577,31 @@ const TableSection = () => {
           setCsvImporting(false); return;
         }
         let imported = 0, errors = [];
-        const batch = writeBatch(db);
-        for (let i = 0; i < results.data.length; i++) {
-          const row = results.data[i];
-          const miss = required.filter(f => !row[f]);
-          if (miss.length) { errors.push({ row: i + 2, error: `Missing: ${miss.join(', ')}` }); continue; }
-          const ref = doc(collection(db, 'clients'));
-          const clean = {};
-          Object.entries(row).forEach(([k, v]) => { if (v !== '' && v != null) clean[k] = v; });
-          // Honour date_added if provided (preserves original date on backup restore)
-          const dateAdded = clean.date_added ? new Date(clean.date_added) : new Date();
-          delete clean.date_added;
-          batch.set(ref, { ...clean, created_at: isNaN(dateAdded) ? new Date() : dateAdded, is_active: true });
-          imported++;
-        }
+        // Firestore batches are capped at 500 writes — commit in chunks so large
+        // registers (hundreds/thousands of rows) import without hitting the limit.
+        const CHUNK = 450;
+        let batch = writeBatch(db);
+        let pending = 0;
         try {
-          await batch.commit();
+          for (let i = 0; i < results.data.length; i++) {
+            const row = results.data[i];
+            const miss = required.filter(f => !row[f]);
+            if (miss.length) { errors.push({ row: i + 2, error: `Missing: ${miss.join(', ')}` }); continue; }
+            const ref = doc(collection(db, 'clients'));
+            const clean = {};
+            Object.entries(row).forEach(([k, v]) => { if (v !== '' && v != null) clean[k] = v; });
+            // Honour date_added if provided (preserves original date on backup restore)
+            const dateAdded = clean.date_added ? new Date(clean.date_added) : new Date();
+            delete clean.date_added;
+            batch.set(ref, { ...clean, created_at: isNaN(dateAdded) ? new Date() : dateAdded, is_active: true });
+            imported++; pending++;
+            if (pending >= CHUNK) { await batch.commit(); batch = writeBatch(db); pending = 0; }
+          }
+          if (pending > 0) await batch.commit();
           if (errors.length) { setCsvErrors(errors); setCsvErrDlg(true); toast(`Imported ${imported}, ${errors.length} failed`, 'warning'); }
           else toast(`Successfully imported ${imported} clients!`);
           _cachedClients = null; fetchClients(true);
-        } catch { toast('Import failed', 'error'); }
+        } catch (err) { toast(`Import failed after ${imported} rows: ${err.message || 'error'}`, 'error'); }
         e.target.value = ''; setCsvImporting(false);
       },
     });
