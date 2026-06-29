@@ -498,7 +498,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Total Commission',        client.commission_total ? fmtLKR(client.commission_total) : null],
         ['Commission Method',       client.commission_paid_method],
         ['Commission Receive Date', client.commission_receive_date],
-        ['Commission Amount Paid',  client.commission_amount_paid ? fmtLKR(client.commission_amount_paid) : null],
+        ['Commission Amount Received',  client.commission_amount_paid ? fmtLKR(client.commission_amount_paid) : null],
         ['Commission VAT',          client.commission_vat ? fmtLKR(client.commission_vat) : null],
       ]);
       addSection('commission', 'PAYMENT', [
@@ -732,7 +732,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Commission SRCC', client.commission_srcc], ['Commission TC', client.commission_tc],
         ['Special Adjustment', client.commission_special_amount], ['Total Commission', client.commission_total],
         ['Commission Method', client.commission_paid_method], ['Receive Date', client.commission_receive_date],
-        ['Commission Amount Paid', client.commission_amount_paid], ['Commission VAT', client.commission_vat],
+        ['Commission Amount Received', client.commission_amount_paid], ['Commission VAT', client.commission_vat],
       ]);
       addSheetSection('PAYMENT', [
         ['Payment Status', client.payment_status], ['Amount Received', client.amount_received], ['Payment Date', client.payment_date],
@@ -1004,7 +1004,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12} sm={6} md={4}><Field label="Total Commission"        value={fmtLKR(client.commission_total)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission Method"       value={client.commission_paid_method} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Receive Date"            value={client.commission_receive_date} /></Grid>
-            <Grid item xs={12} sm={6} md={4}><Field label="Commission Amount Paid"  value={fmtLKR(client.commission_amount_paid)} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Commission Amount Received"  value={fmtLKR(client.commission_amount_paid)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission VAT"          value={fmtLKR(client.commission_vat)} /></Grid>
             <SubHeader title="Payment" />
             <Grid item xs={12} sm={6} md={4}><Field label="Payment Status"    value={client.payment_status} /></Grid>

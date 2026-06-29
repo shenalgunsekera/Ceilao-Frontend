@@ -148,7 +148,7 @@ async function exportUnderwritingExcel(clients) {
     { key: 'commission_total',   header: 'Total Commission (Rs)',   w: 18, isNum: true },
     { key: 'commission_paid_method', header: 'Commis. Method',     w: 16 },
     { key: 'commission_receive_date', header: 'Commis. Receive Date', w: 18, isDate: true },
-    { key: 'commission_amount_paid', header: 'Commis. Amount Paid (Rs)', w: 20, isNum: true },
+    { key: 'commission_amount_paid', header: 'Commis. Amount Received (Rs)', w: 20, isNum: true },
     { key: 'commission_vat',     header: 'Commis. VAT (Rs)',       w: 14, isNum: true },
     // Claims
     { key: 'claim_paid',         header: 'Claim Paid?',            w: 12 },

@@ -180,7 +180,7 @@ export const textFields = [
   { label: 'Total Commission',   name: 'commission_total',   section: 'Commission', type: 'number', readOnly: true },
   { label: 'Commission Method',  name: 'commission_paid_method', section: 'Commission', dropdown: true },
   { label: 'Commission Receive Date', name: 'commission_receive_date', section: 'Commission', date: true },
-  { label: 'Commission Amount Paid',  name: 'commission_amount_paid',  section: 'Commission', type: 'number' },
+  { label: 'Commission Amount Received', name: 'commission_amount_paid',  section: 'Commission', type: 'number' },
   { label: 'Commission VAT',     name: 'commission_vat',     section: 'Commission', type: 'number' },
   // Claims
   { label: 'Claim Paid?',        name: 'claim_paid',         section: 'Claims', dropdown: true },
@@ -241,9 +241,17 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 
 function fmtNum(v) {
   if (v === '' || v === null || v === undefined) return '';
-  const clean = String(v).replace(/,/g, '');
-  const n = Number(clean);
-  return isNaN(n) ? clean : n.toLocaleString('en-US');
+  let s = String(v).replace(/,/g, '');
+  // Not a number-in-progress — show as-is.
+  if (!/^-?\d*\.?\d*$/.test(s)) return s;
+  const neg = s.startsWith('-');
+  if (neg) s = s.slice(1);
+  const hasDot = s.includes('.');
+  let [intPart, decPart = ''] = s.split('.');
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ','); // thousands separators
+  // Preserve the decimal portion exactly as typed (trailing dot / zeros kept).
+  let out = intPart + (hasDot ? '.' + decPart : '');
+  return (neg ? '-' : '') + out;
 }
 
 /* ── sub-components ──────────────────────────────────────────────────────── */
