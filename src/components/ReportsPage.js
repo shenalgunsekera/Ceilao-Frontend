@@ -820,6 +820,8 @@ const ReportsPage = () => {
   // Time period (by record creation date) — applied to whichever source is active.
   const [periodFrom, setPeriodFrom] = useState(null);
   const [periodTo,   setPeriodTo]   = useState(null);
+  // Which date the period range filters on (clients): policy start, expiry, or date added.
+  const [periodField, setPeriodField] = useState('policy_period_from');
   const [loading,    setLoading]    = useState(false);
   const [savedTemplates, setSavedTemplates] = useState([]);
 
@@ -950,8 +952,10 @@ const ReportsPage = () => {
     const base = cfg.source==='clients'?clients:cfg.source==='claims'?claims:quotes;
     const from = periodFrom ? new Date(new Date(periodFrom).setHours(0,0,0,0)) : null;
     const to   = periodTo   ? new Date(new Date(periodTo).setHours(23,59,59,999)) : null;
+    // Clients can filter on policy dates; claims/quotes only have a creation date.
+    const dateField = cfg.source==='clients' ? (cfg.periodField||periodField) : 'created_at';
     const raw = (from||to) ? base.filter(r=>{
-      const v=r.created_at; const d=v?.toDate?v.toDate():(v?new Date(v):null);
+      const v=r[dateField]; const d=v?.toDate?v.toDate():(v?new Date(v):null);
       if(!d||isNaN(d)) return false;
       if(from && d<from) return false;
       if(to   && d>to)   return false;
@@ -968,7 +972,7 @@ const ReportsPage = () => {
   };
 
   const runReport = () => {
-    const { results, pivot } = buildResults({ source, filters, viewMode, groupBy, aggregations, sortBy, sortDir, pivotColField, pivotValField, pivotValOp });
+    const { results, pivot } = buildResults({ source, filters, viewMode, groupBy, aggregations, sortBy, sortDir, pivotColField, pivotValField, pivotValOp, periodField });
     setResults(results); setPivotData(pivot); setRPage(1);
   };
 
@@ -988,6 +992,7 @@ const ReportsPage = () => {
       pivotColField: tpl.pivotColField||'',
       pivotValField: tpl.pivotValField||'',
       pivotValOp: tpl.pivotValOp||'sum',
+      periodField: tpl.periodField||'policy_period_from',
     };
     // reflect the template in the builder controls
     setSource(cfg.source); setSelFields(cfg.fields); setGroupBy(cfg.groupBy);
@@ -995,6 +1000,7 @@ const ReportsPage = () => {
     setSortDir(cfg.sortDir); setViewMode(cfg.viewMode); setCharts(cfg.charts);
     setPivotColField(cfg.pivotColField); setPivotValField(cfg.pivotValField); setPivotValOp(cfg.pivotValOp);
     setSummaryFields(tpl.summaryFields||[]);
+    setPeriodField(cfg.periodField);
     setSaveName(tpl.name||''); setSaveDesc(tpl.description||'');
     // compute + show results immediately
     if (tpl.id==='expiry_report') {
@@ -1013,7 +1019,7 @@ const ReportsPage = () => {
   const handleSaveTpl = async()=>{
     if (!saveName.trim()) return; setSavingTpl(true);
     try {
-      const tpl={name:saveName.trim(),description:saveDesc.trim(),source,fields:selFields,summaryFields,groupBy,aggregations,filters,sortBy,sortDir,viewMode,charts,pivotColField,pivotValField,pivotValOp,created_at:serverTimestamp()};
+      const tpl={name:saveName.trim(),description:saveDesc.trim(),source,fields:selFields,summaryFields,groupBy,aggregations,filters,sortBy,sortDir,viewMode,charts,pivotColField,pivotValField,pivotValOp,periodField,created_at:serverTimestamp()};
       await setDoc(doc(collection(db,'report_templates')),tpl);
       setSaveOpen(false); setSaveName(''); setSaveDesc(''); loadSaved(); showToast('Template saved!');
     } catch(err){showToast(err.message,'error');}
@@ -1184,8 +1190,18 @@ const ReportsPage = () => {
                   </Select>
                 </FormControl>
 
-                {/* Time period (by date created) */}
-                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Time Period <span style={{fontWeight:400,textTransform:'none'}}>(by date created)</span></Typography>
+                {/* Time period */}
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Time Period</Typography>
+                {source==='clients' && (
+                  <FormControl fullWidth size="small" sx={{mb:1}}>
+                    <InputLabel sx={{fontSize:12}}>Period applies to</InputLabel>
+                    <Select label="Period applies to" value={periodField} onChange={e=>setPeriodField(e.target.value)} sx={{fontSize:13}}>
+                      <MenuItem value="policy_period_from" sx={{fontSize:13}}>Policy From (start date)</MenuItem>
+                      <MenuItem value="policy_period_to"   sx={{fontSize:13}}>Policy Expiry</MenuItem>
+                      <MenuItem value="created_at"         sx={{fontSize:13}}>Date Added</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
                 <Stack direction="row" spacing={1} sx={{mb:1}}>
                   <DatePicker label="From" value={periodFrom} onChange={setPeriodFrom}
                     slotProps={{textField:{size:'small',fullWidth:true}}}/>
