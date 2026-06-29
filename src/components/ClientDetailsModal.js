@@ -12,8 +12,6 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Button from '@mui/material/Button';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import Link from '@mui/material/Link';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
@@ -27,15 +25,6 @@ import InputLabel from '@mui/material/InputLabel';
 import IconButton from '@mui/material/IconButton';
 import Alert from '@mui/material/Alert';
 
-import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
-import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import AttachMoneyOutlinedIcon from '@mui/icons-material/AttachMoneyOutlined';
-import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlined';
-import PaymentOutlinedIcon from '@mui/icons-material/PaymentOutlined';
-import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
-import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
@@ -52,19 +41,6 @@ const docFields = [
   { label:'Invoice / Debit',  doc:'invoice_doc_url',          text:'invoice_text' },
   { label:'Payment Receipt',  doc:'payment_receipt_doc_url',  text:'payment_receipt_text' },
   { label:'NIC / BR',         doc:'nic_br_doc_url',           text:'nic_br_text' },
-];
-
-const TABS = [
-  { label:'Overview',    icon:<BadgeOutlinedIcon /> },
-  { label:'Proposer',    icon:<PersonOutlineIcon /> },
-  { label:'Policy',      icon:<CalendarMonthOutlinedIcon /> },
-  { label:'Risk',        icon:<ShieldOutlinedIcon /> },
-  { label:'Coverage',    icon:<AttachMoneyOutlinedIcon /> },
-  { label:'Financials',  icon:<MonetizationOnOutlinedIcon /> },
-  { label:'Commission',  icon:<PaymentOutlinedIcon /> },
-  { label:'Claims',      icon:<ReportProblemOutlinedIcon /> },
-  { label:'Endorsements',icon:<HistoryEduOutlinedIcon /> },
-  { label:'Documents',   icon:<FolderOutlinedIcon /> },
 ];
 
 // Endorsement = a recorded change to an in-force policy (sum insured, period,
@@ -157,9 +133,10 @@ const UW_FIELD_ALIASES = {
 
 const ClientDetailsModal = ({ client, onClose }) => {
   const { user, userProfile } = useAuth();
-  const [tab,       setTab]       = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
+  const contentRef = React.useRef(null);
+  const endoRef    = React.useRef(null);
 
   // Endorsements — kept in local state so the modal (and its PDF/Excel) reflect
   // edits immediately; each change is also persisted to the client document.
@@ -786,9 +763,9 @@ const ClientDetailsModal = ({ client, onClose }) => {
 
   const fmtLKR = v => v ? `LKR ${Number(v).toLocaleString()}` : null;
 
-  const renderTab = () => {
-    switch (tab) {
-      case 0: /* Overview — Introducer + Insurance Company */
+  const renderSection = (sec) => {
+    switch (sec) {
+      case 0: /* Introducer + Insurance Company */
         return (
           <Grid container spacing={2.5}>
             <SubHeader title="Introducer" />
@@ -1015,6 +992,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12} sm={6} md={4}><Field label="Payment Method"    value={client.payment_method} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Cheque / Slip No." value={client.cheque_slip_no} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Receipt No."       value={client.receipt_no} /></Grid>
+            <Grid item xs={12} sm={6} md={4}><Field label="Debit Note No."    value={client.debit_note_no} /></Grid>
           </Grid>
         );
       case 7: /* Claims */
@@ -1150,6 +1128,13 @@ const ClientDetailsModal = ({ client, onClose }) => {
             ))}
           </Grid>
         );
+      case 10: /* Other */
+        return (
+          <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6} md={4}><Field label="Birthday Policy" value={client.birthday_policy} /></Grid>
+            <Grid item xs={12}             ><Field label="Notes"           value={client.notes} /></Grid>
+          </Grid>
+        );
       default: return null;
     }
   };
@@ -1174,26 +1159,33 @@ const ClientDetailsModal = ({ client, onClose }) => {
         </Box>
       </DialogTitle>
 
-      <Box sx={{ bgcolor:'rgba(255,248,245,0.5)', borderBottom:'1px solid rgba(255,139,90,0.12)' }}>
-        <Tabs
-          value={tab} onChange={(_, v) => setTab(v)}
-          variant="scrollable" scrollButtons="auto"
-          sx={{
-            minHeight:42,
-            '& .MuiTab-root': { fontSize:11.5, fontWeight:600, minHeight:42, py:0, textTransform:'none', color:'#9CA3AF', minWidth:'unset', px:1.5 },
-            '& .Mui-selected': { color:'#FF5A5A' },
-            '& .MuiTabs-indicator': { background:'linear-gradient(90deg,#FF5A5A,#FF8B5A)', height:2.5 },
-          }}
-        >
-          {TABS.map((t, i) => (
-            <Tab key={i} label={t.label} icon={t.icon} iconPosition="start"
-              sx={{ '& .MuiTab-iconWrapper': { fontSize:16, mr:0.5 } }} />
+      <DialogContent sx={{ p:3, overflowY:'auto' }} ref={contentRef}>
+        {/* Single scroll — each form section shown in its own category, in form order. */}
+        <Box className="anim-fade-in">
+          {[
+            { sec: 0,  title: null },                     // Introducer + Insurance Company (own headers)
+            { sec: 1,  title: 'Proposer Details' },
+            { sec: 2,  title: 'Period of Insurance' },
+            { sec: 3,  title: null },                     // Risk sub-sections (own headers)
+            { sec: 4,  title: null },                     // Sum Insured / Covers / Clauses (own headers)
+            { sec: 5,  title: 'Premium & Deductibles' },
+            { sec: 6,  title: null },                     // Commission / Payment (own headers)
+            { sec: 7,  title: 'Claims' },
+            { sec: 10, title: 'Other' },
+            { sec: 8,  title: 'Endorsements', ref: endoRef },
+            { sec: 9,  title: 'Documents' },
+          ].map(({ sec, title, ref }) => (
+            <Box key={sec} ref={ref} sx={{ mb: 3.5 }}>
+              {title && (
+                <Typography sx={{ fontSize:13, fontWeight:800, color:'#1A1A2E', textTransform:'uppercase', letterSpacing:0.6, mb:1.5,
+                                  borderLeft:'3px solid #FF8B5A', pl:1.2 }}>
+                  {title}
+                </Typography>
+              )}
+              {renderSection(sec)}
+            </Box>
           ))}
-        </Tabs>
-      </Box>
-
-      <DialogContent sx={{ p:3, overflowY:'auto' }}>
-        <Box className="anim-fade-in">{renderTab()}</Box>
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ px:3, py:2, borderTop:'1px solid rgba(255,139,90,0.10)', flexWrap:'wrap', gap:1 }}>
@@ -1205,7 +1197,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         <Button
           variant="outlined"
           startIcon={<HistoryEduOutlinedIcon />}
-          onClick={() => setTab(8)}
+          onClick={() => endoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           sx={{ borderColor:'rgba(124,58,237,0.4)', color:'#7c3aed', fontSize:13,
                 '&:hover':{ borderColor:'#7c3aed', bgcolor:'rgba(124,58,237,0.04)' } }}>
           Endorsements{endorsements.length ? ` (${endorsements.length})` : ''}
