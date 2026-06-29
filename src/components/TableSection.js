@@ -8,6 +8,7 @@ import { useAuth } from '../App';
 import { uploadFile as uploadToCloudinary } from '../storage';
 import AddClientForm, { textFields as UW_FIELDS } from './AddClientForm';
 import ClientDetailsModal from './ClientDetailsModal';
+import { exportHeader, normaliseImportRow } from '../utils/csvHeaders';
 import Papa from 'papaparse';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -560,7 +561,10 @@ const TableSection = () => {
       commission_basic: '10000',
       date_added: new Date().toISOString().slice(0, 10),
     };
-    const csv = Papa.unparse([allFields, allFields.map(h => example[h] ?? '')]);
+    // Header row uses friendly names (e.g. total_premium) while values are still
+    // pulled by the internal key. The importer maps the friendly names back.
+    const headerRow = allFields.map(exportHeader);
+    const csv = Papa.unparse([headerRow, allFields.map(h => example[h] ?? '')]);
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
       download: 'ceilao_underwriting_template.csv',
@@ -590,7 +594,7 @@ const TableSection = () => {
         let pending = 0;
         try {
           for (let i = 0; i < results.data.length; i++) {
-            const row = results.data[i];
+            const row = normaliseImportRow(results.data[i]);
             const miss = required.filter(f => !row[f]);
             if (miss.length) { errors.push({ row: i + 2, error: `Missing: ${miss.join(', ')}` }); continue; }
             const ref = doc(collection(db, 'clients'));

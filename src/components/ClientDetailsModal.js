@@ -24,6 +24,8 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import IconButton from '@mui/material/IconButton';
 import Alert from '@mui/material/Alert';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
@@ -54,15 +56,21 @@ const endoNum = (v) => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
 const fmtSigned = (n) => `${n < 0 ? '-' : '+'}LKR ${Math.abs(n).toLocaleString()}`;
 
 function Field({ label, value }) {
-  if (!value && value !== 0) return null;
+  const empty = value === null || value === undefined || value === '';
   return (
     <Box>
       <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, mb: 0.3 }}>
         {label}
       </Typography>
-      <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, wordBreak: 'break-word' }}>
-        {value}
-      </Typography>
+      {empty ? (
+        <Typography sx={{ fontSize: 13, color: 'rgba(220,38,38,0.55)', fontStyle: 'italic', fontWeight: 500 }}>
+          Not filled
+        </Typography>
+      ) : (
+        <Typography sx={{ fontSize: 13.5, color: '#1A1A2E', fontWeight: 500, wordBreak: 'break-word' }}>
+          {value}
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -136,7 +144,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
   const [exporting, setExporting] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const contentRef = React.useRef(null);
-  const endoRef    = React.useRef(null);
+  const [tab, setTab] = useState(0);
 
   // Endorsements — kept in local state so the modal (and its PDF/Excel) reflect
   // edits immediately; each change is also persisted to the client document.
@@ -765,14 +773,17 @@ const ClientDetailsModal = ({ client, onClose }) => {
 
   const renderSection = (sec) => {
     switch (sec) {
-      case 0: /* Introducer + Insurance Company */
+      case 0: /* Introducer */
         return (
           <Grid container spacing={2.5}>
-            <SubHeader title="Introducer" />
             <Grid item xs={12} sm={6} md={4}><Field label="Ceilao IB File No." value={client.ceilao_ib_file_no} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Manager"            value={client.manager} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Introducer Code"    value={client.introducer_code} /></Grid>
-            <SubHeader title="Insurance Company" />
+          </Grid>
+        );
+      case 11: /* Insurance Company */
+        return (
+          <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6} md={4}><Field label="Insurance Type"      value={client.insurance_type} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Main Class"         value={client.main_class} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Product"            value={client.product} /></Grid>
@@ -969,10 +980,9 @@ const ClientDetailsModal = ({ client, onClose }) => {
             )}
           </Box>
         );
-      case 6: /* Commission + Payment */
+      case 6: /* Commission */
         return (
           <Grid container spacing={2.5}>
-            <SubHeader title="Commission" />
             <Grid item xs={12} sm={6} md={4}><Field label="Commission Type"         value={client.commission_type} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Basic Commission %"      value={client.commission_pct} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Special Rate (+/- %)"    value={client.commission_special_rate} /></Grid>
@@ -985,7 +995,11 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Grid item xs={12} sm={6} md={4}><Field label="Receive Date"            value={client.commission_receive_date} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission Amount Received"  value={fmtLKR(client.commission_amount_paid)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Commission VAT"          value={fmtLKR(client.commission_vat)} /></Grid>
-            <SubHeader title="Payment" />
+          </Grid>
+        );
+      case 12: /* Payment */
+        return (
+          <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6} md={4}><Field label="Payment Status"    value={client.payment_status} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Amount Received"   value={fmtLKR(client.amount_received)} /></Grid>
             <Grid item xs={12} sm={6} md={4}><Field label="Payment Date"      value={client.payment_date} /></Grid>
@@ -1139,6 +1153,24 @@ const ClientDetailsModal = ({ client, onClose }) => {
     }
   };
 
+  // One tab per form section (in form order). Each shows only its own data.
+  const SECTION_TABS = [
+    { label: 'Introducer',   sec: 0  },
+    { label: 'Insurance',    sec: 11 },
+    { label: 'Proposer',     sec: 1  },
+    { label: 'Period',       sec: 2  },
+    { label: 'Risk',         sec: 3  },
+    { label: 'Coverage',     sec: 4  },
+    { label: 'Premium',      sec: 5  },
+    { label: 'Commission',   sec: 6  },
+    { label: 'Payment',      sec: 12 },
+    { label: 'Claims',       sec: 7  },
+    { label: 'Other',        sec: 10 },
+    { label: `Endorsements${endorsements.length ? ` (${endorsements.length})` : ''}`, sec: 8 },
+    { label: 'Documents',    sec: 9  },
+  ];
+  const endoTabIdx = SECTION_TABS.findIndex(t => t.sec === 8);
+
   return (
     <Dialog open={!!client} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '90vh' } }}>
       <DialogTitle sx={{ pb: 1 }}>
@@ -1159,32 +1191,22 @@ const ClientDetailsModal = ({ client, onClose }) => {
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ p:3, overflowY:'auto' }} ref={contentRef}>
-        {/* Single scroll — each form section shown in its own category, in form order. */}
-        <Box className="anim-fade-in">
-          {[
-            { sec: 0,  title: null },                     // Introducer + Insurance Company (own headers)
-            { sec: 1,  title: 'Proposer Details' },
-            { sec: 2,  title: 'Period of Insurance' },
-            { sec: 3,  title: null },                     // Risk sub-sections (own headers)
-            { sec: 4,  title: null },                     // Sum Insured / Covers / Clauses (own headers)
-            { sec: 5,  title: 'Premium & Deductibles' },
-            { sec: 6,  title: null },                     // Commission / Payment (own headers)
-            { sec: 7,  title: 'Claims' },
-            { sec: 10, title: 'Other' },
-            { sec: 8,  title: 'Endorsements', ref: endoRef },
-            { sec: 9,  title: 'Documents' },
-          ].map(({ sec, title, ref }) => (
-            <Box key={sec} ref={ref} sx={{ mb: 3.5 }}>
-              {title && (
-                <Typography sx={{ fontSize:13, fontWeight:800, color:'#1A1A2E', textTransform:'uppercase', letterSpacing:0.6, mb:1.5,
-                                  borderLeft:'3px solid #FF8B5A', pl:1.2 }}>
-                  {title}
-                </Typography>
-              )}
-              {renderSection(sec)}
-            </Box>
-          ))}
+      <DialogContent sx={{ p:0, overflowY:'auto' }} ref={contentRef}>
+        {/* Each form section is its own clickable tab — click to see just its data. */}
+        <Box sx={{ position:'sticky', top:0, zIndex:3, bgcolor:'#fff', borderBottom:'1px solid rgba(255,139,90,0.15)' }}>
+          <Tabs
+            value={tab}
+            onChange={(e, v) => { setTab(v); if (contentRef.current) contentRef.current.scrollTop = 0; }}
+            variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile
+            sx={{ minHeight:44,
+                  '& .MuiTab-root': { minHeight:44, py:1, textTransform:'none', fontSize:12.5, fontWeight:700, color:'#9CA3AF', minWidth:0, px:1.8 },
+                  '& .Mui-selected': { color:'#FF5A5A !important' },
+                  '& .MuiTabs-indicator': { backgroundColor:'#FF5A5A', height:3, borderRadius:'3px 3px 0 0' } }}>
+            {SECTION_TABS.map(t => <Tab key={t.sec} label={t.label} />)}
+          </Tabs>
+        </Box>
+        <Box key={tab} className="anim-fade-in" sx={{ p:3 }}>
+          {renderSection(SECTION_TABS[tab]?.sec ?? 0)}
         </Box>
       </DialogContent>
 
@@ -1197,7 +1219,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         <Button
           variant="outlined"
           startIcon={<HistoryEduOutlinedIcon />}
-          onClick={() => endoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onClick={() => { setTab(endoTabIdx); if (contentRef.current) contentRef.current.scrollTop = 0; }}
           sx={{ borderColor:'rgba(124,58,237,0.4)', color:'#7c3aed', fontSize:13,
                 '&:hover':{ borderColor:'#7c3aed', bgcolor:'rgba(124,58,237,0.04)' } }}>
           Endorsements{endorsements.length ? ` (${endorsements.length})` : ''}

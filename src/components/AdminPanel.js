@@ -11,6 +11,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
 import { textFields as UW_FIELDS } from './AddClientForm';
+import { exportHeader } from '../utils/csvHeaders';
 import PendingApprovals from './PendingApprovals';
 import CreateAccountModal from './CreateAccountModal';
 import InsuranceCompaniesManager from './InsuranceCompaniesManager';
@@ -385,7 +386,7 @@ function buildClientsImportCsv(clients) {
     ...Array.from(extraDocCols),
   ].filter(c => { if (seen.has(c)) return false; seen.add(c); return true; });
 
-  const header = cols.join(',');
+  const header = cols.map(exportHeader).join(',');
   const rows = clients.map(c => {
     const createdDate = c.created_at?.toDate ? c.created_at.toDate() : c.created_at ? new Date(c.created_at) : null;
     const dateAdded = createdDate && !isNaN(createdDate) ? createdDate.toISOString().slice(0, 10) : '';
