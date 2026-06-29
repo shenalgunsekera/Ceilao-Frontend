@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { collection, getDocs, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { textFields as UW_FIELDS } from './AddClientForm';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -67,44 +68,29 @@ import FunctionsIcon from '@mui/icons-material/Functions';
 const CHART_COLORS = ['#FF5A5A','#6366f1','#10B981','#f59e0b','#0ea5e9','#8b5cf6','#ec4899','#14b8a6','#f97316','#84cc16'];
 
 /* ── Field definitions ───────────────────────────────────────────────────── */
-const CLIENT_FIELDS = [
-  { key: 'client_name',        label: 'Client Name',        type: 'string'  },
-  { key: 'insurance_type',     label: 'Insurance Type',     type: 'string'  },
-  { key: 'customer_type',      label: 'Customer Type',      type: 'string'  },
-  { key: 'product',            label: 'Product',            type: 'string'  },
-  { key: 'main_class',         label: 'Main Class',         type: 'string'  },
-  { key: 'insurance_provider', label: 'Insurance Provider', type: 'string'  },
-  { key: 'insurer',            label: 'Insurer',            type: 'string'  },
-  { key: 'branch',             label: 'Branch',             type: 'string'  },
-  { key: 'policy_no',          label: 'Policy No',          type: 'string'  },
-  { key: 'policy_type',        label: 'Policy Type',        type: 'string'  },
-  { key: 'policy_period_from', label: 'Policy From',        type: 'date'    },
-  { key: 'policy_period_to',   label: 'Policy Expiry',      type: 'date'    },
-  { key: 'ceilao_ib_file_no',  label: 'File No',            type: 'string'  },
-  { key: 'mobile_no',          label: 'Mobile',             type: 'string'  },
-  { key: 'email',              label: 'Email',              type: 'string'  },
-  { key: 'sales_rep_id',       label: 'Sales Rep',          type: 'string'  },
-  { key: 'sum_insured_currency', label: 'SI Currency',      type: 'string'  },
-  { key: 'sum_insured',        label: 'Sum Insured',        type: 'number'  },
-  { key: 'basic_premium',      label: 'Basic Premium',      type: 'number'  },
-  { key: 'srcc_premium',       label: 'SRCC Premium',       type: 'number'  },
-  { key: 'tc_premium',         label: 'TC Premium',         type: 'number'  },
-  { key: 'net_premium',        label: 'Net Premium',        type: 'number'  },
-  { key: 'total_invoice',      label: 'Total Invoice',      type: 'number'  },
-  { key: 'commission_basic',   label: 'Commission Basic',   type: 'number'  },
-  { key: 'commission_srcc',    label: 'Commission SRCC',    type: 'number'  },
-  { key: 'commission_tc',      label: 'Commission TC',      type: 'number'  },
-  { key: 'stamp_duty',         label: 'Stamp Duty',         type: 'number'  },
-  { key: 'admin_fees',         label: 'Admin Fees',         type: 'number'  },
-  { key: 'vat_fee',            label: 'VAT',                type: 'number'  },
-  { key: 'road_safety_fee',    label: 'Road Safety Fee',    type: 'number'  },
-  { key: 'policy_fee',         label: 'Policy Fee',         type: 'number'  },
-  { key: 'policy_',            label: 'Policy',             type: 'string'  },
-  { key: 'policies',           label: 'Policies',           type: 'number'  },
-  { key: 'coverage',           label: 'Coverage',           type: 'string'  },
-  { key: 'status',             label: 'Status',             type: 'string'  },
-  { key: 'created_at',         label: 'Date Added',         type: 'date'    },
+const uwType = (f) => (f.type === 'number' || f.type === 'currency') ? 'number' : (f.date ? 'date' : 'string');
+// keys that exist on a client doc but aren't editable form fields
+const CLIENT_SYSTEM_FIELDS = [
+  { key: 'created_at',  label: 'Date Added',  type: 'date'   },
+  { key: 'insurer',     label: 'Insurer',     type: 'string' },
+  { key: 'main_class',  label: 'Main Class',  type: 'string' },
+  { key: 'status',      label: 'Status',      type: 'string' },
 ];
+// Base = every underwriting form field (so the report can use ALL of them) + system fields.
+// Excludes derived/non-stored keys (date_added becomes created_at; year/month are derived).
+const CLIENT_FIELDS = (() => {
+  const skip = new Set(['date_added', 'policy_year', 'policy_month']);
+  const base = UW_FIELDS.filter(f => !skip.has(f.name)).map(f => ({ key: f.name, label: f.label, type: uwType(f) }));
+  const have = new Set(base.map(f => f.key));
+  return [...base, ...CLIENT_SYSTEM_FIELDS.filter(f => !have.has(f.key))];
+})();
+// keys to hide from the dynamic field list (internal / file URLs / JSON blobs)
+const isInternalKey = (k) =>
+  k.startsWith('doc_') || k.endsWith('_doc_url') || k.endsWith('_text') ||
+  ['id','updated_at','is_active','submitted_by','submitted_at','submitted_by_name','source_quote_id',
+   'cover_responses','clause_responses','plan_premiums','endorsements','product_key',
+   'date_added','policy_year','policy_month','rejection_reason','reviewed_by','reviewed_at'].includes(k);
+const prettyKey = (k) => k.replace(/^(cover_|clause_|fi_)/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 const CLAIM_FIELDS = [
   { key: 'client_name',    label: 'Client Name',    type: 'string' },
@@ -188,7 +174,7 @@ function computeAgg(op, vals) {
   return 0;
 }
 
-function applyFilters(rows, filters) {
+function applyFilters(rows, filters, fieldList) {
   return rows.filter(row => {
     for (const f of filters) {
       const rawVal = row[f.field];
@@ -198,8 +184,9 @@ function applyFilters(rows, filters) {
         const d=rawVal?.toDate?rawVal.toDate():new Date(rawVal);
         if (isNaN(d)||d<now||d>end) return false; continue;
       }
-      const field=[...CLIENT_FIELDS,...CLAIM_FIELDS,...QUOTE_FIELDS].find(f2=>f2.key===f.field);
-      if (!field) continue;
+      const field=(fieldList||[...CLIENT_FIELDS,...CLAIM_FIELDS,...QUOTE_FIELDS]).find(f2=>f2.key===f.field)
+        // Unknown/dynamic field — infer string vs number from the first non-empty value.
+        || { key:f.field, type:(rawVal!=='' && rawVal!=null && !isNaN(String(rawVal).replace(/,/g,'')))?'number':'string' };
       if (field.type==='string') {
         const val=(rawVal||'').toLowerCase(); const cmp=(f.value||'').toLowerCase();
         if (f.op==='equals'&&val!==cmp) return false;
@@ -839,6 +826,7 @@ const ReportsPage = () => {
   // Builder state
   const [source,       setSource]       = useState('clients');
   const [selFields,    setSelFields]    = useState(['client_name','insurance_provider','net_premium','total_invoice']);
+  const [summaryFields, setSummaryFields] = useState([]); // numeric fields featured in the top stat cards
   const [groupBy,      setGroupBy]      = useState('');
   const [aggregations, setAggregations] = useState([]);
   const [filters,      setFilters]      = useState([]);
@@ -934,7 +922,26 @@ const ReportsPage = () => {
 
   useEffect(()=>{loadData();loadSaved();},[loadData,loadSaved]);
 
-  const sourceFields = source==='clients'?CLIENT_FIELDS:source==='claims'?CLAIM_FIELDS:QUOTE_FIELDS;
+  // Client fields = all underwriting form fields + system fields + any extra keys
+  // actually present on the records (product-specific covers/clauses/risk fields).
+  const clientFields = useMemo(() => {
+    const have = new Set(CLIENT_FIELDS.map(f => f.key));
+    const extras = [];
+    for (const c of clients) {
+      for (const k of Object.keys(c)) {
+        if (have.has(k) || isInternalKey(k)) continue;
+        have.add(k);
+        const v = c[k];
+        const type = (typeof v === 'number') || (typeof v === 'string' && v.trim() !== '' && !isNaN(v.replace(/,/g, ''))) ? 'number' : 'string';
+        extras.push({ key: k, label: prettyKey(k), type });
+      }
+    }
+    extras.sort((a, b) => a.label.localeCompare(b.label));
+    return [...CLIENT_FIELDS, ...extras];
+  }, [clients]);
+
+  const fieldsFor = (src) => src === 'clients' ? clientFields : src === 'claims' ? CLAIM_FIELDS : QUOTE_FIELDS;
+  const sourceFields = fieldsFor(source);
 
   // Compute report results from an explicit config + the current datasets/period.
   // Used by both the Run button and by running a template directly, so a template
@@ -950,7 +957,7 @@ const ReportsPage = () => {
       if(to   && d>to)   return false;
       return true;
     }) : base;
-    const filtered = applyFilters(raw, cfg.filters||[]);
+    const filtered = applyFilters(raw, cfg.filters||[], fieldsFor(cfg.source));
     if (cfg.viewMode==='pivot')
       return { results: filtered, pivot: buildPivot(filtered,cfg.groupBy,cfg.pivotColField,cfg.pivotValField,cfg.pivotValOp) };
     if (cfg.viewMode==='aggregated')
@@ -987,6 +994,7 @@ const ReportsPage = () => {
     setAggregations(cfg.aggregations); setFilters(cfg.filters); setSortBy(cfg.sortBy);
     setSortDir(cfg.sortDir); setViewMode(cfg.viewMode); setCharts(cfg.charts);
     setPivotColField(cfg.pivotColField); setPivotValField(cfg.pivotValField); setPivotValOp(cfg.pivotValOp);
+    setSummaryFields(tpl.summaryFields||[]);
     setSaveName(tpl.name||''); setSaveDesc(tpl.description||'');
     // compute + show results immediately
     if (tpl.id==='expiry_report') {
@@ -1005,7 +1013,7 @@ const ReportsPage = () => {
   const handleSaveTpl = async()=>{
     if (!saveName.trim()) return; setSavingTpl(true);
     try {
-      const tpl={name:saveName.trim(),description:saveDesc.trim(),source,fields:selFields,groupBy,aggregations,filters,sortBy,sortDir,viewMode,charts,pivotColField,pivotValField,pivotValOp,created_at:serverTimestamp()};
+      const tpl={name:saveName.trim(),description:saveDesc.trim(),source,fields:selFields,summaryFields,groupBy,aggregations,filters,sortBy,sortDir,viewMode,charts,pivotColField,pivotValField,pivotValOp,created_at:serverTimestamp()};
       await setDoc(doc(collection(db,'report_templates')),tpl);
       setSaveOpen(false); setSaveName(''); setSaveDesc(''); loadSaved(); showToast('Template saved!');
     } catch(err){showToast(err.message,'error');}
@@ -1199,11 +1207,26 @@ const ReportsPage = () => {
 
                 {/* Fields */}
                 <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Fields to Show</Typography>
-                <Box sx={{maxHeight:180,overflowY:'auto',border:'1px solid rgba(0,0,0,0.08)',borderRadius:'8px',p:1,mb:2.5}}>
+                <Box sx={{maxHeight:180,overflowY:'auto',border:'1px solid rgba(0,0,0,0.08)',borderRadius:'8px',p:1,mb:1}}>
                   {sourceFields.map(f=>(
                     <FormControlLabel key={f.key} control={<Checkbox size="small" checked={selFields.includes(f.key)} onChange={()=>setSelFields(p=>p.includes(f.key)?p.filter(k=>k!==f.key):[...p,f.key])} sx={{color:'#FF8B5A','&.Mui-checked':{color:'#FF5A5A'},p:0.5}}/>} label={<Typography sx={{fontSize:12}}>{f.label}</Typography>} sx={{display:'block',m:0,py:0.2}}/>
                   ))}
                 </Box>
+                <Stack direction="row" spacing={1} sx={{mb:2.5}}>
+                  <Button size="small" onClick={()=>setSelFields(sourceFields.map(f=>f.key))} sx={{fontSize:10.5,color:'#6366f1',minWidth:0,p:0.3}}>Select all</Button>
+                  <Button size="small" onClick={()=>setSelFields([])} sx={{fontSize:10.5,color:'#9CA3AF',minWidth:0,p:0.3}}>Clear</Button>
+                </Stack>
+
+                {/* Summary cards — choose which numeric totals appear in the top boxes */}
+                <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>Summary Cards (totals)</Typography>
+                <Box sx={{maxHeight:140,overflowY:'auto',border:'1px solid rgba(0,0,0,0.08)',borderRadius:'8px',p:1,mb:0.5}}>
+                  {sourceFields.filter(f=>f.type==='number').map(f=>(
+                    <FormControlLabel key={f.key} control={<Checkbox size="small" checked={summaryFields.includes(f.key)} onChange={()=>setSummaryFields(p=>p.includes(f.key)?p.filter(k=>k!==f.key):[...p,f.key])} sx={{color:'#6366f1','&.Mui-checked':{color:'#6366f1'},p:0.5}}/>} label={<Typography sx={{fontSize:12}}>{f.label}</Typography>} sx={{display:'block',m:0,py:0.2}}/>
+                  ))}
+                </Box>
+                <Typography sx={{fontSize:10.5,color:'#9CA3AF',mb:2.5}}>
+                  {summaryFields.length ? `${summaryFields.length} chosen` : 'None chosen — defaults to the first 3 numeric fields shown.'}
+                </Typography>
 
                 {/* View Mode */}
                 <Typography sx={{fontSize:11,fontWeight:800,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:0.8,mb:1}}>View Mode</Typography>
@@ -1410,16 +1433,23 @@ const ReportsPage = () => {
 
             {results&&(
               <>
-                {/* Summary stats */}
+                {/* Summary stats — featured fields are user-chosen (Summary Cards),
+                    falling back to the first 3 numeric shown fields. */}
                 <Stack direction="row" spacing={1.5} sx={{mb:2}} flexWrap="wrap">
-                  {[
-                    {label:'Total Records',val:totalDataRows,color:'#6366f1',bg:'rgba(99,102,241,0.08)'},
-                    ...displayCols.filter(c=>c.type==='number').slice(0,3).map(c=>({
-                      label:c.label,
-                      val:fmtNum(results.filter(r=>!r._type||r._type==='data').reduce((a,r)=>a+parseNum(r[c.key]),0)),
-                      color:'#FF5A5A',bg:'rgba(255,90,90,0.07)',
-                    })),
-                  ].map((s,i)=>(
+                  {(() => {
+                    const dataRows = results.filter(r=>!r._type||r._type==='data');
+                    const chosen = summaryFields.length
+                      ? summaryFields.map(k=>sourceFields.find(f=>f.key===k)).filter(Boolean)
+                      : displayCols.filter(c=>c.type==='number').slice(0,3);
+                    return [
+                      {label:'Total Records',val:totalDataRows,color:'#6366f1',bg:'rgba(99,102,241,0.08)'},
+                      ...chosen.map(c=>({
+                        label:c.label,
+                        val:fmtNum(dataRows.reduce((a,r)=>a+parseNum(r[c.key]),0)),
+                        color:'#FF5A5A',bg:'rgba(255,90,90,0.07)',
+                      })),
+                    ];
+                  })().map((s,i)=>(
                     <Box key={i} sx={{p:1.5,borderRadius:'10px',bgcolor:s.bg,border:`1px solid ${s.bg}`,minWidth:120}}>
                       <Typography sx={{fontSize:18,fontWeight:800,color:s.color}}>{s.val}</Typography>
                       <Typography sx={{fontSize:11,color:'#6B7280'}}>{s.label}</Typography>
