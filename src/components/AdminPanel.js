@@ -195,7 +195,7 @@ async function buildClientWorkbook(client, logoBase64, ExcelJS) {
       ['Road Safety Fee',client.road_safety_fee],
       ['Policy Fee',     client.policy_fee],
       ['VAT Fee',        client.vat_fee],
-      ['Total Invoice',  client.total_invoice],
+      ['Total Premium',  client.total_invoice],
       ['Commission Type',client.commission_type],
       ['Commission Basic',client.commission_basic],
       ['Commission SRCC', client.commission_srcc],

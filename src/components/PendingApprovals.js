@@ -31,7 +31,7 @@ const FIELD_LABELS = {
   insurance_provider: 'Insurance Provider', policy_no: 'Policy No',
   policy_type: 'Policy Type', policy_period_from: 'Period From',
   policy_period_to: 'Period To', net_premium: 'Net Premium',
-  total_invoice: 'Total Invoice', customer_type: 'Customer Type',
+  total_invoice: 'Total Premium', customer_type: 'Customer Type',
   branch: 'Branch', email: 'Email',
 };
 

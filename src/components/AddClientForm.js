@@ -161,7 +161,7 @@ export const textFields = [
   { label: 'Stamp Duty',         name: 'stamp_duty',         section: 'Premium', type: 'number' },
   { label: 'VAT',                name: 'vat_fee',            section: 'Premium', type: 'number' },
   { label: 'Net Premium (excl. taxes)', name: 'net_premium', section: 'Premium', type: 'number' },
-  { label: 'Total Invoice (incl. taxes)', name: 'total_invoice', section: 'Premium', type: 'number' },
+  { label: 'Total Premium (incl. taxes)', name: 'total_invoice', section: 'Premium', type: 'number' },
   // Payment
   { label: 'Payment Status',     name: 'payment_status',     section: 'Payment', dropdown: true },
   { label: 'Amount Received',    name: 'amount_received',    section: 'Payment', type: 'number' },

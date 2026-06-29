@@ -471,7 +471,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
           ...tableOpts(y),
           head: [[{ content:'PREMIUM', colSpan:2, styles:{fillColor:[26,26,46],textColor:[255,139,90],fontStyle:'bold',fontSize:8.5,cellPadding:{top:3.5,bottom:3.5,left:6,right:6}} }]],
           body: [...finRows, [
-            { content:'TOTAL INVOICE', styles:{fontStyle:'bold',fontSize:10.5,fillColor:[232,71,42],textColor:[255,255,255],cellPadding:{top:5,bottom:5,left:6,right:6}} },
+            { content:'TOTAL PREMIUM', styles:{fontStyle:'bold',fontSize:10.5,fillColor:[232,71,42],textColor:[255,255,255],cellPadding:{top:5,bottom:5,left:6,right:6}} },
             { content: fmtLKR(client.total_invoice), styles:{fontStyle:'bold',fontSize:10.5,fillColor:[232,71,42],textColor:[255,255,255],halign:'right',cellPadding:{top:5,bottom:5,left:6,right:6}} },
           ]],
           columnStyles: { 0:{cellWidth:65,fontStyle:'bold',fillColor:[255,248,245],textColor:[55,65,81]}, 1:{halign:'right',textColor:[26,26,46]} },
@@ -524,7 +524,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         startSec('endorsements');
         addSection('endorsements', 'REVISED TOTALS (AFTER ENDORSEMENTS)', [
           ['Sum Insured', `${fmtLKR(client.sum_insured)}  ->  ${fmtLKR(revisedSum)}${sumDelta ? `  (${fmtSigned(sumDelta)})` : ''}`],
-          ['Total Invoice', `${fmtLKR(client.total_invoice)}  ->  ${fmtLKR(revisedPrem)}${premDelta ? `  (${fmtSigned(premDelta)})` : ''}`],
+          ['Total Premium', `${fmtLKR(client.total_invoice)}  ->  ${fmtLKR(revisedPrem)}${premDelta ? `  (${fmtSigned(premDelta)})` : ''}`],
           ['Total Commission', `${fmtLKR(client.commission_total)}  ->  ${fmtLKR(revisedComm)}${commDelta ? `  (${fmtSigned(commDelta)})` : ''}`],
         ]);
         autoTable(pdf, {
@@ -724,7 +724,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Cess', client.cess], ['NBL', client.nbl], ['SSC Levy', client.ssc_levy], ['Other Premium', client.other_premium],
         ['Net Premium', client.net_premium], ['Stamp Duty', client.stamp_duty], ['Admin Fees', client.admin_fees],
         ['Road Safety Fee', client.road_safety_fee], ['Policy Fee', client.policy_fee], ['VAT', client.vat_fee],
-        ['Total Invoice', client.total_invoice], ['Deductible', client.deductible], ['Excesses', client.excesses],
+        ['Total Premium', client.total_invoice], ['Deductible', client.deductible], ['Excesses', client.excesses],
       ]);
       addSheetSection('COMMISSION', [
         ['Commission Type', client.commission_type], ['Basic Commission %', client.commission_pct],
@@ -763,7 +763,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         const totalsHdr = es.addRow(['REVISED TOTALS', '', '', '', 'Original', 'Change', 'Revised', '']);
         totalsHdr.font = { bold: true };
         es.addRow(['Sum Insured', '', '', '', endoNum(client.sum_insured), sumDelta, revisedSum, '']);
-        es.addRow(['Total Invoice', '', '', '', endoNum(client.total_invoice), premDelta, revisedPrem, '']);
+        es.addRow(['Total Premium', '', '', '', endoNum(client.total_invoice), premDelta, revisedPrem, '']);
         es.addRow(['Total Commission', '', '', '', endoNum(client.commission_total), commDelta, revisedComm, '']);
       }
 
@@ -974,7 +974,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
               </Box>
             </Box>
             <Box sx={{ p:2, borderRadius:'12px', background:'linear-gradient(135deg,rgba(255,90,90,0.08),rgba(255,139,90,0.06))', border:'1px solid rgba(255,90,90,0.15)', mb:2 }}>
-              <Typography sx={{ fontSize:12, color:'#9CA3AF', mb:0.5 }}>Total Invoice</Typography>
+              <Typography sx={{ fontSize:12, color:'#9CA3AF', mb:0.5 }}>Total Premium</Typography>
               <Typography sx={{ fontSize:24, fontWeight:800, color:'#FF5A5A' }}>
                 LKR {Number(client.total_invoice || 0).toLocaleString()}
               </Typography>
@@ -1033,7 +1033,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
             <Box sx={{ display:'grid', gridTemplateColumns:{ xs:'1fr', sm:'1fr 1fr 1fr' }, gap:2, mb:2.5 }}>
               {[
                 { label:'Sum Insured',     orig: endoNum(client.sum_insured),     delta: sumDelta,  revised: revisedSum,  color:'#059669' },
-                { label:'Total Invoice',   orig: endoNum(client.total_invoice),   delta: premDelta, revised: revisedPrem, color:'#FF5A5A' },
+                { label:'Total Premium',   orig: endoNum(client.total_invoice),   delta: premDelta, revised: revisedPrem, color:'#FF5A5A' },
                 { label:'Total Commission',orig: endoNum(client.commission_total),delta: commDelta, revised: revisedComm, color:'#ec4899' },
               ].map(c => (
                 <Box key={c.label} sx={{ p:1.8, borderRadius:'12px', border:`1px solid ${c.color}22`, bgcolor:`${c.color}08` }}>
