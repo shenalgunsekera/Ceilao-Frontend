@@ -1451,27 +1451,32 @@ const ReportsPage = () => {
               <>
                 {/* Summary stats — featured fields are user-chosen (Summary Cards),
                     falling back to the first 3 numeric shown fields. */}
-                <Stack direction="row" spacing={1.5} sx={{mb:2}} flexWrap="wrap">
+                <Box sx={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))',gap:1.5,mb:2}}>
                   {(() => {
                     const dataRows = results.filter(r=>!r._type||r._type==='data');
                     const chosen = summaryFields.length
                       ? summaryFields.map(k=>sourceFields.find(f=>f.key===k)).filter(Boolean)
                       : displayCols.filter(c=>c.type==='number').slice(0,3);
                     return [
-                      {label:'Total Records',val:totalDataRows,color:'#6366f1',bg:'rgba(99,102,241,0.08)'},
+                      {label:'Total Records',val:totalDataRows,color:'#6366f1',bg:'rgba(99,102,241,0.06)'},
                       ...chosen.map(c=>({
                         label:c.label,
                         val:fmtNum(dataRows.reduce((a,r)=>a+parseNum(r[c.key]),0)),
-                        color:'#FF5A5A',bg:'rgba(255,90,90,0.07)',
+                        color:'#FF5A5A',bg:'rgba(255,90,90,0.05)',
                       })),
                     ];
                   })().map((s,i)=>(
-                    <Box key={i} sx={{p:1.5,borderRadius:'10px',bgcolor:s.bg,border:`1px solid ${s.bg}`,minWidth:120}}>
-                      <Typography sx={{fontSize:18,fontWeight:800,color:s.color}}>{s.val}</Typography>
-                      <Typography sx={{fontSize:11,color:'#6B7280'}}>{s.label}</Typography>
+                    <Box key={i} sx={{
+                      position:'relative', p:1.6, pl:2, borderRadius:'12px', bgcolor:s.bg,
+                      border:'1px solid rgba(0,0,0,0.05)', overflow:'hidden',
+                      display:'flex', flexDirection:'column', justifyContent:'center', minHeight:74,
+                    }}>
+                      <Box sx={{position:'absolute',left:0,top:0,bottom:0,width:4,bgcolor:s.color,opacity:0.85}}/>
+                      <Typography sx={{fontSize:10,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.5,mb:0.4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.label}</Typography>
+                      <Typography sx={{fontSize:20,fontWeight:800,color:s.color,lineHeight:1.1}}>{s.val}</Typography>
                     </Box>
                   ))}
-                </Stack>
+                </Box>
 
                 {/* Mode badge */}
                 <Stack direction="row" spacing={1} sx={{mb:2}}>
