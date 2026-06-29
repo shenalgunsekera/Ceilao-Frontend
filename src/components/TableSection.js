@@ -140,6 +140,7 @@ async function exportUnderwritingExcel(clients) {
     { key: 'payment_method',     header: 'Payment Method',         w: 16 },
     { key: 'cheque_slip_no',     header: 'Cheque / Slip No.',      w: 18 },
     { key: 'receipt_no',         header: 'Receipt No.',            w: 14 },
+    { key: 'debit_note_no',      header: 'Debit Note No.',         w: 16 },
     // Commission
     { key: 'commission_pct',     header: 'Commission %',           w: 13, isNum: true },
     { key: 'commission_basic',   header: 'Commission Basic (Rs)',   w: 18, isNum: true },
@@ -595,6 +596,15 @@ const TableSection = () => {
             const ref = doc(collection(db, 'clients'));
             const clean = {};
             Object.entries(row).forEach(([k, v]) => { if (v !== '' && v != null) clean[k] = v; });
+            // Auto-calculations the form normally derives — computed on import so the
+            // record shows complete totals without anyone re-saving it.
+            const n = (v) => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
+            const commTotal = n(clean.commission_basic) + n(clean.commission_srcc) + n(clean.commission_tc) + n(clean.commission_special_amount);
+            if (commTotal !== 0) clean.commission_total = String(Math.round(commTotal * 100) / 100);
+            if (clean.policy_period_from && clean.policy_period_to && !clean.policy_days) {
+              const a = new Date(clean.policy_period_from), b = new Date(clean.policy_period_to);
+              if (!isNaN(a) && !isNaN(b)) { const days = Math.round((b - a) / 86400000); if (days >= 0) clean.policy_days = String(days); }
+            }
             // Honour date_added if provided (preserves original date on backup restore)
             const dateAdded = clean.date_added ? new Date(clean.date_added) : new Date();
             delete clean.date_added;

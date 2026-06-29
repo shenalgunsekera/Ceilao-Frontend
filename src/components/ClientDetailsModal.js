@@ -508,6 +508,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
         ['Payment Method',  client.payment_method],
         ['Cheque / Slip No.', client.cheque_slip_no],
         ['Receipt No.',     client.receipt_no],
+        ['Debit Note No.',  client.debit_note_no],
       ]);
 
       addSection('claims', 'CLAIMS', [
@@ -737,6 +738,7 @@ const ClientDetailsModal = ({ client, onClose }) => {
       addSheetSection('PAYMENT', [
         ['Payment Status', client.payment_status], ['Amount Received', client.amount_received], ['Payment Date', client.payment_date],
         ['Payment Method', client.payment_method], ['Cheque / Slip No.', client.cheque_slip_no], ['Receipt No.', client.receipt_no],
+        ['Debit Note No.', client.debit_note_no],
       ]);
       addSheetSection('CLAIMS', [
         ['Claim Paid?', client.claim_paid], ['Date of Claim', client.claim_date], ['Claim Amount', client.claim_amount],

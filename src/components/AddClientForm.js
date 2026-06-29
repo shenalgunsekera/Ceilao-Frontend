@@ -169,6 +169,7 @@ export const textFields = [
   { label: 'Payment Method',     name: 'payment_method',     section: 'Payment', dropdown: true },
   { label: 'Cheque / Slip No.',  name: 'cheque_slip_no',     section: 'Payment' },
   { label: 'Receipt No.',        name: 'receipt_no',         section: 'Payment' },
+  { label: 'Debit Note No.',     name: 'debit_note_no',      section: 'Payment' },
   // Commission
   { label: 'Commission Type',    name: 'commission_type',    section: 'Commission', dropdown: true },
   { label: 'Basic Commission %', name: 'commission_pct',     section: 'Commission', type: 'number', readOnly: true },
@@ -191,8 +192,6 @@ export const textFields = [
   { label: 'Partial Payment Reasons', name: 'partial_payment_reasons', section: 'Claims' },
   // Other
   { label: 'Birthday Policy',    name: 'birthday_policy',    section: 'Other', date: true },
-  { label: 'Sales Rep ID',       name: 'sales_rep_id',       section: 'Other' },
-  { label: 'Policies (count)',   name: 'policies',           section: 'Other', type: 'number' },
   { label: 'Date Added',         name: 'date_added',         section: 'Other', date: true },
   { label: 'Notes',              name: 'notes',              section: 'Other' },
 ];

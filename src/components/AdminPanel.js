@@ -10,6 +10,7 @@ import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import logoUrl from '../Ceilao Logo.png';
+import { textFields as UW_FIELDS } from './AddClientForm';
 import PendingApprovals from './PendingApprovals';
 import CreateAccountModal from './CreateAccountModal';
 import InsuranceCompaniesManager from './InsuranceCompaniesManager';
@@ -159,7 +160,6 @@ async function buildClientWorkbook(client, logoBase64, ExcelJS) {
       ['Business Reg.',      client.business_registration],
       ['SVAT Proof',         client.svat_proof],
       ['VAT Proof',          client.vat_proof],
-      ['Sales Rep ID',       client.sales_rep_id],
     ]},
     { title: 'ADDRESS', fields: [
       ['Street 1',  client.street1],
@@ -262,20 +262,15 @@ const DOC_FIELDS = [
   { label: 'nic_br',           key: 'nic_br_doc_url' },
 ];
 
-// CSV import columns — must match TableSection handleImportCSV exactly
-const CLIENT_IMPORT_COLS = [
-  'insurance_type','customer_type','product','insurance_provider','client_name','mobile_no',
-  'ceilao_ib_file_no','vehicle_number','main_class','insurer','introducer_code',
-  'branch','street1','street2','city','district','province','telephone',
-  'contact_person','email','social_media','nic_proof','dob_proof',
-  'business_registration','svat_proof','vat_proof',
-  'policy_','policy_type','policy_no','policy_period_from','policy_period_to',
-  'coverage','sum_insured_currency','sum_insured','basic_premium','srcc_premium','tc_premium','net_premium',
-  'stamp_duty','admin_fees','road_safety_fee','policy_fee','vat_fee','total_invoice',
-  'commission_type','commission_basic','commission_srcc','commission_tc',
-  'sales_rep_id','policies',
-  'date_added', // preserves original created_at on restore
-];
+// CSV import/backup columns — derived from the underwriting form so every field
+// (incl. new ones like debit_note_no) is backed up automatically and stays in sync.
+// Re-import maps by column name; date_added preserves the original created_at.
+const CLIENT_IMPORT_COLS = (() => {
+  const skip = new Set(['policy_year', 'policy_month']); // derived, not stored
+  const fromForm = UW_FIELDS.map(f => f.name).filter(n => !skip.has(n));
+  const extras = ['insurer', 'vehicle_make', 'vehicle_model', 'dob_proof', 'vat_proof']; // aliases/legacy keys
+  return [...new Set([...fromForm, ...extras])];
+})();
 
 /* Fetch one URL and return ArrayBuffer, or null on failure. */
 async function fetchFile(url) {
