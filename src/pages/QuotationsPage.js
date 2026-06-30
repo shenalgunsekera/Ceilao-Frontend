@@ -565,6 +565,10 @@ function QuoteRow({ quote, onSelect, tab, onDelete, onResend, isManager, allProd
               </Typography>
               <Chip label={product?.label || quote.product_key} size="small"
                 sx={{ bgcolor: 'rgba(255,90,90,0.08)', color: '#FF5A5A', fontWeight: 600, fontSize: 10 }} />
+              {quote.source === 'website' && (
+                <Chip label="🌐 From Website" size="small"
+                  sx={{ bgcolor: 'rgba(255,106,26,0.12)', color: '#E8431E', fontWeight: 700, fontSize: 10 }} />
+              )}
               {hasCustomerSel && (
                 <Chip label={`🏆 ${quote.customer_selection.company_name}`} size="small"
                   sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#059669', fontWeight: 700, fontSize: 10 }} />
