@@ -32,16 +32,18 @@ const PRODUCT_KEY_MAP = Object.fromEntries(
   Object.entries(PRODUCTS).map(([k, v]) => [v.label, k])
 );
 // product key → main class  (used to auto-fill the Main Class dropdown)
+// Allowed Main Class values (what the dropdown shows).
+const MAIN_CLASSES = ['Fire', 'Marine', 'Motor', 'Health', 'Miscellaneous', 'Individual', 'Group', 'Other'];
 const PRODUCT_MAIN_CLASS = {
-  motor: 'Motor',
+  motor: 'Motor', mf: 'Motor',
   fire: 'Fire',
   marine: 'Marine',
-  car: 'Engineering', ear: 'Engineering', dtap: 'Engineering',
-  public_liability: 'Liability', product_liability: 'Liability',
-  personal_accidents: 'People', wci: 'People', group_medical: 'People',
-  surgical: 'People', life_endowment: 'People',
-  travel: 'Miscellaneous', fgt: 'Miscellaneous', cyber: 'Miscellaneous',
-  title_insurance: 'Miscellaneous',
+  surgical: 'Health', group_medical: 'Group',
+  personal_accidents: 'Individual', life_endowment: 'Individual', travel: 'Individual',
+  wci: 'Group',
+  car: 'Miscellaneous', ear: 'Miscellaneous', dtap: 'Miscellaneous',
+  public_liability: 'Miscellaneous', product_liability: 'Miscellaneous',
+  fgt: 'Miscellaneous', cyber: 'Miscellaneous', title_insurance: 'Miscellaneous',
 };
 
 /* ── Risk field sections to pull from product config ─────────────────────── */
@@ -66,7 +68,7 @@ const docFields = [
 const dropdowns = {
   insurance_type: ['General', 'Life'],
   sum_insured_currency: ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'JPY', 'INR', 'SGD', 'Other'],
-  main_class: ['Motor', 'Fire', 'Marine', 'Engineering', 'Liability', 'People', 'Miscellaneous'],
+  main_class: MAIN_CLASSES,
   // Auto-generated from PRODUCTS config — if a product is added there, it appears here
   product: Object.values(PRODUCTS).map(p => p.label),
   customer_type: ['Individual', 'Company'],
@@ -93,8 +95,8 @@ const dropdowns = {
    For a "Special" commission, an additional special rate (+/-) is applied to the
    BASIC premium only; SRCC and TC rates remain fixed.                          */
 const COMMISSION_BASIC_RATES = {
-  Motor: 20, Fire: 20, Marine: 15, Engineering: 20,
-  Liability: 20, People: 20, Miscellaneous: 20,
+  Motor: 20, Fire: 20, Marine: 15, Health: 20,
+  Miscellaneous: 20, Individual: 20, Group: 20, Other: 20,
 };
 const COMMISSION_SRCC_RATE = 7.5;
 const COMMISSION_TC_RATE   = 7.5;
@@ -476,7 +478,9 @@ const AddClientForm = ({ onSuccess, onCancel, initialData = {}, isEdit = false }
   useEffect(() => {
     const key = productKeyMap[fields.product];
     const mc = (key && PRODUCT_MAIN_CLASS[key]) || allProducts[key]?.mainClass;
-    if (mc) setFields(f => ({ ...f, main_class: mc }));
+    // Only auto-fill with a value that exists in the dropdown; otherwise leave
+    // it for manual selection so the Select never shows an out-of-range value.
+    if (mc && MAIN_CLASSES.includes(mc)) setFields(f => ({ ...f, main_class: mc }));
   }, [fields.product, productKeyMap, allProducts]);
 
 
