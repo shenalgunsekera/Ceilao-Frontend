@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { collection, addDoc, writeBatch, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { confirmTypedDelete } from '../utils/confirmDelete';
 import { DEFAULT_INSURANCE_COMPANIES, CATEGORY_COLORS } from '../config/insuranceCompanies';
 
 import Box from '@mui/material/Box';
@@ -72,7 +73,7 @@ const InsuranceCompaniesManager = () => {
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Remove ${name}?`)) return;
+    if (!confirmTypedDelete(`Remove insurer contact ${name}?`)) return;
     await deleteDoc(doc(db,'insurance_companies',id));
     setCompanies(c => c.filter(x => x.id !== id));
     setToast({ open:true, msg:`${name} removed.`, severity:'info' });
