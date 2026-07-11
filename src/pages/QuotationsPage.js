@@ -1087,7 +1087,26 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
         ).join('')
       }</tr>`;
 
-      const tableHtml = `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;border-radius:10px;overflow:hidden;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
+      // Key risk details shown at the top of the email (vehicle no. + sum insured)
+      const fmtVal = v => {
+        const n = Number(String(v).replace(/,/g, ''));
+        return Number.isFinite(n) && String(v).trim() !== '' ? n.toLocaleString() : String(v);
+      };
+      const keyDetails = [];
+      if (quote.form_data?.vehicle_no) keyDetails.push(['Vehicle No.', quote.form_data.vehicle_no]);
+      const siField =
+        (product?.fields || []).find(f => ['total_value', 'sum_insured'].includes(f.name) && quote.form_data?.[f.name]) ||
+        (product?.fields || []).filter(f => f.section === 'Sum Insured' && quote.form_data?.[f.name]).pop();
+      if (siField) keyDetails.push([siField.label, fmtVal(quote.form_data[siField.name])]);
+      const detailsHtml = keyDetails.length
+        ? `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;margin-bottom:14px;">${
+            keyDetails.map(([l, v]) =>
+              `<tr><td style="padding:7px 14px;background:#FFF8F5;font-weight:700;color:#374151;font-size:12.5px;width:200px;border:1px solid #FFE0D4;">${l}</td><td style="padding:7px 14px;font-size:12.5px;font-weight:600;color:#1A1A2E;border:1px solid #FFE0D4;">${v}</td></tr>`
+            ).join('')
+          }</table>`
+        : '';
+
+      const tableHtml = detailsHtml + `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;border-radius:10px;overflow:hidden;"><thead><tr><th style="background:#1A1A2E;color:#FF8B5A;padding:10px 14px;font-size:13px;text-align:left;">Field</th>${headerCells}</tr></thead><tbody>${breakdownRows}${deductiblesRow}${excessRow}${validityRow}${coverRows}${clauseRows}${docRow}</tbody></table>`;
 
       // Selection buttons + PDF download link for email (table-based for Outlook/Gmail compatibility)
       const baseUrl = window.location.origin;
