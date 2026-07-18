@@ -358,8 +358,8 @@ function ProductForm({ product, values, onChange, errors = {}, allProducts = STA
             {url ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
                 <CheckCircleIcon sx={{ color: '#22c55e', fontSize: 14 }} />
-                <Typography component="a" href={url} target="_blank" rel="noopener noreferrer"
-                  sx={{ fontSize: 11, color: '#22c55e', textDecoration: 'none', '&:hover': { textDecoration: 'underline' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+                <Typography component="a" href={url} onClick={e => { e.preventDefault(); openFile(url); }} rel="noopener noreferrer"
+                  sx={{ fontSize: 11, color: '#22c55e', textDecoration: 'none', cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
                   {fname || 'View document'}
                 </Typography>
               </Box>
