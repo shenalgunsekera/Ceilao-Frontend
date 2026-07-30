@@ -1660,6 +1660,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
                       ))}
                     </React.Fragment>
                   ))}
+                  {!product?.hideInsurerTotal && (
                   <TableRow sx={{ bgcolor: 'rgba(8,145,178,0.10)' }}>
                     <TableCell sx={{ fontWeight: 800, color: '#0891b2' }}>Grand Total (LKR)</TableCell>
                     {responses.map(r => (
@@ -1667,7 +1668,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
                         {Number(r.premium || 0).toLocaleString()}
                       </TableCell>
                     ))}
-                  </TableRow>
+                  </TableRow>)}
                 </>
               ) : (
                 <>
@@ -1694,6 +1695,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
                       })}
                     </TableRow>
                   ))}
+                  {!product?.hideInsurerTotal && (
                   <TableRow sx={{ bgcolor: 'rgba(255,90,90,0.06)' }}>
                     <TableCell sx={{ fontWeight: 800, color: '#FF5A5A' }}>Total Premium (LKR)</TableCell>
                     {responses.map(r => (
@@ -1701,7 +1703,7 @@ function ComparisonView({ quote, onBack, onConfirm, allProducts = STATIC_PRODUCT
                         {Number(r.premium || 0).toLocaleString()}
                       </TableCell>
                     ))}
-                  </TableRow>
+                  </TableRow>)}
                 </>
               )}
               {/* Commission — broker internal only */}
