@@ -59,6 +59,15 @@ export async function generateComparisonPdf({ quote, product, responses, audienc
   const isPlansProduct = !!product?.hasPlans;
   const planCount = isPlansProduct ? Math.max(parseInt(quote?.form_data?.no_of_plans) || 1, 1) : 0;
 
+  /* ── Header summary details (customer, sum insured, motor vehicle no.) ────── */
+  const fd = quote?.form_data || {};
+  const customerName = (fd.proposer_name || fd.company_name || fd.full_name || fd.client_name || quote?.customer_name || '').trim();
+  const _siRaw = fd.sum_insured || fd.total_value || fd.market_value || fd.sum_assured || fd.limit_per_occurrence || fd.cyber_limit || fd.cover_limit || fd.hospitalization_cover || '';
+  const _siNum = Number(String(_siRaw).replace(/[^0-9.]/g, ''));
+  const sumInsured = (_siRaw && !isNaN(_siNum) && _siNum > 0) ? `LKR ${_siNum.toLocaleString()}` : '';
+  const isMotorProduct = quote?.product_key === 'motor' || /motor/i.test(product?.label || '');
+  const vehicleNo = isMotorProduct ? String(fd.vehicle_no || '').trim() : '';
+
   const coverFields = [
     ...(product?.fields || []).filter(f => ['Covers Required', 'Cover Required'].includes(f.section) && f.type === 'yesno' && quote?.form_data?.[f.name] === 'Yes'),
     ...parseDynamicExtras(quote?.form_data, 'extra_covers'),
@@ -103,12 +112,36 @@ export async function generateComparisonPdf({ quote, product, responses, audienc
   };
 
   const drawInfoBand = (groupLabel) => {
-    pdf.setFillColor(249, 250, 251); pdf.rect(0, 23, pw, 12, 'F');
+    // Two-tier band: title + reference on top, key policy details underneath.
+    pdf.setFillColor(249, 250, 251); pdf.rect(0, 23, pw, 20, 'F');
+    pdf.setFillColor(...RED); pdf.rect(0, 43, pw, 0.6, 'F');
+
+    // Tier 1 — report title (left) and reference meta (right)
     pdf.setFontSize(10); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...NAVY);
-    pdf.text(isBroker ? 'QUOTE COMPARISON REPORT' : 'PERSONALISED INSURANCE COMPARISON REPORT', 14, 31);
+    pdf.text(isBroker ? 'QUOTE COMPARISON REPORT' : 'PERSONALISED INSURANCE COMPARISON REPORT', 14, 30);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(107, 114, 128);
     const right = `Ref: ${quote.reference}   ·   ${product?.label || ''}   ·   ${today}${groupLabel ? `   ·   ${groupLabel}` : ''}`;
-    pdf.text(right, pw - 14, 31, { align: 'right' });
+    pdf.text(right, pw - 14, 30, { align: 'right' });
+
+    // Tier 1.5 — thin divider between title and details
+    pdf.setDrawColor(226, 232, 240); pdf.setLineWidth(0.3); pdf.line(14, 33.5, pw - 14, 33.5);
+
+    // Tier 2 — labelled detail fields flowing left to right
+    let x = 14;
+    const drawField = (label, value) => {
+      if (!value) return;
+      pdf.setFontSize(6.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...GREY);
+      pdf.text(label.toUpperCase(), x, 37.5);
+      pdf.setFontSize(9); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...NAVY);
+      const val = pdf.splitTextToSize(String(value), 90)[0];
+      pdf.text(val, x, 41.5);
+      const w = Math.max(pdf.getTextWidth(val), (pdf.setFontSize(6.5), pdf.getTextWidth(label.toUpperCase())));
+      pdf.setFontSize(9);
+      x += w + 14;
+    };
+    drawField('Customer', customerName);
+    drawField('Sum Insured', sumInsured);
+    drawField('Vehicle No.', vehicleNo);
   };
 
   /* ── body builder (rebuilt per insurer-chunk) ────────────────────────────── */
@@ -205,7 +238,7 @@ export async function generateComparisonPdf({ quote, product, responses, audienc
     drawInfoBand(groupLabel);
 
     autoTable(pdf, {
-      startY: 38,
+      startY: 46,
       head: [[
         { content: 'Field', styles: { fillColor: NAVY, textColor: ORANGE, fontStyle: 'bold', fontSize: 9 } },
         ...groupResps.map(r => ({ content: r.company_name + (isBroker && r.edited_by_broker ? '\n✎ Broker Edited' : ''), styles: { fillColor: RED, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' } })),
