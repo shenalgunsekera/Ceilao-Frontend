@@ -22,6 +22,7 @@ import DevicesManager from './DevicesManager';
 import UsersManager from './UsersManager';
 import ProductsManager from './ProductsManager';
 import CustomersManager from './CustomersManager';
+import CommissionRatesManager from './CommissionRatesManager';
 import MarketersManager from './MarketersManager';
 
 import Box from '@mui/material/Box';
@@ -67,6 +68,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DevicesOtherIcon from '@mui/icons-material/DevicesOther';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import PercentIcon from '@mui/icons-material/Percent';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -86,8 +88,8 @@ const STATUS_COLORS = {
 
 /* ── ExcelJS ARGB palette ────────────────────────────────────────────────── */
 const XL = {
-  coral: 'FFFF5A5A', orange: 'FFFF8B5A', dark: 'FF1A1A2E',
-  grey: 'FF6B7280', peach: 'FFFFF8F5', border: 'FFFFD4C0',
+  coral: 'FF255EAB', orange: 'FF38A3E0', dark: 'FF0A1A3E',
+  grey: 'FF6B7280', peach: 'FFF2F7FC', border: 'FFD6E6F5',
   white: 'FFFFFFFF', gold: 'FFFFD45A',
 };
 
@@ -425,7 +427,7 @@ async function buildQuotationsWorkbook(quotes, ExcelJS) {
     { header: 'Insurer Count',      key: 'insurer_count',     width: 14 },
   ];
   ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0A1A3E' } };
   quotes.forEach(q => {
     ws.addRow({
       reference:          q.reference || '',
@@ -450,7 +452,7 @@ async function buildQuotationsWorkbook(quotes, ExcelJS) {
     { header: 'Document URL',  key: 'doc_url',       width: 60 },
   ];
   ws2.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  ws2.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF5A5A' } };
+  ws2.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF255EAB' } };
   quotes.forEach(q => {
     (q.responses || []).forEach(r => {
       ws2.addRow({
@@ -619,19 +621,19 @@ const AdminPanel = () => {
     ws.mergeCells('A1:G1');
     const h1 = ws.getCell('A1');
     h1.value = 'CEILAO INSURANCE BROKERS (PVT) LTD'; h1.font = { bold:true, size:14, color:{argb:'FFFFFFFF'}, name:'Calibri' };
-    h1.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1A1A2E'} }; h1.alignment = { horizontal:'center', vertical:'middle' };
+    h1.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0A1A3E'} }; h1.alignment = { horizontal:'center', vertical:'middle' };
     ws.getRow(1).height = 26;
 
     ws.mergeCells('A2:G2');
     const h2 = ws.getCell('A2');
     h2.value = 'Employee Work Hours Report'; h2.font = { bold:true, size:12, color:{argb:'FFFFFFFF'}, name:'Calibri' };
-    h2.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFF5A5A'} }; h2.alignment = { horizontal:'center', vertical:'middle' };
+    h2.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF255EAB'} }; h2.alignment = { horizontal:'center', vertical:'middle' };
     ws.getRow(2).height = 22;
 
     ws.mergeCells('A3:G3');
     const h3 = ws.getCell('A3');
     h3.value = `Generated: ${dateStr}  |  ${rows.length} sessions`; h3.font = { size:9, color:{argb:'FF9CA3AF'}, name:'Calibri' };
-    h3.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFFF8F5'} }; h3.alignment = { horizontal:'center' };
+    h3.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF2F7FC'} }; h3.alignment = { horizontal:'center' };
     ws.getRow(3).height = 14;
     ws.getRow(4).height = 8;
 
@@ -646,8 +648,8 @@ const AdminPanel = () => {
     let sr = 5;
     ws.mergeCells(`A${sr}:G${sr}`);
     const sh = ws.getCell(`A${sr}`);
-    sh.value = 'SUMMARY BY EMPLOYEE'; sh.font = { bold:true, size:10, color:{argb:'FFFF8B5A'}, name:'Calibri' };
-    sh.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1A1A2E'} }; sh.alignment = { horizontal:'center' };
+    sh.value = 'SUMMARY BY EMPLOYEE'; sh.font = { bold:true, size:10, color:{argb:'FF38A3E0'}, name:'Calibri' };
+    sh.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0A1A3E'} }; sh.alignment = { horizontal:'center' };
     ws.getRow(sr).height = 18; sr++;
 
     ['Employee','Sessions','Total Hours','Avg Hours/Session'].forEach((label, i) => {
@@ -658,7 +660,7 @@ const AdminPanel = () => {
     ws.getRow(sr).height = 18; sr++;
 
     Object.entries(empTotals).forEach(([emp, data], ri) => {
-      const bg = ri % 2 === 0 ? 'FFFFF8F5' : 'FFFFFFFF';
+      const bg = ri % 2 === 0 ? 'FFF2F7FC' : 'FFFFFFFF';
       const hours = (data.minutes / 60).toFixed(2);
       const avg   = (data.minutes / data.sessions / 60).toFixed(2);
       [emp, data.sessions, hours, avg].forEach((v, i) => {
@@ -667,7 +669,7 @@ const AdminPanel = () => {
         if (i > 0) { cell.numFmt = i === 1 ? '0' : '0.00'; cell.alignment = { horizontal:'right' }; }
         cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
         cell.font = { size:10, name:'Calibri' };
-        cell.border = { bottom:{ style:'hair', color:{argb:'FFFFD4C0'} } };
+        cell.border = { bottom:{ style:'hair', color:{argb:'FFD6E6F5'} } };
       });
       sr++;
     });
@@ -677,14 +679,14 @@ const AdminPanel = () => {
     const detailHeaders = ['Employee','Email','Date','Clock In','Clock Out','Duration (hrs)','Activity / Notes'];
     detailHeaders.forEach((label, i) => {
       const cell = ws.getCell(sr, i + 1);
-      cell.value = label; cell.font = { bold:true, size:10, color:{argb:'FFFF8B5A'}, name:'Calibri' };
-      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1A1A2E'} }; cell.alignment = { horizontal: i >= 3 ? 'center' : 'left', vertical:'middle' };
+      cell.value = label; cell.font = { bold:true, size:10, color:{argb:'FF38A3E0'}, name:'Calibri' };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0A1A3E'} }; cell.alignment = { horizontal: i >= 3 ? 'center' : 'left', vertical:'middle' };
     });
     ws.getRow(sr).height = 20; sr++;
 
     // Detail rows
     rows.forEach((r, ri) => {
-      const bg = ri % 2 === 0 ? 'FFFFF8F5' : 'FFFFFFFF';
+      const bg = ri % 2 === 0 ? 'FFF2F7FC' : 'FFFFFFFF';
       const ci = r.clock_in?.toDate ? r.clock_in.toDate() : null;
       const co = r.clock_out?.toDate ? r.clock_out.toDate() : null;
       const fmtTime = (d) => d ? d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '—';
@@ -701,9 +703,9 @@ const AdminPanel = () => {
         cell.value = v;
         if (i >= 3 && i <= 5) cell.alignment = { horizontal:'center' };
         cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
-        cell.font = { size:9.5, name:'Calibri', color:{argb:'FF1A1A2E'} };
+        cell.font = { size:9.5, name:'Calibri', color:{argb:'FF0A1A3E'} };
         if (!co && i === 4) cell.font = { ...cell.font, color:{argb:'FFf59e0b'}, bold:true };
-        cell.border = { bottom:{ style:'hair', color:{argb:'FFFFD4C0'} } };
+        cell.border = { bottom:{ style:'hair', color:{argb:'FFD6E6F5'} } };
       });
       ws.getRow(sr).height = 17; sr++;
     });
@@ -1025,6 +1027,7 @@ const AdminPanel = () => {
         <Tab icon={<CategoryOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Products" />
         <Tab icon={<PeopleAltOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Customers" />
         <Tab icon={<CampaignOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Marketers" />
+        <Tab icon={<PercentIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Commissions" />
       </Tabs>
 
       {/* ── TICKETS TAB ── */}
@@ -1424,6 +1427,7 @@ const AdminPanel = () => {
 
       {/* ── MARKETERS TAB ── */}
       {tab === 11 && <MarketersManager />}
+      {tab === 12 && <CommissionRatesManager />}
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(t => ({ ...t, open: false }))}>
         <Alert severity={toast.severity} variant="filled" sx={{ width: '100%' }}>{toast.msg}</Alert>

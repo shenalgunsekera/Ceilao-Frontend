@@ -40,6 +40,7 @@ import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import PostAddOutlinedIcon from '@mui/icons-material/PostAddOutlined';
+import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import { buildClaimsCsv, buildClaimsTemplate, parseClaimsCsv, matchClaimDoc } from '../utils/claimsIo';
 
 const BRAND_PREFIX = 'ceilao';
@@ -85,12 +86,53 @@ const TRACKER_STEPS = [
 const YESNO = ['Yes', 'No'];
 const allowsUpload = (v) => !!v && v !== 'No' && v !== 'Pending';
 
+// Each tracker step belongs to a status stage. The claim status auto-advances to
+// the stage of the FURTHEST completed step, so the chip keeps pace with the work
+// done. Ordered low → high; 'Rejected' is a manual outcome with no step.
+const STATUS_ORDER = ['Filed', 'Investigating', 'Under Review', 'Approved', 'Settled'];
+const STEP_STAGE = {
+  claim_intimated: 'Filed', claim_number_created: 'Filed',
+  surveyor_assigned: 'Investigating', inspection_completed: 'Investigating',
+  documents_requested: 'Under Review', customer_informed: 'Under Review',
+  documents_received: 'Under Review', documents_verified: 'Under Review',
+  documents_submitted_insurer: 'Under Review', claim_under_assessment: 'Under Review',
+  further_queries_raised: 'Under Review', query_response_submitted: 'Under Review',
+  offer_received: 'Approved', dispute_raised: 'Approved', negotiation_history: 'Approved',
+  final_offer_received: 'Approved', customer_acceptance: 'Approved', payment_released: 'Approved',
+  payment_received: 'Settled', receipt_issued: 'Settled', claim_closed: 'Settled',
+  customer_satisfaction_survey: 'Settled', lessons_learned: 'Settled',
+};
+const isPos = (v) => !!v && v !== 'No' && v !== 'Pending';
+// Highest stage reached across all completed steps ('' when nothing is done yet).
+function deriveClaimStatus(tracker = {}) {
+  let best = -1;
+  Object.keys(STEP_STAGE).forEach(k => {
+    if (isPos(tracker[k]?.value)) best = Math.max(best, STATUS_ORDER.indexOf(STEP_STAGE[k]));
+  });
+  return best >= 0 ? STATUS_ORDER[best] : 'Filed';
+}
+
 function ClaimProcessTracker({ value, onChange, claimId, brandPrefix, accent }) {
   const [busy, setBusy] = useState('');
+  const [noteDrafts, setNoteDrafts] = useState({});
   const tracker = value || {};
 
   const setValue = (key, v) =>
     onChange({ ...tracker, [key]: { ...(tracker[key] || {}), value: v } });
+
+  const commitNote = (key, v) =>
+    onChange({ ...tracker, [key]: { ...(tracker[key] || {}), note: v } });
+
+  const addLink = (key) => {
+    const raw = window.prompt('Paste one or more video / document links (YouTube, Drive, etc.).\nSeparate multiple links with a new line, comma or space.') || '';
+    const added = raw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+      .map(u => ({ url: /^https?:\/\//i.test(u) ? u : `https://${u}` }));
+    if (!added.length) return;
+    onChange({ ...tracker, [key]: { ...(tracker[key] || {}), links: [...(tracker[key]?.links || []), ...added] } });
+  };
+
+  const removeLink = (key, idx) =>
+    onChange({ ...tracker, [key]: { ...(tracker[key] || {}), links: (tracker[key]?.links || []).filter((_, i) => i !== idx) } });
 
   const addFiles = async (key, fileList) => {
     const files = Array.from(fileList || []);
@@ -123,6 +165,7 @@ function ClaimProcessTracker({ value, onChange, claimId, brandPrefix, accent }) 
           const opts = step.options || YESNO;
           const showUp = allowsUpload(st.value);
           const docs = st.docs || [];
+          const links = st.links || [];
           return (
             <Box key={step.key} sx={{ p: 1.1, borderRadius: '10px',
                     border: '1px solid rgba(0,0,0,0.06)', bgcolor: showUp ? `${accent}0D` : 'transparent' }}>
@@ -146,16 +189,36 @@ function ClaimProcessTracker({ value, onChange, claimId, brandPrefix, accent }) 
                       onChange={e => { addFiles(step.key, e.target.files); e.target.value = ''; }} />
                   </Button>
                 )}
+                {showUp && (
+                  <Button size="small" variant="outlined" onClick={() => addLink(step.key)}
+                    startIcon={<LinkOutlinedIcon sx={{ fontSize: 15 }} />}
+                    sx={{ fontSize: 11, borderColor: `${accent}55`, color: accent, whiteSpace: 'nowrap' }}>
+                    Add link
+                  </Button>
+                )}
               </Box>
-              {docs.length > 0 && (
+              {(docs.length > 0 || links.length > 0) && (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, mt: 1 }}>
                   {docs.map((d, di) => (
-                    <Chip key={di} size="small" icon={<DescriptionOutlinedIcon sx={{ fontSize: 14 }} />}
+                    <Chip key={'d' + di} size="small" icon={<DescriptionOutlinedIcon sx={{ fontSize: 14 }} />}
                       label={d.name || `File ${di + 1}`}
                       onClick={() => openFile(d.url)} onDelete={() => removeDoc(step.key, di)}
                       sx={{ fontSize: 11, maxWidth: 220, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
                   ))}
+                  {links.map((l, li) => (
+                    <Chip key={'l' + li} size="small" icon={<LinkOutlinedIcon sx={{ fontSize: 14 }} />}
+                      label={l.name || l.url.replace(/^https?:\/\//, '').slice(0, 34)}
+                      onClick={() => window.open(l.url, '_blank', 'noopener')} onDelete={() => removeLink(step.key, li)}
+                      sx={{ fontSize: 11, maxWidth: 220, bgcolor: `${accent}12`, color: accent, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
+                  ))}
                 </Box>
+              )}
+              {showUp && (
+                <TextField size="small" fullWidth multiline placeholder="Notes for this step (optional)…"
+                  value={noteDrafts[step.key] ?? (st.note || '')}
+                  onChange={e => setNoteDrafts(d => ({ ...d, [step.key]: e.target.value }))}
+                  onBlur={e => commitNote(step.key, e.target.value)}
+                  sx={{ mt: 1, '& .MuiOutlinedInput-root': { fontSize: 12, borderRadius: '8px' } }} />
               )}
             </Box>
           );
@@ -183,6 +246,7 @@ function ClaimCard({ claim, onUpdate, onDelete, defaultOpen = false }) {
   const [deleting, setDeleting] = useState(false);
   const [tracker, setTracker] = useState(claim.process_tracker || {});
   const [core, setCore] = useState({
+    claim_ref_id:  claim.claim_ref_id  || '',
     client_name:   claim.client_name   || '',
     policy_no:     claim.policy_no      || '',
     product:       claim.product        || '',
@@ -197,10 +261,35 @@ function ClaimCard({ claim, onUpdate, onDelete, defaultOpen = false }) {
     ? claim.created_at.toDate().toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })
     : '—';
 
+  const [disputeOpen, setDisputeOpen] = useState(false);
+
   // Tracker edits on the card persist to Firestore immediately.
   const persistTracker = async (next) => {
+    // A dispute can resolve either way (Approved or Rejected), so when it's first
+    // raised we never auto-advance — we ask the user to set the status by hand.
+    const disputeJustRaised = isPos(next.dispute_raised?.value) && !isPos(tracker.dispute_raised?.value);
     setTracker(next);
-    try { await updateDoc(doc(db, 'claims', claim.id), { process_tracker: next, updated_at: serverTimestamp() }); }
+    const derived = deriveClaimStatus(next);
+    const patch = { process_tracker: next, updated_at: serverTimestamp() };
+    // Auto-advance the status to match tracker progress. Rejected is a manual
+    // state (there is no tracker step for it), so never override it automatically.
+    if (disputeJustRaised) {
+      setDisputeOpen(true);
+    } else if (derived && derived !== status && status !== 'Rejected') {
+      patch.status = derived;
+      setStatus(derived);
+      onUpdate?.(claim.id, { status: derived });
+    }
+    try { await updateDoc(doc(db, 'claims', claim.id), patch); }
+    catch (_) { /* ignore */ }
+  };
+
+  // Manual status pick after a dispute is raised.
+  const chooseDisputeStatus = async (newStatus) => {
+    setStatus(newStatus);
+    setDisputeOpen(false);
+    onUpdate?.(claim.id, { status: newStatus });
+    try { await updateDoc(doc(db, 'claims', claim.id), { status: newStatus, updated_at: serverTimestamp() }); }
     catch (_) { /* ignore */ }
   };
 
@@ -231,19 +320,37 @@ function ClaimCard({ claim, onUpdate, onDelete, defaultOpen = false }) {
           <Box sx={{ flex:1, minWidth:0 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:0.3 }}>
               <Typography sx={{ fontWeight:700, fontSize:14 }}>{claim.reference}</Typography>
+              {claim.claim_ref_id && (
+                <Chip label={`Ref: ${claim.claim_ref_id}`} size="small" sx={{ bgcolor:'rgba(255,90,90,0.10)', color:'#FF5A5A', fontWeight:700, fontSize:10.5 }} />
+              )}
               <Chip label={claim.status} size="small" sx={{ bgcolor:s.bg, color:s.color, fontWeight:700, fontSize:10.5 }} />
             </Stack>
             <Typography sx={{ fontSize:12, color:'#9CA3AF' }}>
               {claim.client_name} · {claim.policy_no} · Filed: {filed}
             </Typography>
           </Box>
-          <Typography sx={{ fontWeight:800, fontSize:14, color:'#FF5A5A', flexShrink:0 }}>
-            {claim.loss_amount ? `LKR ${Number(claim.loss_amount).toLocaleString()}` : '—'}
-          </Typography>
+          <Box sx={{ display:'flex', gap:{ xs:1.5, sm:3 }, flexShrink:0, lineHeight:1.25 }}>
+            <Box sx={{ textAlign:'right' }}>
+              <Typography sx={{ fontSize:9.5, fontWeight:800, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:0.4 }}>Est. Loss</Typography>
+              <Typography sx={{ fontWeight:800, fontSize:14, color:'#FF5A5A', whiteSpace:'nowrap' }}>
+                {claim.loss_amount ? `LKR ${Number(claim.loss_amount).toLocaleString()}` : '—'}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign:'right' }}>
+              <Typography sx={{ fontSize:9.5, fontWeight:800, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:0.4 }}>Settled</Typography>
+              <Typography sx={{ fontWeight:800, fontSize:14, color:'#059669', whiteSpace:'nowrap' }}>
+                {claim.settlement_amount ? `LKR ${Number(claim.settlement_amount).toLocaleString()}` : '—'}
+              </Typography>
+            </Box>
+          </Box>
           {open ? <ExpandLessIcon sx={{ color:'#9CA3AF' }} /> : <ExpandMoreIcon sx={{ color:'#9CA3AF' }} />}
         </Box>
         <Collapse in={open} timeout={220} unmountOnExit>
           <Box sx={{ px:2.5, pb:2.5, pt:0.5, borderTop:'1px solid rgba(255,139,90,0.08)' }}>
+            <Typography sx={{ fontSize:11, fontWeight:800, color:'#FF5A5A', textTransform:'uppercase', letterSpacing:1, mb:1 }}>Claim Reference</Typography>
+            <Box sx={{ mb:2 }}>
+              <TextField size="small" label="Claim Ref ID" value={core.claim_ref_id} onChange={e=>setC('claim_ref_id', e.target.value)} sx={{ width:{ xs:'100%', sm:'50%' } }} />
+            </Box>
             <Typography sx={{ fontSize:11, fontWeight:800, color:'#FF5A5A', textTransform:'uppercase', letterSpacing:1, mb:1 }}>Claim Details</Typography>
             <Box sx={{ display:'grid', gridTemplateColumns:{ xs:'1fr', sm:'1fr 1fr' }, gap:1.5, mb:2 }}>
               <TextField size="small" label="Client Name" value={core.client_name} onChange={e=>setC('client_name', e.target.value)} />
@@ -280,12 +387,29 @@ function ClaimCard({ claim, onUpdate, onDelete, defaultOpen = false }) {
           </Box>
         </Collapse>
       </CardContent>
+
+      {/* Dispute raised — the outcome can go either way, so the user chooses. */}
+      <Dialog open={disputeOpen} onClose={() => setDisputeOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, fontSize: 16 }}>Dispute Raised</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 13, color: '#4B5563' }}>
+            A dispute can end in the claim being settled or rejected, so the status isn't
+            advanced automatically. Please set it manually for <strong>{claim.reference}</strong>.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1, flexWrap: 'wrap' }}>
+          <Button size="small" onClick={() => setDisputeOpen(false)} sx={{ color: '#6B7280' }}>Decide later</Button>
+          <Box sx={{ flex: 1 }} />
+          <Button size="small" variant="outlined" color="error" onClick={() => chooseDisputeStatus('Rejected')}>Rejected</Button>
+          <Button size="small" variant="contained" color="success" onClick={() => chooseDisputeStatus('Settled')}>Settled</Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }
 
 const EMPTY_FORM = {
-  client_name:'', policy_no:'', product:'', incident_date:'',
+  claim_ref_id:'', client_name:'', policy_no:'', product:'', incident_date:'',
   cause:'', description:'', loss_amount:'',
 };
 
@@ -546,6 +670,11 @@ const ClaimsPage = () => {
         <DialogTitle>Register New Claim</DialogTitle>
         <DialogContent sx={{pt:2.5}}>
           <Stack spacing={2}>
+            <Box>
+              <Typography sx={{ fontSize:11, fontWeight:800, color:'#FF5A5A', textTransform:'uppercase', letterSpacing:1, mb:1 }}>Claim Reference</Typography>
+              <TextField size="small" fullWidth label="Claim Ref ID" value={form.claim_ref_id} onChange={e=>set('claim_ref_id',e.target.value)} />
+            </Box>
+            <Typography sx={{ fontSize:11, fontWeight:800, color:'#FF5A5A', textTransform:'uppercase', letterSpacing:1, mt:0.5 }}>Claim Details</Typography>
             <TextField size="small" fullWidth label="Client Name *" value={form.client_name} onChange={e=>set('client_name',e.target.value)} />
             <Stack direction={{ xs:'column', sm:'row' }} spacing={1.5}>
               <TextField size="small" fullWidth label="Policy No" value={form.policy_no} onChange={e=>set('policy_no',e.target.value)} />
@@ -559,7 +688,7 @@ const ClaimsPage = () => {
             <TextField size="small" fullWidth multiline minRows={3} label="Loss Description" value={form.description} onChange={e=>set('description',e.target.value)} />
           </Stack>
           {newClaimRef && (
-            <ClaimProcessTracker value={regTracker} onChange={setRegTracker} claimId={newClaimRef.id} brandPrefix={BRAND_PREFIX} accent={ACCENT} />
+            <ClaimProcessTracker value={regTracker} onChange={setRegTracker} claimId={newClaimRef.id} brandPrefix="ceilao" accent="#FF5A5A" />
           )}
         </DialogContent>
         <DialogActions sx={{px:3,py:2,borderTop:'1px solid rgba(255,139,90,0.10)'}}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { structureRate } from '../utils/commissionStructures';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -84,8 +85,8 @@ function exportRenewalsPDF(rows, title) {
   const pageH = pdf.internal.pageSize.getHeight();
   const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  pdf.setFillColor(255, 90, 90); pdf.rect(0, 0, pageW, 26, 'F');
-  pdf.setFillColor(200, 55, 55);  pdf.rect(0, 26, pageW, 10, 'F');
+  pdf.setFillColor(37, 94, 171); pdf.rect(0, 0, pageW, 26, 'F');
+  pdf.setFillColor(10, 26, 62);  pdf.rect(0, 26, pageW, 10, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(15); pdf.setFont('helvetica', 'bold');
   pdf.text(COMPANY, pageW / 2, 11, { align: 'center' });
@@ -102,9 +103,9 @@ function exportRenewalsPDF(rows, title) {
       if (c.num) return v === '' ? '—' : Number(v).toLocaleString();
       return v === '' ? '—' : String(v);
     })),
-    headStyles: { fillColor: [200, 55, 55], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, cellPadding: 3 },
-    alternateRowStyles: { fillColor: [255, 245, 242] },
-    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [60, 30, 30] },
+    headStyles: { fillColor: [10, 26, 62], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, cellPadding: 3 },
+    alternateRowStyles: { fillColor: [242, 247, 252] },
+    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [10, 26, 62] },
     columnStyles: { 6: { halign: 'right' } },
     didParseCell: (d) => {
       if (d.section !== 'body') return;
@@ -122,6 +123,7 @@ function exportRenewalsPDF(rows, title) {
 
 const RenewalsPage = () => {
   const [clients,  setClients]  = useState([]);
+  const [structures, setStructures] = useState({}); // product label → commission structure
   const [loading,  setLoading]  = useState(true);
   const [search,   setSearch]   = useState('');
   const [fromDate, setFromDate] = useState('');
@@ -136,7 +138,23 @@ const RenewalsPage = () => {
       setClients(snap.docs.map(d => ({ id: d.id, ...d.data() }))
         .filter(c => !c.status || c.status === 'approved'));
     }).finally(() => setLoading(false));
+    getDoc(doc(db, 'settings', 'commission_structures'))
+      .then(s => { if (s.exists()) setStructures(s.data().products || {}); })
+      .catch(() => {});
   }, []);
+
+  // For a commission-structure product, the rate the policy moves to at renewal —
+  // measured from the ORIGINAL policy's start date to this policy's expiry (the next
+  // period's start). Returns { year, rate } or null when the product has no structure.
+  const byId = useMemo(() => Object.fromEntries(clients.map(c => [c.id, c])), [clients]);
+  const scaleInfo = (c) => {
+    const v = structures[c.product];
+    const segs = (v && v.segments) || (Array.isArray(v) ? v : null);
+    if (!segs || !segs.length) return null;
+    const root = c.root_policy_id ? (byId[c.root_policy_id] || c) : c;
+    const hit = structureRate(segs, root.policy_period_from, c.policy_period_to);
+    return { year: hit ? Math.floor(hit.months / 12) + 1 : null, rate: hit ? hit.rate : 0 };
+  };
 
   const categorised = useMemo(() => {
     const withDays = clients
@@ -223,7 +241,7 @@ const RenewalsPage = () => {
             <Box sx={{ flex:1 }} />
             <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon sx={{ fontSize:16 }} />}
               disabled={!filtered.length} onClick={()=>exportRenewalsCSV(filtered, tabName)}
-              sx={{ textTransform:'none', fontSize:12.5, fontWeight:600, borderColor:'#FF5A5A', color:'#FF5A5A', '&:hover':{ borderColor:'#e04848', bgcolor:'rgba(255,90,90,0.04)' } }}>
+              sx={{ textTransform:'none', fontSize:12.5, fontWeight:600, borderColor:'#FF5A5A', color:'#FF5A5A', '&:hover':{ borderColor:'#1A1A2E', bgcolor:'rgba(255,90,90,0.04)' } }}>
               Export CSV
             </Button>
             <Button size="small" variant="contained" startIcon={<PictureAsPdfOutlinedIcon sx={{ fontSize:16 }} />}
@@ -254,7 +272,18 @@ const RenewalsPage = () => {
                       <TableRow key={c.id} sx={{ bgcolor: i%2===0?'#fff':'rgba(255,248,245,0.6)' }}>
                         <TableCell sx={{ fontWeight:600 }}>{c.client_name}</TableCell>
                         <TableCell sx={{ fontFamily:'monospace' }}>{c.policy_no||'—'}</TableCell>
-                        <TableCell>{c.product||'—'}</TableCell>
+                        <TableCell>
+                          {c.product||'—'}
+                          {(() => {
+                            const si = scaleInfo(c);
+                            if (!si) return null;
+                            return (
+                              <Chip size="small" label={si.year ? `Scale → Y${si.year}: ${si.rate}%` : `Scale ended: 0%`}
+                                sx={{ ml: 0.8, height: 18, fontSize: 9.5, fontWeight: 700,
+                                      bgcolor:'rgba(8,145,178,0.10)', color:'#0e7490' }} />
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell>{c.insurance_provider||'—'}</TableCell>
                         <TableCell>{c.policy_period_to||'—'}</TableCell>
                         <TableCell>

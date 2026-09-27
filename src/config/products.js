@@ -12,7 +12,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -80,7 +80,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -190,7 +190,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -303,7 +303,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -385,7 +385,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -476,7 +476,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -570,7 +570,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -658,7 +658,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -755,7 +755,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -846,7 +846,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -938,7 +938,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1037,7 +1037,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1126,6 +1126,7 @@ export const PRODUCTS = {
 
   life_endowment: {
     label: 'Life Endowment',
+    hidden: true, // hidden from all product selectors/listings (Ceilao)
     prefix: 'LE',
     customerNameField: 'proposer_name',
     icon: '💚',
@@ -1135,7 +1136,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1241,7 +1242,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1353,7 +1354,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1453,7 +1454,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1587,7 +1588,7 @@ export const PRODUCTS = {
     fields: [
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', required: true, type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address', label: 'Address', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1666,7 +1667,7 @@ export const PRODUCTS = {
 
       { name: 'introducer', label: 'Introducer Code', section: 'Introducer', maxLength: 10 },
       { name: 'manager',    label: 'Manager',          section: 'Introducer' },
-      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Corporate'] },
+      { name: 'customer_type', label: 'Customer Type', section: 'Proposer Details', required: true, type: 'select', options: ['Individual', 'Individual Inhouse', 'Corporate', 'Corporate Inhouse'] },
       { name: 'title', label: 'Title', section: 'Proposer Details', type: 'select', options: ['Mr', 'Mrs', 'Miss', 'Rev'], showIf: { field: 'customer_type', value: 'Individual' } },
       { name: 'proposer_name', label: 'Name of Insured', section: 'Proposer Details', required: true },
       { name: 'address_of_risk', label: 'Address of Risk', section: 'Proposer Details', required: true, type: 'textarea' },
@@ -1770,6 +1771,7 @@ export const MODULES = [
   { key: 'accounting',   label: 'Accounting',         icon: '💰', description: 'Premiums, commissions and payments' },
   { key: 'reports',      label: 'Reports',            icon: '📊', description: 'Analytics and data exports' },
   { key: 'renewals',     label: 'Renewals Tracker',   icon: '🔄', description: 'Upcoming renewals and alerts' },
+  { key: 'commstructures', label: 'Commission Structures', icon: '📉', description: 'Declining commission scales by policy year' },
   { key: 'marketing',    label: 'Marketing',          icon: '📣', description: 'WhatsApp bulk campaigns and client messaging' },
   { key: 'portfolio',    label: 'Portfolio Review',   icon: '🗂️', description: 'Customer portfolio risk assessment and recommendations' },
 ];
@@ -1781,6 +1783,7 @@ export const DEFAULT_MODULE_ACCESS = {
   accounting:   ['admin', 'manager', 'employee'],
   reports:      ['admin', 'manager', 'employee'],
   renewals:     ['admin', 'manager', 'employee'],
+  commstructures: ['admin', 'manager'],
   marketing:    ['admin', 'manager', 'employee'],
   portfolio:    ['admin', 'manager', 'employee'],
 };

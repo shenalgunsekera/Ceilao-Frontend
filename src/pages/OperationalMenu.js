@@ -20,6 +20,7 @@ const MODULE_ROUTES = {
   accounting:   '/accounting',
   reports:      '/reports',
   renewals:     '/renewals',
+  commstructures: '/commission-structures',
   marketing:    '/marketing',
   portfolio:    '/portfolio',
 };
@@ -32,6 +33,7 @@ const MODULE_COLORS = {
   accounting:   { grad:'linear-gradient(135deg,#10B981,#34d399)', light:'rgba(16,185,129,0.08)',  border:'rgba(16,185,129,0.18)'  },
   reports:      { grad:'linear-gradient(135deg,#f59e0b,#fbbf24)', light:'rgba(245,158,11,0.08)',  border:'rgba(245,158,11,0.18)'  },
   renewals:     { grad:'linear-gradient(135deg,#8b5cf6,#a78bfa)', light:'rgba(139,92,246,0.08)',  border:'rgba(139,92,246,0.18)'  },
+  commstructures:{ grad:'linear-gradient(135deg,#0891b2,#22d3ee)', light:'rgba(8,145,178,0.08)',  border:'rgba(8,145,178,0.18)'   },
   marketing:    { grad:'linear-gradient(135deg,#25D366,#128C7E)',  light:'rgba(37,211,102,0.08)', border:'rgba(37,211,102,0.18)'  },
   portfolio:    { grad:'linear-gradient(135deg,#E8472A,#E8712A)', light:'rgba(232,71,42,0.08)',   border:'rgba(232,71,42,0.18)'   },
 };
@@ -73,7 +75,7 @@ const OperationalMenu = () => {
           </Box>
           <Box>
             <Typography sx={{ fontWeight:800, color:'#1A1A2E', fontSize:16, lineHeight:1.1 }}>
-              Ceilao Insurance
+              Ceilao
             </Typography>
             <Typography sx={{ fontSize:10.5, color:'#9CA3AF', fontWeight:600, letterSpacing:0.8, textTransform:'uppercase' }}>
               Management Portal
