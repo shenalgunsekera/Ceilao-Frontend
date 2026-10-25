@@ -34,6 +34,7 @@ const CommissionStructuresPage = lazy(() => import("./pages/CommissionStructures
 const ClaimsPage       = lazy(() => import('./pages/ClaimsPage'));
 const MarketingPage    = lazy(() => import('./pages/MarketingPage'));
 const PortfolioPage    = lazy(() => import('./pages/PortfolioPage'));
+const BancaPage        = lazy(() => import('./banca/BancaPage'));
 
 /* ── MUI theme ───────────────────────────────────────────────────────────── */
 const theme = createTheme({
@@ -558,6 +559,8 @@ function App() {
                   <Routes>
                     {/* Full-screen operational menu — no sidebar */}
                     <Route path="/menu" element={<OperationalMenu />} />
+                    {/* Bancassurance — its own full-screen sub-space per bank (Module 11 = PMF) */}
+                    <Route path="/banca/:bankId/:section?" element={<BancaPage />} />
 
                     {/* All other routes use sidebar layout */}
                     <Route path="/*" element={
