@@ -33,8 +33,42 @@ import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import InputAdornment from '@mui/material/InputAdornment';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
+import PercentIcon from '@mui/icons-material/Percent';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
 
 const UPLOAD_REGISTERS = ['master', 'gwp', 'renewals', 'payments', 'commission', 'claims', 'targets'];
+const REG_META = {
+  master: { icon: TableChartOutlinedIcon, hint: 'Policy + premium + payment + commission in one file' },
+  gwp: { icon: ReceiptLongOutlinedIcon, hint: 'New business, endorsements, cancellations' },
+  renewals: { icon: AutorenewIcon, hint: 'Renewed policy periods' },
+  payments: { icon: PaymentsOutlinedIcon, hint: 'Premium received & refunds' },
+  commission: { icon: PercentIcon, hint: 'Commission paid by insurers' },
+  claims: { icon: GavelOutlinedIcon, hint: 'Claim status & settlements' },
+  targets: { icon: FlagOutlinedIcon, hint: 'Monthly net GWP targets' },
+};
+
+const StepCard = ({ n, title, sub, children, done: ok }) => (
+  <Box sx={{ p: { xs: 2, md: 2.5 }, bgcolor: '#fff', borderRadius: '16px', border: `1px solid ${T.line}`, boxShadow: '0 2px 10px rgba(26,26,46,0.04)', mb: 2 }}>
+    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.8 }}>
+      <Box sx={{ width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, flexShrink: 0,
+        bgcolor: ok ? T.green : T.dark, color: '#fff' }}>{ok ? <CheckCircleIcon sx={{ fontSize: 18 }} /> : n}</Box>
+      <Box>
+        <Typography sx={{ fontWeight: 800, fontSize: 15, color: T.dark, lineHeight: 1.2 }}>{title}</Typography>
+        {sub && <Typography sx={{ fontSize: 12.5, color: T.muted }}>{sub}</Typography>}
+      </Box>
+    </Stack>
+    {children}
+  </Box>
+);
 
 export function UploadPage({ initialRegister, onPosted }) {
   const ctx = useBanca();
@@ -88,51 +122,103 @@ export function UploadPage({ initialRegister, onPosted }) {
   };
   const reversedSame = (raw.batches || []).filter(b => b.register === register && b.status === 'Reversed' && !b.corrected_by);
 
+  const [drag, setDrag] = useState(false);
+  const pickFile = (f) => { if (!f) return; if (!/\.(xlsx|csv)$/i.test(f.name)) { setErr('Upload an .xlsx or .csv file (old .xls: open in Excel and Save As .xlsx).'); return; } reset(); setFile(f); };
+
   return (<>
-    <SectionTitle sub="Download the standard template, declare the record count and control total, validate, review accepted / rejected / duplicate counts, then confirm. Only accepted rows post; nothing posts before confirmation.">Bulk Upload</SectionTitle>
-    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-      {UPLOAD_REGISTERS.map(k => (
-        <Box key={k} onClick={() => { if (!busy) { setRegister(k); reset(); } }} sx={{ cursor: 'pointer', px: 1.6, py: 1, borderRadius: '10px', border: `2px solid ${register === k ? T.coral : T.line}`, bgcolor: register === k ? '#FFF1EC' : '#fff' }}>
-          <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{TEMPLATES[k].label}</Typography>
+    <SectionTitle sub="Four steps: pick what you're uploading, add the file, declare the totals, validate. Nothing is posted until you confirm — only accepted rows post.">Bulk Upload</SectionTitle>
+
+    <StepCard n={1} title="What are you uploading?" sub={tpl.note} done={!!register}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)', xl: 'repeat(7, 1fr)' }, gap: 1.2 }}>
+        {UPLOAD_REGISTERS.map(k => {
+          const Icon = REG_META[k].icon; const on = register === k;
+          return (
+            <Box key={k} onClick={() => { if (!busy) { setRegister(k); reset(); } }} sx={{ cursor: busy ? 'default' : 'pointer', p: 1.5, borderRadius: '14px', position: 'relative',
+              border: `2px solid ${on ? T.coral : 'transparent'}`, bgcolor: on ? '#FFF1EC' : '#F9FAFB', transition: 'all .15s',
+              '&:hover': { bgcolor: on ? '#FFF1EC' : '#FFF8F5', transform: busy ? 'none' : 'translateY(-1px)' } }}>
+              <Box sx={{ width: 36, height: 36, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1,
+                background: on ? `linear-gradient(135deg,${T.coral},${T.coral2})` : '#fff', border: on ? 'none' : `1px solid ${T.line}` }}>
+                <Icon sx={{ fontSize: 20, color: on ? '#fff' : T.coral }} />
+              </Box>
+              <Typography sx={{ fontWeight: 800, fontSize: 13, color: T.dark, lineHeight: 1.25 }}>{TEMPLATES[k].label}</Typography>
+              <Typography sx={{ fontSize: 11.5, color: T.muted, mt: 0.3, lineHeight: 1.35 }}>{REG_META[k].hint}</Typography>
+              {on && <CheckCircleIcon sx={{ position: 'absolute', top: 10, right: 10, fontSize: 18, color: T.coral }} />}
+            </Box>
+          );
+        })}
+      </Box>
+    </StepCard>
+
+    <StepCard n={2} title="Add your file" sub="Use the standard template so the columns are recognised. Title rows above the headers are fine." done={!!file}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
+        <Box sx={{ flex: '0 0 auto', p: 2, borderRadius: '14px', bgcolor: '#F9FAFB', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 230 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, mb: 0.5 }}>Need the template?</Typography>
+          <Typography sx={{ fontSize: 11.5, color: T.muted, mb: 1.2 }}>{TEMPLATES[register].label} — {TEMPLATES[register].cols.length} columns, with an instructions sheet.</Typography>
+          <Button startIcon={<FileDownloadOutlinedIcon />} variant="outlined" sx={btnOutline} onClick={downloadTemplate}>Download template</Button>
         </Box>
-      ))}
-    </Stack>
-    <Box sx={{ p: 2, bgcolor: '#fff', borderRadius: '14px', border: `1px solid ${T.line}` }}>
-      <Typography sx={{ fontSize: 12.5, color: T.muted, mb: 1.5 }}>{tpl.note}</Typography>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }}>
-        <Button startIcon={<FileDownloadOutlinedIcon />} variant="outlined" sx={btnOutline} onClick={downloadTemplate}>Download template</Button>
-        <Button component="label" startIcon={<UploadFileOutlinedIcon />} variant="outlined" sx={btnOutline} disabled={busy}>
-          {file ? file.name : 'Choose .xlsx / .csv'}<input hidden type="file" accept=".xlsx,.csv" onChange={e => { reset(); setFile(e.target.files?.[0] || null); }} />
-        </Button>
-        <TextField size="small" type="number" label="Declared record count *" value={declCount} onChange={e => setDeclCount(e.target.value)} sx={{ width: 190 }} />
-        <TextField size="small" type="number" label={`Declared control total (${tpl.control}) *`} value={declTotal} onChange={e => setDeclTotal(e.target.value)} sx={{ width: 260 }} />
+        <Box component="label" onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+          onDrop={e => { e.preventDefault(); setDrag(false); if (!busy) pickFile(e.dataTransfer.files?.[0]); }}
+          sx={{ flex: 1, minHeight: 130, borderRadius: '14px', border: `2px dashed ${drag ? T.coral : file ? T.green : 'rgba(255,90,90,0.35)'}`, bgcolor: drag ? '#FFF1EC' : file ? 'rgba(5,150,105,0.04)' : '#FFFCFB',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: busy ? 'default' : 'pointer', p: 2, transition: 'all .15s' }}>
+          <input hidden type="file" accept=".xlsx,.csv" disabled={busy} onChange={e => pickFile(e.target.files?.[0] || null)} />
+          {file ? <>
+            <DescriptionOutlinedIcon sx={{ fontSize: 34, color: T.green, mb: 0.5 }} />
+            <Typography sx={{ fontWeight: 800, fontSize: 14, color: T.dark }}>{file.name}</Typography>
+            <Typography sx={{ fontSize: 12, color: T.muted }}>{(file.size / 1024).toFixed(0)} KB · click or drop to replace</Typography>
+          </> : <>
+            <CloudUploadOutlinedIcon sx={{ fontSize: 36, color: T.coral, mb: 0.5 }} />
+            <Typography sx={{ fontWeight: 800, fontSize: 14, color: T.dark }}>Drop your .xlsx or .csv here</Typography>
+            <Typography sx={{ fontSize: 12, color: T.muted }}>or click to browse</Typography>
+          </>}
+        </Box>
       </Stack>
       {tpl.library && (
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} sx={{ mt: 1.5 }}>
-          <Button component="label" variant="outlined" sx={{ ...btnOutline, color: '#374151', borderColor: '#D1D5DB' }} disabled={busy}>
-            {doc ? doc.name : 'Source document (insurer statement PDF) — recommended'}<input hidden type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv" onChange={e => setDoc(e.target.files?.[0] || null)} />
-          </Button>
-          {doc && <>
-            <Autocomplete freeSolo size="small" options={insurers} value={docIns} onInputChange={(_, v) => setDocIns(v)} sx={{ width: 220 }} renderInput={p => <TextField {...p} label="Insurance company" />} />
-            <TextField size="small" type="date" label="Statement from" value={docFrom} onChange={e => setDocFrom(e.target.value)} InputLabelProps={{ shrink: true }} />
-            <TextField size="small" type="date" label="to" value={docTo} onChange={e => setDocTo(e.target.value)} InputLabelProps={{ shrink: true }} />
-          </>}
-        </Stack>
+        <Box sx={{ mt: 2, p: 1.5, borderRadius: '12px', bgcolor: '#F9FAFB' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }}>
+            <Box sx={{ flex: '0 0 auto' }}>
+              <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: T.dark }}>Source document <Box component="span" sx={{ fontWeight: 500, color: T.muted }}>(recommended)</Box></Typography>
+              <Typography sx={{ fontSize: 11.5, color: T.muted }}>The insurer's original statement — filed in the library and linked to this batch.</Typography>
+            </Box>
+            <Button component="label" variant="outlined" startIcon={<UploadFileOutlinedIcon />} sx={{ ...btnOutline, color: '#374151', borderColor: '#D1D5DB', bgcolor: '#fff' }} disabled={busy}>
+              {doc ? doc.name : 'Attach PDF / statement'}<input hidden type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv" onChange={e => setDoc(e.target.files?.[0] || null)} />
+            </Button>
+            {doc && <>
+              <Autocomplete freeSolo size="small" options={insurers} value={docIns} onInputChange={(_, v) => setDocIns(v)} sx={{ minWidth: 200, bgcolor: '#fff' }} renderInput={p => <TextField {...p} label="Insurance company" />} />
+              <TextField size="small" type="date" label="Statement from" value={docFrom} onChange={e => setDocFrom(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ bgcolor: '#fff' }} />
+              <TextField size="small" type="date" label="to" value={docTo} onChange={e => setDocTo(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ bgcolor: '#fff' }} />
+            </>}
+          </Stack>
+        </Box>
       )}
       {reversedSame.length > 0 && (
-        <TextField select size="small" label="This upload corrects a reversed batch (optional)" value={corrects} onChange={e => setCorrects(e.target.value)} sx={{ mt: 1.5, minWidth: 380 }}>
-          <MenuItem value="">— not a correction —</MenuItem>
+        <TextField select size="small" fullWidth label="Does this upload correct a reversed batch? (optional)" value={corrects} onChange={e => setCorrects(e.target.value)} sx={{ mt: 2 }}>
+          <MenuItem value="">No — this is a normal upload</MenuItem>
           {reversedSame.map(b => <MenuItem key={b.id} value={b.id}>{b.file_name} · {String(b.uploaded_at).slice(0, 10)} · {b.id}</MenuItem>)}
         </TextField>
       )}
-      <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-        <Button sx={btnPrimary} disabled={!file || busy} onClick={runValidation}>{busy && !plan ? 'Validating…' : 'Validate'}</Button>
-        {plan && <Button sx={btnPrimary} disabled={!canConfirm || busy || !!done} onClick={confirm}>{busy ? 'Posting…' : `Confirm & post ${plan.stats.accepted} row(s)`}</Button>}
-        {plan && !done && <Button onClick={reset} disabled={busy} sx={{ textTransform: 'none' }}>Cancel</Button>}
-      </Stack>
-      {busy && plan && <LinearProgress variant="determinate" value={pct} sx={{ mt: 1.5 }} />}
-      {err && <Alert severity="error" sx={{ mt: 1.5 }}>{err}</Alert>}
+    </StepCard>
+
+    <StepCard n={3} title="Declare the control totals" sub="From the insurer's statement or your own count. The system compares these with what it reads from the file." done={declCount !== '' && declTotal !== ''}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+        <TextField type="number" label="Number of records in the file" value={declCount} onChange={e => setDeclCount(e.target.value)} helperText="Data rows only — don't count the header row" fullWidth />
+        <TextField type="number" label={`Control total — ${tpl.control} (LKR)`} value={declTotal} onChange={e => setDeclTotal(e.target.value)} helperText="Sum of the column across all rows, including any that may be rejected" fullWidth
+          InputProps={{ startAdornment: <InputAdornment position="start">LKR</InputAdornment> }} />
+      </Box>
+    </StepCard>
+
+    <Box sx={{ position: 'sticky', bottom: 12, zIndex: 5, p: 1.5, borderRadius: '16px', bgcolor: T.dark, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', boxShadow: '0 8px 30px rgba(26,26,46,0.25)' }}>
+      <Box sx={{ flex: 1, minWidth: 220 }}>
+        <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: 14 }}>{done ? 'Posted ✓' : plan ? 'Review the results below, then confirm' : 'Step 4 — validate'}</Typography>
+        <Typography sx={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
+          {!file ? 'Add a file to continue' : declCount === '' || declTotal === '' ? 'Declare the record count and control total' : plan ? `${plan.stats.accepted} accepted · ${plan.stats.rejected} rejected · ${plan.stats.duplicates} duplicate` : `${TEMPLATES[register].label} · ${file.name}`}
+        </Typography>
+      </Box>
+      {plan && !done && <Button onClick={reset} disabled={busy} sx={{ textTransform: 'none', color: '#fff' }}>Start over</Button>}
+      {!plan && <Button sx={{ ...btnPrimary, px: 3 }} disabled={!file || busy} onClick={runValidation}>{busy ? 'Validating…' : 'Validate file'}</Button>}
+      {plan && <Button sx={{ ...btnPrimary, px: 3 }} disabled={!canConfirm || busy || !!done} onClick={confirm}>{busy ? 'Posting…' : `Confirm & post ${plan.stats.accepted} row(s)`}</Button>}
+      {busy && plan && <LinearProgress variant="determinate" value={pct} sx={{ width: '100%', borderRadius: 2 }} />}
     </Box>
+    {err && <Alert severity="error" sx={{ mt: 1.5 }}>{err}</Alert>}
 
     {plan && (
       <Box sx={{ mt: 2 }}>

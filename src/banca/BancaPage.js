@@ -24,6 +24,78 @@ import CircularProgress from '@mui/material/CircularProgress';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
+import PercentIcon from '@mui/icons-material/Percent';
+import EventRepeatOutlinedIcon from '@mui/icons-material/EventRepeatOutlined';
+import TrackChangesOutlinedIcon from '@mui/icons-material/TrackChangesOutlined';
+import HourglassBottomOutlinedIcon from '@mui/icons-material/HourglassBottomOutlined';
+import EventBusyOutlinedIcon from '@mui/icons-material/EventBusyOutlined';
+import CallSplitOutlinedIcon from '@mui/icons-material/CallSplitOutlined';
+import LibraryBooksOutlinedIcon from '@mui/icons-material/LibraryBooksOutlined';
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
+import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import BalanceOutlinedIcon from '@mui/icons-material/BalanceOutlined';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import ManageSearchOutlinedIcon from '@mui/icons-material/ManageSearchOutlined';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ReportGmailerrorredOutlinedIcon from '@mui/icons-material/ReportGmailerrorredOutlined';
+import RestoreOutlinedIcon from '@mui/icons-material/RestoreOutlined';
+import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import CompareArrowsOutlinedIcon from '@mui/icons-material/CompareArrowsOutlined';
+import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import Collapse from '@mui/material/Collapse';
+import Stack from '@mui/material/Stack';
+
+const NAV_ICONS = {
+  'master': TableChartOutlinedIcon,
+  'gwp': ReceiptLongOutlinedIcon,
+  'payments': PaymentsOutlinedIcon,
+  'commission': PercentIcon,
+  'renewals': EventRepeatOutlinedIcon,
+  'commission-tracker': TrackChangesOutlinedIcon,
+  'outstanding': HourglassBottomOutlinedIcon,
+  'expired': EventBusyOutlinedIcon,
+  'split': CallSplitOutlinedIcon,
+  'lib-gwp': LibraryBooksOutlinedIcon,
+  'lib-payment': TaskAltOutlinedIcon,
+  'lib-commission': DescriptionOutlinedIcon,
+  'claims': GavelOutlinedIcon,
+  'dashboard': DashboardOutlinedIcon,
+  'upload': CloudUploadOutlinedIcon,
+  'batches': HistoryOutlinedIcon,
+  'exceptions': ErrorOutlineIcon,
+  'reconciliation': BalanceOutlinedIcon,
+  'statements': AccountBalanceWalletOutlinedIcon,
+  'approvals': CheckCircleIcon,
+  'lib-pmf': FolderOutlinedIcon,
+  'lib-claims': ManageSearchOutlinedIcon,
+  'targets': FlagOutlinedIcon,
+  'settings': SettingsOutlinedIcon,
+  'audit': ReportGmailerrorredOutlinedIcon,
+  'p-dr': RestoreOutlinedIcon,
+  'p-ca': BuildCircleOutlinedIcon,
+  'p-issue': BugReportOutlinedIcon,
+  'p-incident': CompareArrowsOutlinedIcon,
+  'p-release': RocketLaunchOutlinedIcon,
+  'p-training': SchoolOutlinedIcon,
+  'p-improvement': LightbulbOutlinedIcon,
+  'p-dev': GroupsOutlinedIcon,
+};
 
 // Left navigation — the first 13 entries follow the PMF layout file order exactly.
 const NAV = [
@@ -45,6 +117,7 @@ function Shell() {
   const [policy, setPolicy] = useState(null);
   const [uploadReg, setUploadReg] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
+  const [closed, setClosed] = useState({ 'Platform Support': true });
   const go = (s) => { navigate(`/banca/${bankId}/${s}`); setMobileNav(false); };
   const goUpload = (reg) => { setUploadReg(reg); go('upload'); };
   const openPolicy = (p) => p && setPolicy(model.byId.get(p.id) || p);
@@ -53,23 +126,55 @@ function Shell() {
   const incidents = platform.filter(x => x.type === 'incident' && x.status === 'Active');
 
   const nav = (
-    <Box sx={{ width: 268, bgcolor: T.dark, color: '#fff', height: '100%', overflowY: 'auto', py: 1.5 }}>
-      {NAV.map(g => (
-        <Box key={g.group} sx={{ mb: 1.5 }}>
-          <Typography sx={{ px: 2.2, py: 0.6, fontSize: 10.5, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>{g.group}</Typography>
-          {g.items.map(([k, label]) => {
-            const active = section === k;
-            const badge = k === 'approvals' ? pendingMine : k === 'exceptions' ? openEx : 0;
-            return (
-              <Box key={k} onClick={() => go(k)} sx={{ mx: 1, px: 1.4, py: 0.75, borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                bgcolor: active ? T.active : 'transparent', color: active ? T.dark : 'rgba(255,255,255,0.85)', fontWeight: active ? 800 : 500, fontSize: 13,
-                '&:hover': { bgcolor: active ? T.active : 'rgba(255,255,255,0.07)' } }}>
-                <span>{label}</span>{badge > 0 && <Chip size="small" label={badge} sx={{ height: 18, fontSize: 10, bgcolor: T.coral, color: '#fff' }} />}
-              </Box>
-            );
-          })}
+    <Box sx={{ width: 272, bgcolor: T.dark, color: '#fff', height: '100%', overflowY: 'auto', py: 1.5, display: 'flex', flexDirection: 'column',
+      '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 3 } }}>
+      <Box sx={{ mx: 1.5, mb: 1.5, p: 1.4, borderRadius: '12px', background: 'linear-gradient(135deg, rgba(255,90,90,0.22), rgba(215,38,46,0.12))', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <Typography sx={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1, color: 'rgba(255,255,255,0.6)' }}>MODULE {bank.moduleNo}</Typography>
+        <Typography sx={{ fontSize: 14, fontWeight: 800 }}>{bank.title}</Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 0.8 }}>
+          <Chip size="small" label={`${model ? model.policies.length : 0} policies`} sx={{ height: 20, fontSize: 10.5, bgcolor: 'rgba(255,255,255,0.1)', color: '#fff' }} />
+          {openEx > 0 && <Chip size="small" label={`${openEx} exceptions`} sx={{ height: 20, fontSize: 10.5, bgcolor: 'rgba(255,90,90,0.35)', color: '#fff' }} />}
+        </Stack>
+      </Box>
+      {NAV.map(g => {
+        const isOpen = !closed[g.group];
+        const hasActive = g.items.some(([k]) => k === section);
+        return (
+          <Box key={g.group} sx={{ mb: 0.8 }}>
+            <Box onClick={() => setClosed(c => ({ ...c, [g.group]: isOpen }))} sx={{ px: 2.2, py: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', '&:hover .gl': { color: 'rgba(255,255,255,0.8)' } }}>
+              <Typography className="gl" sx={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.1, textTransform: 'uppercase', color: hasActive ? T.active : 'rgba(255,255,255,0.45)', transition: 'color .15s' }}>{g.group}</Typography>
+              <ExpandMoreIcon sx={{ fontSize: 16, color: 'rgba(255,255,255,0.4)', transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .2s' }} />
+            </Box>
+            <Collapse in={isOpen || hasActive}>
+              {g.items.map(([k, label]) => {
+                const active = section === k;
+                const badge = k === 'approvals' ? pendingMine : k === 'exceptions' ? openEx : 0;
+                const Icon = NAV_ICONS[k] || FolderOutlinedIcon;
+                return (
+                  <Box key={k} onClick={() => go(k)} sx={{ mx: 1.2, my: 0.25, pl: 1.2, pr: 1, py: 0.8, borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1.2,
+                    bgcolor: active ? T.active : 'transparent', color: active ? T.dark : 'rgba(255,255,255,0.82)',
+                    boxShadow: active ? '0 4px 14px rgba(255,224,102,0.25)' : 'none', transition: 'background .15s, transform .15s',
+                    '&:hover': { bgcolor: active ? T.active : 'rgba(255,255,255,0.07)', transform: active ? 'none' : 'translateX(2px)' } }}>
+                    <Icon sx={{ fontSize: 18, color: active ? T.dark : 'rgba(255,255,255,0.55)', flexShrink: 0 }} />
+                    <Typography sx={{ flex: 1, fontSize: 13, fontWeight: active ? 800 : 500, lineHeight: 1.25 }}>{label}</Typography>
+                    {badge > 0 && <Box sx={{ minWidth: 20, height: 20, px: 0.6, borderRadius: '10px', bgcolor: active ? T.dark : T.coral, color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badge}</Box>}
+                  </Box>
+                );
+              })}
+            </Collapse>
+          </Box>
+        );
+      })}
+      <Box sx={{ flex: 1 }} />
+      <Box sx={{ mx: 1.5, mt: 1, p: 1.2, borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 32, height: 32, borderRadius: '50%', background: `linear-gradient(135deg,${T.coral},${T.coral2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
+          {(me.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
         </Box>
-      ))}
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.name}</Typography>
+          <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>{me.role}</Typography>
+        </Box>
+      </Box>
     </Box>
   );
 
