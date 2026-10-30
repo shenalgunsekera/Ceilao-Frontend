@@ -155,6 +155,9 @@ const theme = createTheme({
             textTransform: 'uppercase',
             whiteSpace: 'nowrap',
           },
+          // sortable headers: keep the sorted column readable on the dark header
+          '& .MuiTableSortLabel-root:hover, & .MuiTableSortLabel-root.Mui-active': { color: '#FFFFFF' },
+          '& .MuiTableSortLabel-root.Mui-active .MuiTableSortLabel-icon': { color: '#FF8B5A' },
         },
       },
     },
