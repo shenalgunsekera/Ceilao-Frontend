@@ -284,6 +284,7 @@ export function PolicyDrawer({ policy, model, batches, files, onClose, onOpenPol
         <Stack direction="row" flexWrap="wrap" columnGap={2}>
           <Field k="Inception" v={p.inception} /><Field k="Expiry" v={p.expiry} /><Field k="Sum insured" v={p.sum_insured ? lkr(p.sum_insured) : ''} />
           <Field k="Address" v={p.address} /><Field k="Telephone" v={p.telephone} />
+          <Field k="Facility No" v={p.facility_no} /><Field k="Vehicle Reg No" v={p.vehicle_no} /><Field k="Pay Type" v={p.pay_type} />
         </Stack>
         {p.custom && Object.keys(p.custom).length > 0 && (
           <Stack direction="row" flexWrap="wrap" columnGap={2}>
@@ -302,7 +303,7 @@ export function PolicyDrawer({ policy, model, batches, files, onClose, onOpenPol
           {next && <>Renewed by <Button size="small" onClick={() => onOpenPolicy(next)} sx={{ textTransform: 'none' }}>{next.policy_no} ({next.inception} → {next.expiry})</Button></>}
         </Typography>}
         {[
-          ['Transactions', p.txns, ['type', 'effective_date', 'gwp_month', 'basic', 'srcc', 'tc', 'total', 'comm_total', 'batch_id'], ['Type', 'Effective', 'GWP month', 'Basic', 'SRCC', 'TC', 'Total', 'Exp. comm', 'Source batch']],
+          ['Transactions', p.txns, ['type', 'effective_date', 'gwp_month', 'basic', 'srcc', 'tc', 'total', 'gross_premium', 'comm_total', 'remarks', 'batch_id'], ['Type', 'Effective', 'GWP month', 'Basic', 'SRCC', 'TC', 'Total', 'Incl. taxes', 'Exp. comm', 'Remarks', 'Source batch']],
           ['Premium receipts', p.receipts, ['date', 'type', 'alloc_amount', 'reference', 'batch_id'], ['Date', 'Type', 'Amount', 'Reference', 'Source batch']],
           ['Commission receipts', p.comms, ['date', 'amount', 'component', 'reference', 'batch_id'], ['Date', 'Amount', 'Component', 'Reference', 'Source batch']],
           ['Claims', p.claims, ['claim_ref', 'status', 'estimate', 'paid', 'outstanding_claim'], ['Claim', 'Status', 'Estimate', 'Paid', 'Outstanding']],
@@ -311,7 +312,7 @@ export function PolicyDrawer({ policy, model, batches, files, onClose, onOpenPol
             <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.coral, textTransform: 'uppercase', letterSpacing: 0.8, mb: 0.5 }}>{t} ({list.length})</Typography>
             {list.length > 0 && <Table size="small"><TableHead><TableRow>{labels.map(l => <TableCell key={l} sx={{ fontSize: 11, fontWeight: 700 }}>{l}</TableCell>)}</TableRow></TableHead>
               <TableBody>{[...list].sort((a, b) => String(a.date || a.effective_date || '').localeCompare(String(b.date || b.effective_date || ''))).map((x, i) => (
-                <TableRow key={x.id || i}>{keys.map(k => <TableCell key={k} sx={{ fontSize: 11.5 }}>{k === 'batch_id' ? <Src bid={x.batch_id} /> : ['basic', 'srcc', 'tc', 'total', 'comm_total', 'alloc_amount', 'amount', 'estimate', 'paid', 'outstanding_claim'].includes(k) ? lkr(x[k]) : (x[k] ?? '')}</TableCell>)}</TableRow>
+                <TableRow key={x.id || i}>{keys.map(k => <TableCell key={k} sx={{ fontSize: 11.5 }}>{k === 'batch_id' ? <Src bid={x.batch_id} /> : ['basic', 'srcc', 'tc', 'total', 'comm_total', 'alloc_amount', 'amount', 'estimate', 'paid', 'outstanding_claim'].includes(k) ? lkr(x[k]) : k === 'gross_premium' ? (x[k] === undefined ? '' : lkr(x[k])) : (x[k] ?? '')}</TableCell>)}</TableRow>
               ))}</TableBody></Table>}
           </Box>
         ))}

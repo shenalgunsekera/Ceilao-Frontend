@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { saveAs } from 'file-saver';
 import { useBanca, saveConfig } from '../store';
-import { TEMPLATES, RECORD_OF, RECORD_LABEL, CUSTOM_TYPES, isLocked, effectiveTemplate, templateWorkbook } from '../templates';
+import { TEMPLATES, RECORD_OF, RECORD_LABEL, CUSTOM_TYPES, isLocked, effectiveTemplate, templateWorkbook, columnOrder } from '../templates';
 import { SectionTitle, T, btnPrimary, btnOutline } from '../ui';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -28,6 +28,9 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestoreIcon from '@mui/icons-material/Restore';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 const REGISTERS = ['master', 'gwp', 'renewals', 'payments', 'commission', 'claims', 'targets'];
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
@@ -45,7 +48,15 @@ export function UploadFields() {
   const dirty = JSON.stringify(fields) !== JSON.stringify(config.fields || {}) || JSON.stringify(custom) !== JSON.stringify(config.custom_fields || {});
 
   const fc = fields[reg] || { hidden: [], labels: {} };
-  const setFc = (next) => setFields(f => ({ ...f, [reg]: { hidden: next.hidden || [], labels: next.labels || {} } }));
+  const setFc = (next) => setFields(f => ({ ...f, [reg]: { hidden: next.hidden || [], labels: next.labels || {}, ...(next.order && next.order.length ? { order: next.order } : {}) } }));
+  // column order: drag a row by its handle (or use the arrows); templates, uploads and register grids follow it
+  const order = useMemo(() => columnOrder(reg, { fields, custom_fields: custom }), [reg, fields, custom]);
+  const [armed, setArmed] = useState(null); const [drag, setDrag] = useState(null); const [over, setOver] = useState(null);
+  const move = (from, to) => {
+    if (from === to || to < 0 || to >= order.length) return;
+    const next = [...order]; const [k] = next.splice(from, 1); next.splice(to, 0, k); setFc({ ...fc, order: next });
+  };
+  const endDrag = () => { setArmed(null); setDrag(null); setOver(null); };
   const rec = RECORD_OF[reg];
   const recFields = (rec && custom[rec]) || [];
   const setRecFields = (list) => setCustom(c => ({ ...c, [rec]: list }));
@@ -112,16 +123,48 @@ export function UploadFields() {
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
         <Box>
           <Typography sx={{ fontWeight: 800, fontSize: 15 }}>Standard columns — {TEMPLATES[reg].label}</Typography>
-          <Typography sx={{ fontSize: 12, color: T.muted }}>{preview.cols.length} columns in the template. Locked columns drive calculations and matching: they can be renamed, not removed. Files using the original names still upload.</Typography>
+          <Typography sx={{ fontSize: 12, color: T.muted }}>{preview.cols.length} columns in the template. Drag a row by its handle to change the column order — the template, uploads and register grids follow it. Locked columns drive calculations and matching: they can be renamed, not removed. Files using the original names still upload.</Typography>
         </Box>
-        <Button size="small" startIcon={<FileDownloadOutlinedIcon />} variant="outlined" sx={btnOutline} onClick={download}>Preview template</Button>
+        <Stack direction="row" spacing={1}>
+          {isAdmin && fc.order && <Button size="small" onClick={() => setFc({ ...fc, order: [] })} sx={{ textTransform: 'none' }}>Reset order</Button>}
+          <Button size="small" startIcon={<FileDownloadOutlinedIcon />} variant="outlined" sx={btnOutline} onClick={download}>Preview template</Button>
+        </Stack>
       </Stack>
       <Table size="small">
-        <TableHead><TableRow>{['In template', 'Column name', 'Original name', 'Type', ''].map(h => <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12 }}>{h}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{TEMPLATES[reg].cols.map(c => {
+        <TableHead><TableRow>{['', 'In template', 'Column name', 'Original name', 'Type', ''].map((h, i) => <TableCell key={i} sx={{ fontWeight: 800, fontSize: 12 }}>{h}</TableCell>)}</TableRow></TableHead>
+        <TableBody>{order.map((key, idx) => {
+          const handle = isAdmin && (
+            <TableCell sx={{ width: 76, px: 0.5, whiteSpace: 'nowrap' }}>
+              <Tooltip title="Drag to reorder"><DragIndicatorIcon onMouseDown={() => setArmed(key)} onMouseUp={() => setArmed(null)} sx={{ fontSize: 20, color: T.muted, cursor: 'grab', verticalAlign: 'middle' }} /></Tooltip>
+              <IconButton size="small" disabled={idx === 0} onClick={() => move(idx, idx - 1)} sx={{ p: 0.2 }}><KeyboardArrowUpIcon sx={{ fontSize: 18 }} /></IconButton>
+              <IconButton size="small" disabled={idx === order.length - 1} onClick={() => move(idx, idx + 1)} sx={{ p: 0.2 }}><KeyboardArrowDownIcon sx={{ fontSize: 18 }} /></IconButton>
+            </TableCell>);
+          const dnd = {
+            draggable: armed === key,
+            onDragStart: (e) => { setDrag(idx); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); },
+            onDragOver: (e) => { if (drag === null) return; e.preventDefault(); if (over !== idx) setOver(idx); },
+            onDrop: (e) => { e.preventDefault(); if (drag !== null) move(drag, idx); endDrag(); },
+            onDragEnd: endDrag,
+          };
+          const dropLine = drag !== null && over === idx && drag !== idx ? { boxShadow: `inset 0 ${drag < idx ? -3 : 3}px 0 ${T.coral}` } : {};
+          if (key.startsWith('cf:')) {
+            const f = recFields.find(x => x.key === key.slice(3)) || { label: key.slice(3), type: 'text' };
+            return (
+              <TableRow key={key} {...dnd} sx={{ bgcolor: drag === idx ? '#FFF4F0' : undefined, ...dropLine }}>
+                {handle || <TableCell sx={{ width: 0, p: 0 }} />}
+                <TableCell sx={{ width: 90 }}><Chip size="small" label="custom" sx={{ height: 20, fontSize: 10.5, fontWeight: 700 }} /></TableCell>
+                <TableCell sx={{ fontSize: 14, fontWeight: 600 }}>{f.label || '(unnamed)'}<Typography component="span" sx={{ fontSize: 11, color: T.muted, ml: 1 }}>edit in Custom fields below</Typography></TableCell>
+                <TableCell sx={{ fontSize: 12, color: T.muted }}>Custom field{f.required && <Chip size="small" label="required" sx={{ ml: 0.8, height: 18, fontSize: 10 }} />}</TableCell>
+                <TableCell sx={{ fontSize: 12, color: T.muted }}>{f.type === 'select' ? (f.options || []).join(' / ') : (CUSTOM_TYPES.find(([v]) => v === f.type) || [null, 'Text'])[1]}</TableCell>
+                <TableCell />
+              </TableRow>
+            );
+          }
+          const c = TEMPLATES[reg].cols.find(x => x.key === key);
           const locked = isLocked(reg, c.key); const on = locked || !(fc.hidden || []).includes(c.key);
           return (
-            <TableRow key={c.key} sx={{ opacity: on ? 1 : 0.5 }}>
+            <TableRow key={c.key} {...dnd} sx={{ opacity: on ? 1 : 0.5, bgcolor: drag === idx ? '#FFF4F0' : undefined, ...dropLine }}>
+              {handle || <TableCell sx={{ width: 0, p: 0 }} />}
               <TableCell sx={{ width: 90 }}>{locked ? <Tooltip title="Required for calculations"><LockOutlinedIcon sx={{ fontSize: 18, color: T.muted, ml: 1 }} /></Tooltip>
                 : <Switch size="small" checked={on} disabled={!isAdmin} onChange={e => setFc({ ...fc, hidden: e.target.checked ? (fc.hidden || []).filter(k => k !== c.key) : [...(fc.hidden || []), c.key] })} />}</TableCell>
               <TableCell><TextField size="small" fullWidth value={(fc.labels || {})[c.key] ?? c.header} disabled={!isAdmin || !on}

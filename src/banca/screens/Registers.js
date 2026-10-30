@@ -35,7 +35,8 @@ export function MasterRegister({ openPolicy }) {
   const rowsC = useMemo(() => withCustom(model.policies), [model]);
   const cols = [
     { key: 'policy_no', label: 'Policy No', render: policyLink(openPolicy) }, { key: 'customer', label: 'Name' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' }, { key: 'class', label: 'Class' },
-    { key: 'inception', label: 'Inception' }, { key: 'expiry', label: 'Expiry' },
+    { key: 'facility_no', label: 'Facility No' }, { key: 'vehicle_no', label: 'Vehicle Reg No' }, { key: 'pay_type', label: 'Pay Type' },
+    { key: 'inception', label: 'Inception' }, { key: 'expiry', label: 'Expiry' }, { key: 'sum_insured', label: 'Sum Insured', type: 'money' },
     { key: 'net_basic', label: 'Basic', type: 'money', group: 'GWP Data' }, { key: 'net_srcc', label: 'SRCC', type: 'money', group: 'GWP Data' }, { key: 'net_tc', label: 'TC', type: 'money', group: 'GWP Data' }, { key: 'net_total', label: 'Net Premium', type: 'money', group: 'GWP Data' },
     { key: 'paid', label: 'Received', type: 'money', group: 'Payment Data' }, { key: 'outstanding', label: 'Outstanding', type: 'money', group: 'Payment Data' }, { key: 'pay_status', label: 'Status', group: 'Payment Data', render: r => <StatusChip value={r.pay_status} /> },
     { key: 'exp_comm', label: 'Expected', type: 'money', group: 'Commission Data' }, { key: 'comm_received', label: 'Received', type: 'money', group: 'Commission Data' }, { key: 'comm_balance', label: 'Balance', type: 'money', group: 'Commission Data' }, { key: 'comm_status', label: 'Status', group: 'Commission Data', render: r => <StatusChip value={r.comm_status} /> },
@@ -51,9 +52,12 @@ export function GwpRegister({ openPolicy }) {
   const { model, bank, config } = useBanca();
   const types = ['New', 'Renewal', 'Endorsement', 'Cancellation', 'Refund'];
   const cols = [
-    { key: 'policy_no', label: 'Policy No' }, { key: 'customer', label: 'Name' }, { key: 'address', label: 'Address' }, { key: 'telephone', label: 'Telephone' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' },
+    { key: 'policy_no', label: 'Policy No' }, { key: 'facility_no', label: 'Facility No' }, { key: 'customer', label: 'Name' }, { key: 'address', label: 'Address' }, { key: 'telephone', label: 'Telephone' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' },
+    { key: 'vehicle_no', label: 'Vehicle Reg No' }, { key: 'pay_type', label: 'Pay Type' }, { key: 'sum_insured', label: 'Sum Insured', type: 'money' },
     { key: 'basic', label: 'Basic Premium', type: 'money' }, { key: 'srcc', label: 'SRCC Premium', type: 'money' }, { key: 'tc', label: 'TC Premium', type: 'money' }, { key: 'total', label: 'Total Premium', type: 'money' },
-    { key: 'type', label: 'Type' }, { key: 'effective_date', label: 'Effective Date' }, { key: 'gwp_month', label: 'GWP Month' }, { key: 'class', label: 'Class' }, { key: 'upload_date', label: 'Uploaded' },
+    { key: 'gross_premium', label: 'Premium incl. Taxes', type: 'money' }, { key: 'prev_premium', label: 'Previous Premium', type: 'money' },
+    { key: 'type', label: 'Type' }, { key: 'effective_date', label: 'Effective Date' }, { key: 'expiry', label: 'Expiry Date' }, { key: 'gwp_month', label: 'GWP Month' }, { key: 'class', label: 'Class' },
+    { key: 'remarks', label: 'Remarks' }, { key: 'upload_date', label: 'Uploaded' },
   ];
   const rows = useMemo(() => withCustom(model.txns), [model]);
   return (<>

@@ -8,8 +8,8 @@ jest.mock('../firebase', () => ({ db: {} }));
 jest.mock('../storage', () => ({ uploadFile: jest.fn(), openFile: jest.fn() }));
 jest.mock('recharts', () => { const P = ({ children }) => <div>{children}</div>; return new Proxy({}, { get: () => P }); });
 const DATA = {
-  policies: [{ id: 'P1', policy_no: 'VM-1', customer: 'A', insurer: 'Ceylinco', branch: 'Colombo', class: 'Motor', inception: '2026-09-05', expiry: '2027-09-04' }],
-  txns: [{ id: 'T1', policy_id: 'P1', type: 'New', effective_date: '2026-09-05', gwp_month: '2026-09', basic: 100000, srcc: 10000, tc: 5000, total: 115000, comm_basic: 17000, comm_srcc: 500, comm_tc: 250, comm_total: 17750, batch_id: 'B1' }],
+  policies: [{ id: 'P1', policy_no: 'VM-1', customer: 'A', insurer: 'Ceylinco', branch: 'Colombo', class: 'Motor', inception: '2026-09-05', expiry: '2027-09-04', facility_no: '0413241100680', vehicle_no: 'WPYN3576', pay_type: 'In-house', sum_insured: 950000 }],
+  txns: [{ id: 'T1', policy_id: 'P1', type: 'New', effective_date: '2026-09-05', gwp_month: '2026-09', basic: 100000, srcc: 10000, tc: 5000, total: 115000, comm_basic: 17000, comm_srcc: 500, comm_tc: 250, comm_total: 17750, gross_premium: 140000, remarks: 'DONE', batch_id: 'B1' }],
   receipts: [], commissions: [], claims: [], batches: [{ id: 'B1', register: 'gwp', status: 'Posted', file_name: 'x.xlsx', uploaded_at: '2026-10-01T00:00:00Z', stats: { accepted: 1 } }],
   files: [], exceptions: [], statements: [], pmf_payments: [], approvals: [], targets: [], signoffs: [],
 };

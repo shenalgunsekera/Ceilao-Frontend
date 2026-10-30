@@ -1,6 +1,6 @@
 // Applies a bank's field settings (renamed / removed columns, custom fields) to the grids,
 // so every register, tracker and export follows what the upload templates hold.
-import { customFieldsFor, isLocked } from './templates';
+import { customFieldsFor, isLocked, columnOrder } from './templates';
 import { fmtCell } from './ui';
 
 // Flatten each record's custom values to `cf_<key>` so the grid can search, sort, filter and export them.
@@ -30,5 +30,11 @@ export function applyFields(columns, register, config, keyMap = {}, customOnly =
     render: gridType(f.type) === 'num' ? (r => fmtCell(r['cf_' + f.key], 'int')) : undefined,
     sortValue: r => r['cf_' + f.key],
   }));
-  return [...std, ...custom];
+  if (customOnly) return [...std, ...custom];
+  // follow the template's column order; columns with no template counterpart (computed ones) stay after the column they followed
+  const rank = new Map(columnOrder(register, config).map((k, i) => [k, i]));
+  let last = -1, n = 0;
+  return [...std, ...custom]
+    .map(c => { const tk = c.key.startsWith('cf_') ? 'cf:' + c.key.slice(3) : (keyMap[c.key] || c.key); if (rank.has(tk)) { last = rank.get(tk); n = 0; return [last, c]; } return [last + ++n / 1000, c]; })
+    .sort((a, b) => a[0] - b[0]).map(x => x[1]);
 }

@@ -16,7 +16,10 @@ const GWP_COLS = [
   C('address', 'Address'),
   C('telephone', 'Telephone', { aliases: ['phone', 'mobile', 'contact no', 'telephone no'] }),
   C('insurer', 'Insurance Company', { required: true, aliases: ['insurer', 'insurance company name', 'company'] }),
-  C('branch', 'Branch', { aliases: ['pmf branch', 'branch name'] }),
+  C('branch', 'Branch', { aliases: ['pmf branch', 'branch name', 'facility branch'] }),
+  C('facility_no', 'Facility No', { aliases: ['facno', 'fac no', 'facility number', 'loan no', 'loan number'] }),
+  C('vehicle_no', 'Vehicle Reg No', { aliases: ['vehicleregno', 'vehicle no', 'vehicle number', 'registration no', 'reg no'] }),
+  C('pay_type', 'Pay Type', { aliases: ['premium pay type', 'payment mode'] }),
   C('class', 'Class / Product', { aliases: ['class', 'product', 'class of insurance', 'insurance class', 'product / class'] }),
   C('inception', 'Inception Date', { type: 'date', aliases: ['period from', 'from date', 'commencement date', 'start date'] }),
   C('expiry', 'Expiry Date', { type: 'date', aliases: ['period to', 'to date', 'end date'] }),
@@ -26,9 +29,12 @@ const GWP_COLS = [
   C('srcc', 'SRCC Premium', { type: 'money', aliases: ['srcc'] }),
   C('tc', 'TC Premium', { type: 'money', aliases: ['tc'] }),
   C('total', 'Total Premium', { type: 'money', aliases: ['total', 'gross premium'] }),
+  C('gross_premium', 'Premium incl. Taxes', { type: 'money', aliases: ['premium including taxes', 'gross premium incl taxes', 'total payable'] }),
+  C('prev_premium', 'Previous Premium', { type: 'money', aliases: ['expiring premium', 'old premium', 'previous period premium'] }),
   C('comm_basic', 'Commission Basic', { type: 'money', aliases: ['basic commission'] }),
   C('comm_srcc', 'Commission SRCC', { type: 'money', aliases: ['srcc commission'] }),
   C('comm_tc', 'Commission TC', { type: 'money', aliases: ['tc commission'] }),
+  C('remarks', 'Remarks', { aliases: ['remark', 'reamaks', 'notes', 'comments'] }),
 ];
 const MASTER_EXTRA = [
   C('paid_amount', 'Premium Paid', { type: 'money', aliases: ['premium paid amount', 'amount paid', 'payment amount'] }),
@@ -104,6 +110,14 @@ export const CUSTOM_TYPES = [['text', 'Text'], ['number', 'Number'], ['money', '
 const LOCKED_EXTRA = { master: ['customer', 'inception', 'expiry', 'effective_date'], gwp: ['customer', 'inception', 'expiry', 'effective_date'], renewals: ['customer', 'inception', 'expiry', 'effective_date'] };
 export const isLocked = (register, key) => !!(TEMPLATES[register]?.cols.find(c => c.key === key)?.required) || (LOCKED_EXTRA[register] || []).includes(key);
 export const customFieldsFor = (config, register) => { const rec = RECORD_OF[register]; return rec ? ((config?.custom_fields || {})[rec] || []).filter(f => f && f.key && !f.removed) : []; };
+// Column order for a register (standard keys + 'cf:<key>' custom fields): the saved order first;
+// a column it doesn't list yet (new or restored) goes after its default neighbour.
+export function columnOrder(register, config) {
+  const all = [...TEMPLATES[register].cols.map(c => c.key), ...customFieldsFor(config, register).map(f => 'cf:' + f.key)];
+  const out = [...new Set((((config?.fields || {})[register] || {}).order || []).filter(k => all.includes(k)))];
+  all.forEach((k, i) => { if (!out.includes(k)) out.splice(i ? out.indexOf(all[i - 1]) + 1 : 0, 0, k); });
+  return out;
+}
 export function effectiveTemplate(register, config) {
   const baseTpl = TEMPLATES[register];
   const fc = (config?.fields || {})[register] || {};
@@ -117,6 +131,8 @@ export function effectiveTemplate(register, config) {
     cols.push({ key: 'cf:' + f.key, header: f.label, type: f.type === 'select' ? 'enum' : f.type === 'money' ? 'money' : f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text',
       options: f.type === 'select' ? (f.options || []) : undefined, required: !!f.required, aliases: [f.key], custom: f });
   }
+  const rank = new Map(columnOrder(register, config).map((k, i) => [k, i]));
+  cols.sort((a, b) => rank.get(a.key) - rank.get(b.key));
   return { ...baseTpl, cols };
 }
 
@@ -265,6 +281,11 @@ export function validate(register, parsed, raw, config, ctx) {
     if (set.size && !set.has(norm(value))) { if (strict) errs.push(`Unknown ${kind.slice(0, -1)} "${value}"`); else warns.push(`New ${kind.slice(0, -1)} "${value}"`); }
     if (!set.has(norm(value))) newMasters[kind].add(value);
   };
+  // optional money columns kept on the transaction only when the file fills them (negative for cancellations / refunds)
+  const optMoney = (row, k, type) => {
+    const v = get(row, k); if (!isNumeric(v)) return {};
+    const n = round2(num(v)); return { [k]: (type === 'Cancellation' || type === 'Refund') && n > 0 ? -n : n };
+  };
   const base = (extra = {}) => ({ batch_id: ctx.batchId, created_at: new Date().toISOString(), created_by: ctx.user || '', ...extra });
 
   // GWP-style rows: originals first (so endorsements in the same file find their period)
@@ -292,7 +313,7 @@ export function validate(register, parsed, raw, config, ctx) {
         const v = get(row, k); dates[k] = toYmd(v);
         if (v !== '' && v !== null && v !== undefined && !dates[k]) errs.push(`${H(k)} is not a real date`);
       }
-      for (const k of ['basic', 'srcc', 'tc', 'total', 'sum_insured', 'comm_basic', 'comm_srcc', 'comm_tc']) {
+      for (const k of ['basic', 'srcc', 'tc', 'total', 'sum_insured', 'gross_premium', 'prev_premium', 'comm_basic', 'comm_srcc', 'comm_tc']) {
         const v = get(row, k); if (v !== '' && v !== null && v !== undefined && !isNumeric(v)) errs.push(`${H(k)} is not a number`);
       }
       let basic = num(get(row, 'basic')), srcc = num(get(row, 'srcc')), tc = num(get(row, 'tc'));
@@ -313,7 +334,8 @@ export function validate(register, parsed, raw, config, ctx) {
           const exists = (raw.policies || []).some(p => p.id === id && livePolicyIds.has(id));
           period = { id, policy_no: pno, prev_policy_no: str(get(row, 'prev_policy_no')), customer: str(get(row, 'customer')), address: str(get(row, 'address')),
             telephone: str(get(row, 'telephone')), insurer, branch: str(get(row, 'branch')), class: str(get(row, 'class')), inception: dates.inception, expiry: dates.expiry,
-            sum_insured: round2(num(get(row, 'sum_insured'))), ...(Object.keys(custom).length ? { custom } : {}) };
+            sum_insured: round2(num(get(row, 'sum_insured'))), facility_no: str(get(row, 'facility_no')), vehicle_no: str(get(row, 'vehicle_no')).toUpperCase(),
+            pay_type: str(get(row, 'pay_type')), ...(Object.keys(custom).length ? { custom } : {}) };
           if (exists || seen.P.has(id)) { period._exists = true; }
         }
       } else if (!errs.length) {
@@ -344,7 +366,9 @@ export function validate(register, parsed, raw, config, ctx) {
             cm = { comm_basic: b, comm_srcc: s, comm_tc: t, comm_total: round2(b + s + t), rate_id: null };
           } else cm = expectedCommission(config, period.insurer, period.class, eff, basic, srcc, tc);
           out.writes.txns.push({ id: u.id, data: { policy_id: period.id, type, effective_date: eff, gwp_month: monthOf(eff), upload_date: today,
-            basic: round2(basic), srcc: round2(srcc), tc: round2(tc), total: round2(total), ...cm, comm_source: supplied ? 'file' : 'schedule', posting_key: key, ...(Object.keys(custom).length ? { custom } : {}), ...base() } });
+            basic: round2(basic), srcc: round2(srcc), tc: round2(tc), total: round2(total), ...cm, comm_source: supplied ? 'file' : 'schedule', posting_key: key,
+            ...optMoney(row, 'gross_premium', type), ...optMoney(row, 'prev_premium'), ...(str(get(row, 'remarks')) ? { remarks: str(get(row, 'remarks')).slice(0, 500) } : {}),
+            ...(Object.keys(custom).length ? { custom } : {}), ...base() } });
           // master register rows may also carry the premium receipt and insurer commission
           if (register === 'master') {
             const paidV = get(row, 'paid_amount'), commV = get(row, 'comm_received');
