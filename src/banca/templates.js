@@ -142,11 +142,17 @@ const hnorm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 export function matchHeaders(headers, tpl) {
   const map = {};
   const used = new Set();
-  for (const col of tpl.cols) {
-    const names = [col.header, ...(col.aliases || [])].map(hnorm);
-    const h = headers.find(x => !used.has(x) && names.includes(hnorm(x)));
-    if (h) { map[col.key] = h; used.add(h); }
-  }
+  // exact column names first, then aliases — so the column order never changes how a file is read
+  const pass = (namesOf) => {
+    for (const col of tpl.cols) {
+      if (map[col.key]) continue;
+      const names = namesOf(col).map(hnorm);
+      const h = headers.find(x => !used.has(x) && names.includes(hnorm(x)));
+      if (h) { map[col.key] = h; used.add(h); }
+    }
+  };
+  pass(c => [c.header]);
+  pass(c => c.aliases || []);
   const missing = tpl.cols.filter(c => c.required && !map[c.key]).map(c => c.header);
   return { map, missing };
 }

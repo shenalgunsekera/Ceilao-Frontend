@@ -258,7 +258,8 @@ export function statementBlock(ctx, s) {
 export async function saveConfig(ctx, next, note) {
   const { bankId, me, config } = ctx;
   const changed = Object.keys(next).filter(k => JSON.stringify(next[k]) !== JSON.stringify(config[k]));
-  await setDoc(doc(db, 'banca', bankId), { ...next, updated_at: nowIso(), updated_by: me.name }, { merge: true });
+  // mergeFields: each setting passed is replaced whole (a deep merge would keep removed labels / orders); other settings untouched
+  await setDoc(doc(db, 'banca', bankId), { ...next, updated_at: nowIso(), updated_by: me.name }, { mergeFields: [...Object.keys(next), 'updated_at', 'updated_by'] });
   await audit(bankId, me, 'config_changed', bankId, { keys: changed, note: note || '', before: Object.fromEntries(changed.map(k => [k, config[k] ?? null])), after: Object.fromEntries(changed.map(k => [k, next[k]])) });
 }
 

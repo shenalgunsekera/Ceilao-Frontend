@@ -57,6 +57,8 @@ export function UploadFields() {
     const next = [...order]; const [k] = next.splice(from, 1); next.splice(to, 0, k); setFc({ ...fc, order: next });
   };
   const endDrag = () => { setArmed(null); setDrag(null); setOver(null); };
+  // releasing the handle anywhere without dragging disarms the row (so text in its name box can still be selected)
+  useEffect(() => { const up = () => setArmed(null); window.addEventListener('mouseup', up); return () => window.removeEventListener('mouseup', up); }, []);
   const rec = RECORD_OF[reg];
   const recFields = (rec && custom[rec]) || [];
   const setRecFields = (list) => setCustom(c => ({ ...c, [rec]: list }));
@@ -135,9 +137,9 @@ export function UploadFields() {
         <TableBody>{order.map((key, idx) => {
           const handle = isAdmin && (
             <TableCell sx={{ width: 76, px: 0.5, whiteSpace: 'nowrap' }}>
-              <Tooltip title="Drag to reorder"><DragIndicatorIcon onMouseDown={() => setArmed(key)} onMouseUp={() => setArmed(null)} sx={{ fontSize: 20, color: T.muted, cursor: 'grab', verticalAlign: 'middle' }} /></Tooltip>
-              <IconButton size="small" disabled={idx === 0} onClick={() => move(idx, idx - 1)} sx={{ p: 0.2 }}><KeyboardArrowUpIcon sx={{ fontSize: 18 }} /></IconButton>
-              <IconButton size="small" disabled={idx === order.length - 1} onClick={() => move(idx, idx + 1)} sx={{ p: 0.2 }}><KeyboardArrowDownIcon sx={{ fontSize: 18 }} /></IconButton>
+              <Tooltip title="Drag to reorder"><DragIndicatorIcon data-testid={`drag-${key}`} onMouseDown={() => setArmed(key)} sx={{ fontSize: 20, color: T.muted, cursor: 'grab', verticalAlign: 'middle' }} /></Tooltip>
+              <IconButton size="small" aria-label={`Move ${key} up`} disabled={idx === 0} onClick={() => move(idx, idx - 1)} sx={{ p: 0.2 }}><KeyboardArrowUpIcon sx={{ fontSize: 18 }} /></IconButton>
+              <IconButton size="small" aria-label={`Move ${key} down`} disabled={idx === order.length - 1} onClick={() => move(idx, idx + 1)} sx={{ p: 0.2 }}><KeyboardArrowDownIcon sx={{ fontSize: 18 }} /></IconButton>
             </TableCell>);
           const dnd = {
             draggable: armed === key,
@@ -150,7 +152,7 @@ export function UploadFields() {
           if (key.startsWith('cf:')) {
             const f = recFields.find(x => x.key === key.slice(3)) || { label: key.slice(3), type: 'text' };
             return (
-              <TableRow key={key} {...dnd} sx={{ bgcolor: drag === idx ? '#FFF4F0' : undefined, ...dropLine }}>
+              <TableRow key={key} data-testid={`row-${key}`} {...dnd} sx={{ bgcolor: drag === idx ? '#FFF4F0' : undefined, ...dropLine }}>
                 {handle || <TableCell sx={{ width: 0, p: 0 }} />}
                 <TableCell sx={{ width: 90 }}><Chip size="small" label="custom" sx={{ height: 20, fontSize: 10.5, fontWeight: 700 }} /></TableCell>
                 <TableCell sx={{ fontSize: 14, fontWeight: 600 }}>{f.label || '(unnamed)'}<Typography component="span" sx={{ fontSize: 11, color: T.muted, ml: 1 }}>edit in Custom fields below</Typography></TableCell>
@@ -163,7 +165,7 @@ export function UploadFields() {
           const c = TEMPLATES[reg].cols.find(x => x.key === key);
           const locked = isLocked(reg, c.key); const on = locked || !(fc.hidden || []).includes(c.key);
           return (
-            <TableRow key={c.key} {...dnd} sx={{ opacity: on ? 1 : 0.5, bgcolor: drag === idx ? '#FFF4F0' : undefined, ...dropLine }}>
+            <TableRow key={c.key} data-testid={`row-${c.key}`} {...dnd} sx={{ opacity: on ? 1 : 0.5, bgcolor: drag === idx ? '#FFF4F0' : undefined, ...dropLine }}>
               {handle || <TableCell sx={{ width: 0, p: 0 }} />}
               <TableCell sx={{ width: 90 }}>{locked ? <Tooltip title="Required for calculations"><LockOutlinedIcon sx={{ fontSize: 18, color: T.muted, ml: 1 }} /></Tooltip>
                 : <Switch size="small" checked={on} disabled={!isAdmin} onChange={e => setFc({ ...fc, hidden: e.target.checked ? (fc.hidden || []).filter(k => k !== c.key) : [...(fc.hidden || []), c.key] })} />}</TableCell>
