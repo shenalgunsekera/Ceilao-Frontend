@@ -266,3 +266,44 @@ export async function saveConfig(ctx, next, note) {
 export const setRecord = (bankId, coll, id, data) => setDoc(doc(db, path(bankId, coll), id), JSON.parse(JSON.stringify(data)), { merge: true });
 export const updateRecord = (bankId, coll, id, data) => updateDoc(doc(db, path(bankId, coll), id), data);
 export { nowIso };
+
+/* ── backup & restore (never overwrites, never deletes) ── */
+export const BACKUP_COLLS = [...COLLS, 'audit'];
+export async function exportBank(ctx) {
+  const { bankId, config } = ctx;
+  const dump = { format: 'ceilao-banca-backup-v1', bank: bankId, exported_at: nowIso(), config, collections: {} };
+  for (const c of BACKUP_COLLS) {
+    const s = await getDocs(collection(db, path(bankId, c)));
+    dump.collections[c] = s.docs.map(d => ({ ...d.data(), id: d.id }));
+  }
+  return dump;
+}
+// Adds back only records whose id is missing now. Existing records are never touched;
+// the audit trail is not replayed (history stays in the backup file).
+export function restorePlan(ctx, dump) {
+  if (!dump || dump.format !== 'ceilao-banca-backup-v1') throw new Error('Not a Bancassurance backup file (BANCA_<BANK>.json from the Admin Panel backup).');
+  if (dump.bank !== ctx.bankId) throw new Error(`This backup is for bank "${dump.bank}", not "${ctx.bankId}".`);
+  const plan = {};
+  for (const c of COLLS) {
+    const have = new Set((ctx.raw[c] || []).map(x => x.id));
+    plan[c] = (dump.collections?.[c] || []).filter(x => x && x.id && !have.has(x.id));
+  }
+  return plan;
+}
+export async function restoreMissing(ctx, plan, fileName) {
+  const { bankId, me } = ctx;
+  const jobs = [];
+  for (const [c, list] of Object.entries(plan)) for (const x of list) { const { id, ...data } = x; jobs.push([c, id, data]); }
+  let written = 0;
+  for (let i = 0; i < jobs.length; i += 400) {
+    const chunk = jobs.slice(i, i + 400);
+    // re-check right before writing: a record created since the screen loaded is skipped, never overwritten
+    const exists = await Promise.all(chunk.map(([c, id]) => getDoc(doc(db, path(bankId, c), id)).then(x => x.exists())));
+    const b = writeBatch(db); let n = 0;
+    chunk.forEach(([c, id, data], k) => { if (!exists[k]) { b.set(doc(db, path(bankId, c), id), JSON.parse(JSON.stringify(data))); n++; } });
+    if (n) await b.commit();
+    written += n;
+  }
+  await audit(bankId, me, 'backup_restore', bankId, { file: fileName, restored: Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, v.length])) });
+  return written;
+}

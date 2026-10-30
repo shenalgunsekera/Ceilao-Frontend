@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { saveAs } from 'file-saver';
 import { openFile } from '../../storage';
 import { useBanca, postBatch, storeLibraryFile, fileFingerprint, newId, requestApproval, saveConfig, audit, setRecord, nowIso } from '../store';
-import { TEMPLATES, parseFile, validate, templateWorkbook, errorWorkbook } from '../templates';
+import { TEMPLATES, parseFile, validate, templateWorkbook, errorWorkbook, effectiveTemplate } from '../templates';
 import { DataGrid, StatusChip, Kpi, SectionTitle, T, btnPrimary, btnOutline } from '../ui';
 import { lkr, round2, num, reconciliation, monthEnd, todayYmd, monthOf } from '../core';
 import Box from '@mui/material/Box';
@@ -83,12 +83,12 @@ export function UploadPage({ initialRegister, onPosted }) {
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [pct, setPct] = useState(0);
   const [overrideReason, setOverrideReason] = useState(''); const [addMasters, setAddMasters] = useState(true);
   const [done, setDone] = useState(null);
-  const tpl = TEMPLATES[register];
+  const tpl = effectiveTemplate(register, config);
   const isApprover = me.role === 'admin' || me.role === 'manager';
   const insurers = useMemo(() => [...new Set(model.policies.map(p => p.insurer))].sort(), [model]);
   const reset = () => { setFile(null); setParsed(null); setPlan(null); setErr(''); setDone(null); setPct(0); setOverrideReason(''); setFp(''); };
 
-  const downloadTemplate = async () => { const buf = await templateWorkbook(register, bank.name); saveAs(new Blob([buf]), `${bank.name}_${register}_template_v1.xlsx`); };
+  const downloadTemplate = async () => { const buf = await templateWorkbook(register, bank.name, config); saveAs(new Blob([buf]), `${bank.name}_${register}_template_v1.xlsx`); };
   const runValidation = async () => {
     setErr(''); setPlan(null); setBusy(true);
     try {
@@ -153,7 +153,7 @@ export function UploadPage({ initialRegister, onPosted }) {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
         <Box sx={{ flex: '0 0 auto', p: 2, borderRadius: '14px', bgcolor: '#F9FAFB', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 230 }}>
           <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, mb: 0.5 }}>Need the template?</Typography>
-          <Typography sx={{ fontSize: 11.5, color: T.muted, mb: 1.2 }}>{TEMPLATES[register].label} — {TEMPLATES[register].cols.length} columns, with an instructions sheet.</Typography>
+          <Typography sx={{ fontSize: 11.5, color: T.muted, mb: 1.2 }}>{TEMPLATES[register].label} — {tpl.cols.length} columns{tpl.cols.some(c => c.custom) ? ` (incl. ${tpl.cols.filter(c => c.custom).length} custom)` : ''}, with an instructions sheet.</Typography>
           <Button startIcon={<FileDownloadOutlinedIcon />} variant="outlined" sx={btnOutline} onClick={downloadTemplate}>Download template</Button>
         </Box>
         <Box component="label" onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}

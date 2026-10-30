@@ -285,6 +285,11 @@ export function PolicyDrawer({ policy, model, batches, files, onClose, onOpenPol
           <Field k="Inception" v={p.inception} /><Field k="Expiry" v={p.expiry} /><Field k="Sum insured" v={p.sum_insured ? lkr(p.sum_insured) : ''} />
           <Field k="Address" v={p.address} /><Field k="Telephone" v={p.telephone} />
         </Stack>
+        {p.custom && Object.keys(p.custom).length > 0 && (
+          <Stack direction="row" flexWrap="wrap" columnGap={2}>
+            {Object.entries(p.custom).map(([k, v]) => { const f = ((model.config?.custom_fields || {}).policy || []).find(x => x.key === k); return <Field key={k} k={(f ? f.label : k) + (f && f.removed ? ' (removed field)' : '')} v={typeof v === 'number' ? v.toLocaleString() : v} />; })}
+          </Stack>
+        )}
         <Divider sx={{ my: 1 }} />
         <Stack direction="row" flexWrap="wrap" columnGap={2}>
           <Field k="Net basic" v={lkr(p.net_basic)} /><Field k="Net SRCC" v={lkr(p.net_srcc)} /><Field k="Net TC" v={lkr(p.net_tc)} /><Field k="Net total premium" v={lkr(p.net_total)} />

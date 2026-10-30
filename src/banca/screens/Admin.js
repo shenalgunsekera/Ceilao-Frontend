@@ -2,7 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { useBanca, saveConfig, loadAudit, audit, nowIso } from '../store';
+import { useBanca, saveConfig, loadAudit, audit, nowIso, exportBank, restorePlan, restoreMissing } from '../store';
+import { saveAs } from 'file-saver';
 import { DataGrid, SectionTitle, T, btnPrimary, btnOutline } from '../ui';
 import { num, todayYmd } from '../core';
 import Box from '@mui/material/Box';
@@ -141,6 +142,7 @@ export function Settings() {
           </TableRow>))}</TableBody></Table>
       {isAdmin && <DelegationAdd users={approvers} onAdd={d => setC({ ...c, delegations: [...(c.delegations || []), d] })} />}
     </Card>
+    <BackupCard ctx={ctx} isAdmin={isAdmin} onDone={reload} />
     <Dialog open={legal} onClose={() => setLegal(false)} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 800 }}>Record legal clearance</DialogTitle>
       <DialogContent dividers>
@@ -152,6 +154,45 @@ export function Settings() {
     </Dialog>
   </>);
 }
+function BackupCard({ ctx, isAdmin, onDone }) {
+  const [busy, setBusy] = useState(''); const [plan, setPlan] = useState(null); const [fileName, setFileName] = useState(''); const [msg, setMsg] = useState(null);
+  const total = plan ? Object.values(plan).reduce((a, l) => a + l.length, 0) : 0;
+  const download = async () => {
+    setBusy('export'); setMsg(null);
+    try {
+      const d = await exportBank(ctx);
+      saveAs(new Blob([JSON.stringify(d, null, 1)], { type: 'application/json' }), `BANCA_${ctx.bankId.toUpperCase()}_${d.exported_at.slice(0, 10)}.json`);
+      await audit(ctx.bankId, ctx.me, 'backup_export', ctx.bankId, {});
+    } catch (e) { setMsg({ s: 'error', t: e.message }); }
+    setBusy('');
+  };
+  const pick = async (f) => {
+    setPlan(null); setMsg(null); if (!f) return;
+    try { setFileName(f.name); setPlan(restorePlan(ctx, JSON.parse(await f.text()))); }
+    catch (e) { setMsg({ s: 'error', t: /JSON|Unexpected/.test(e.message) && !/backup/.test(e.message) ? 'That file is not valid JSON.' : e.message }); }
+  };
+  const restore = async () => {
+    setBusy('restore'); setMsg(null);
+    try { const n = await restoreMissing(ctx, plan, fileName); setMsg({ s: 'success', t: `Restored ${n} missing record(s). Nothing existing was changed.` }); setPlan(null); onDone(); }
+    catch (e) { setMsg({ s: 'error', t: e.message }); }
+    setBusy('');
+  };
+  return (
+    <Card title="Backup & restore" sub="Everything in this module is also in the weekly Firestore backup (kept 98 days), point-in-time recovery (last 7 days) and the Admin Panel manual backup. Records are never deleted from the app.">
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+        <Button variant="outlined" sx={btnOutline} disabled={!!busy} onClick={download}>{busy === 'export' ? 'Preparing…' : 'Download module backup (JSON)'}</Button>
+        {isAdmin && <Button component="label" variant="outlined" sx={{ ...btnOutline, color: '#374151', borderColor: '#D1D5DB' }} disabled={!!busy}>Restore missing records…<input hidden type="file" accept=".json" onChange={e => pick(e.target.files?.[0])} /></Button>}
+      </Stack>
+      {plan && <Box sx={{ mt: 1.5, p: 1.5, borderRadius: '10px', bgcolor: '#F9FAFB' }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{fileName}: {total} record(s) are in the backup but missing now</Typography>
+        <Typography sx={{ fontSize: 12, color: T.muted, mb: 1 }}>{Object.entries(plan).filter(([, l]) => l.length).map(([k, l]) => `${k}: ${l.length}`).join(' · ') || 'Nothing to restore — every record is present.'} Existing records are never overwritten.</Typography>
+        <Button sx={btnPrimary} disabled={!total || !!busy} onClick={restore}>{busy === 'restore' ? 'Restoring…' : `Restore ${total} record(s)`}</Button>
+      </Box>}
+      {msg && <Alert severity={msg.s} sx={{ mt: 1.5 }}>{msg.t}</Alert>}
+    </Card>
+  );
+}
+
 function DelegationAdd({ users, onAdd }) {
   const [d, setD] = useState({ from: '', to: '', start: todayYmd(), end: '', limit: '' });
   const u = (uid) => users.find(x => x.uid === uid);

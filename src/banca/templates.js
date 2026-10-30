@@ -91,6 +91,35 @@ export const TEMPLATES = {
   ], note: 'Monthly net GWP targets (Month as YYYY-MM). Leave Branch / Class blank for "all".' },
 };
 
+/* ── configurable fields ──────────────────────────────────────────────────
+   Per bank (config):
+     fields[register]  = { hidden: [optional column keys], labels: { key: 'Column header' } }
+     custom_fields[rec] = [{ key, label, type, options, required, removed }]  rec = policy | payment | commission | claim
+   Custom fields are stored on the record under `custom` and show in the grids, drill-downs and exports.
+   Removing a field only hides it — values already posted are kept. */
+export const RECORD_OF = { master: 'policy', gwp: 'policy', renewals: 'policy', payments: 'payment', commission: 'commission', claims: 'claim', targets: null };
+export const RECORD_LABEL = { policy: 'Policy (Master, GWP & Renewals uploads)', payment: 'Payment', commission: 'Commission receipt', claim: 'Claim' };
+export const CUSTOM_TYPES = [['text', 'Text'], ['number', 'Number'], ['money', 'Amount (LKR)'], ['date', 'Date'], ['select', 'Dropdown']];
+// Columns the calculations and matching depend on — they can be renamed but never removed.
+const LOCKED_EXTRA = { master: ['customer', 'inception', 'expiry', 'effective_date'], gwp: ['customer', 'inception', 'expiry', 'effective_date'], renewals: ['customer', 'inception', 'expiry', 'effective_date'] };
+export const isLocked = (register, key) => !!(TEMPLATES[register]?.cols.find(c => c.key === key)?.required) || (LOCKED_EXTRA[register] || []).includes(key);
+export const customFieldsFor = (config, register) => { const rec = RECORD_OF[register]; return rec ? ((config?.custom_fields || {})[rec] || []).filter(f => f && f.key && !f.removed) : []; };
+export function effectiveTemplate(register, config) {
+  const baseTpl = TEMPLATES[register];
+  const fc = (config?.fields || {})[register] || {};
+  const hidden = new Set(fc.hidden || []);
+  const labels = fc.labels || {};
+  const cols = baseTpl.cols
+    .filter(c => isLocked(register, c.key) || !hidden.has(c.key))
+    .map(c => (labels[c.key] && labels[c.key].trim() && labels[c.key].trim() !== c.header
+      ? { ...c, header: labels[c.key].trim(), aliases: [c.header, ...(c.aliases || [])] } : c));
+  for (const f of customFieldsFor(config, register)) {
+    cols.push({ key: 'cf:' + f.key, header: f.label, type: f.type === 'select' ? 'enum' : f.type === 'money' ? 'money' : f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text',
+      options: f.type === 'select' ? (f.options || []) : undefined, required: !!f.required, aliases: [f.key], custom: f });
+  }
+  return { ...baseTpl, cols };
+}
+
 const hnorm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Map file headers → template keys. Returns { map: {key: header}, missing: [labels] }. */
@@ -170,10 +199,25 @@ function uniqueId(prefix, key, taken, reversedIds) {
  * @param ctx       { batchId, user, bankId }
  */
 export function validate(register, parsed, raw, config, ctx) {
-  const tpl = TEMPLATES[register];
+  const tpl = effectiveTemplate(register, config);
+  const H = (k) => (tpl.cols.find(c => c.key === k) || TEMPLATES[register].cols.find(c => c.key === k) || { header: k }).header;
   const { map, missing } = matchHeaders(parsed.headers, tpl);
   if (missing.length) return { fatal: `Missing required column(s): ${missing.join(', ')}` };
   const get = (row, key) => (map[key] ? row[map[key]] : '');
+  const customCols = tpl.cols.filter(c => c.custom);
+  // Parse this row's custom fields by type; errors reject the row. Required is enforced only where it applies.
+  const readCustom = (row, errs, enforceRequired) => {
+    const o = {};
+    for (const c of customCols) {
+      const f = c.custom; const v = get(row, c.key);
+      if (v === '' || v === null || v === undefined) { if (f.required && enforceRequired) errs.push(`${f.label} missing`); continue; }
+      if (f.type === 'date') { const d = toYmd(v); if (!d) { errs.push(`${f.label} is not a real date`); continue; } o[f.key] = d; }
+      else if (f.type === 'number' || f.type === 'money') { if (!isNumeric(v)) { errs.push(`${f.label} is not a number`); continue; } o[f.key] = f.type === 'money' ? round2(num(v)) : num(v); }
+      else if (f.type === 'select') { const m = (f.options || []).find(x => norm(x) === norm(str(v))); if (!m) { errs.push(`${f.label} must be one of: ${(f.options || []).join(', ')}`); continue; } o[f.key] = m; }
+      else o[f.key] = str(v).slice(0, 500);
+    }
+    return o;
+  };
   const today = todayYmd();
   const masters = { insurers: new Set((config.insurers || []).map(norm)), branches: new Set((config.branches || []).map(norm)), classes: new Set((config.classes || []).map(norm)) };
   const strict = !!config.strict_masters;
@@ -240,15 +284,16 @@ export function validate(register, parsed, raw, config, ctx) {
       const type = normType(str(get(row, 'type')) || tpl.defaultType || '');
       const pno = str(get(row, 'policy_no')); const insurer = str(get(row, 'insurer'));
       if (!TXN_TYPES.includes(type)) errs.push(`Transaction Type must be one of ${TXN_TYPES.join(', ')}`);
+      const custom = readCustom(row, errs, ORIGINAL_TYPES.has(type));
       if (!pno) errs.push('Policy No missing');
       if (!insurer) errs.push('Insurance Company missing');
       const dates = {};
       for (const k of ['inception', 'expiry', 'effective_date']) {
         const v = get(row, k); dates[k] = toYmd(v);
-        if (v !== '' && v !== null && v !== undefined && !dates[k]) errs.push(`${tpl.cols.find(c => c.key === k).header} is not a real date`);
+        if (v !== '' && v !== null && v !== undefined && !dates[k]) errs.push(`${H(k)} is not a real date`);
       }
       for (const k of ['basic', 'srcc', 'tc', 'total', 'sum_insured', 'comm_basic', 'comm_srcc', 'comm_tc']) {
-        const v = get(row, k); if (v !== '' && v !== null && v !== undefined && !isNumeric(v)) errs.push(`${tpl.cols.find(c => c.key === k).header} is not a number`);
+        const v = get(row, k); if (v !== '' && v !== null && v !== undefined && !isNumeric(v)) errs.push(`${H(k)} is not a number`);
       }
       let basic = num(get(row, 'basic')), srcc = num(get(row, 'srcc')), tc = num(get(row, 'tc'));
       let total = isNumeric(get(row, 'total')) ? num(get(row, 'total')) : basic + srcc + tc;
@@ -268,7 +313,7 @@ export function validate(register, parsed, raw, config, ctx) {
           const exists = (raw.policies || []).some(p => p.id === id && livePolicyIds.has(id));
           period = { id, policy_no: pno, prev_policy_no: str(get(row, 'prev_policy_no')), customer: str(get(row, 'customer')), address: str(get(row, 'address')),
             telephone: str(get(row, 'telephone')), insurer, branch: str(get(row, 'branch')), class: str(get(row, 'class')), inception: dates.inception, expiry: dates.expiry,
-            sum_insured: round2(num(get(row, 'sum_insured'))) };
+            sum_insured: round2(num(get(row, 'sum_insured'))), ...(Object.keys(custom).length ? { custom } : {}) };
           if (exists || seen.P.has(id)) { period._exists = true; }
         }
       } else if (!errs.length) {
@@ -299,7 +344,7 @@ export function validate(register, parsed, raw, config, ctx) {
             cm = { comm_basic: b, comm_srcc: s, comm_tc: t, comm_total: round2(b + s + t), rate_id: null };
           } else cm = expectedCommission(config, period.insurer, period.class, eff, basic, srcc, tc);
           out.writes.txns.push({ id: u.id, data: { policy_id: period.id, type, effective_date: eff, gwp_month: monthOf(eff), upload_date: today,
-            basic: round2(basic), srcc: round2(srcc), tc: round2(tc), total: round2(total), ...cm, comm_source: supplied ? 'file' : 'schedule', posting_key: key, ...base() } });
+            basic: round2(basic), srcc: round2(srcc), tc: round2(tc), total: round2(total), ...cm, comm_source: supplied ? 'file' : 'schedule', posting_key: key, ...(Object.keys(custom).length ? { custom } : {}), ...base() } });
           // master register rows may also carry the premium receipt and insurer commission
           if (register === 'master') {
             const paidV = get(row, 'paid_amount'), commV = get(row, 'comm_received');
@@ -332,6 +377,7 @@ export function validate(register, parsed, raw, config, ctx) {
         if (!type) errs.push('Type must be Receipt or Refund');
         if (type === 'Refund' && amount > 0) amount = -amount;
       }
+      const custom = readCustom(row, errs, true);
       const comp = str(get(row, 'component'));
       if (register === 'commission' && comp && !['basic', 'srcc', 'tc'].includes(norm(comp))) errs.push('Component must be Basic, SRCC or TC');
       if (!errs.length) {
@@ -345,6 +391,7 @@ export function validate(register, parsed, raw, config, ctx) {
           const doc = { policy_id: r.period ? r.period.id : null, policy_no: pno, customer: str(get(row, 'customer')) || r.period?.customer || '', insurer, branch: str(get(row, 'branch')) || r.period?.branch || '',
             date: d, amount, reference: str(get(row, 'reference')), status: r.period ? 'Matched' : 'Unmatched', posting_key: key, ...base() };
           if (register === 'payments') doc.type = type; else doc.component = comp;
+          if (Object.keys(custom).length) doc.custom = custom;
           (register === 'payments' ? out.writes.receipts : out.writes.commissions).push({ id: u.id, data: doc });
           if (!r.period) {
             status = 'unmatched'; warns.push(r.error);
@@ -359,8 +406,9 @@ export function validate(register, parsed, raw, config, ctx) {
       const st = str(get(row, 'status'));
       if (!ref) errs.push('Claim Ref ID missing'); if (!pno) errs.push('Policy No missing'); if (!st) errs.push('Status missing');
       const dates = {};
-      for (const k of ['incident_date', 'intimation_date', 'payment_date']) { const v = get(row, k); dates[k] = toYmd(v); if (v !== '' && v != null && !dates[k]) errs.push(`${tpl.cols.find(c => c.key === k).header} is not a real date`); }
-      for (const k of ['estimate', 'settlement']) { const v = get(row, k); if (v !== '' && v != null && !isNumeric(v)) errs.push(`${tpl.cols.find(c => c.key === k).header} is not a number`); }
+      for (const k of ['incident_date', 'intimation_date', 'payment_date']) { const v = get(row, k); dates[k] = toYmd(v); if (v !== '' && v != null && !dates[k]) errs.push(`${H(k)} is not a real date`); }
+      for (const k of ['estimate', 'settlement']) { const v = get(row, k); if (v !== '' && v != null && !isNumeric(v)) errs.push(`${H(k)} is not a number`); }
+      const custom = readCustom(row, errs, true);
       const settle = round2(num(get(row, 'settlement')));
       if (settle && !dates.payment_date) errs.push('Payment Date is required with a Settlement Amount');
       let period = null;
@@ -376,6 +424,7 @@ export function validate(register, parsed, raw, config, ctx) {
         setIf('incident_date', dates.incident_date); setIf('intimation_date', dates.intimation_date); setIf('cause', str(get(row, 'cause')));
         setIf('description', str(get(row, 'description'))); setIf('rejection_reason', str(get(row, 'rejection_reason')));
         if (isNumeric(get(row, 'estimate'))) setIf('estimate', round2(num(get(row, 'estimate'))));
+        for (const [k, v] of Object.entries(custom)) if ((c.custom || {})[k] !== v) { c.custom = { ...(c.custom || {}), [k]: v }; changed = true; }
         if (c.status !== st) { c.status_history = [...(c.status_history || []), { status: st, at: today, batch_id: ctx.batchId }]; c.status = st; changed = true; }
         if (settle) {
           const pid = 'P' + hashKey(`${id}|${dates.payment_date}|${settle}`);
@@ -425,8 +474,8 @@ function normType(t) {
 }
 
 /* ── template + error workbooks ── */
-export async function templateWorkbook(register, bankName) {
-  const tpl = TEMPLATES[register];
+export async function templateWorkbook(register, bankName, config) {
+  const tpl = effectiveTemplate(register, config);
   const { default: ExcelJS } = await import('exceljs');
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Data');
@@ -441,7 +490,7 @@ export async function templateWorkbook(register, bankName) {
   info.addRow(['Dates: real Excel dates or YYYY-MM-DD (DD/MM/YYYY is also read). Amounts in LKR, 2 decimals. Do not rename the headers.']);
   info.addRow([]);
   info.addRow(['Column', 'Required', 'Format / allowed values']).font = { bold: true };
-  tpl.cols.forEach(c => info.addRow([c.header, c.required ? 'Yes' : '', c.type === 'enum' ? c.options.join(' / ') : c.type === 'date' ? 'Date' : c.type === 'money' ? 'Amount (LKR)' : 'Text']));
+  tpl.cols.forEach(c => info.addRow([c.header + (c.custom ? ' (custom)' : ''), c.required ? 'Yes' : '', c.type === 'enum' ? (c.options || []).join(' / ') : c.type === 'date' ? 'Date' : c.type === 'money' ? 'Amount (LKR)' : c.type === 'number' ? 'Number' : 'Text']));
   info.getColumn(1).width = 28; info.getColumn(2).width = 10; info.getColumn(3).width = 60;
   return wb.xlsx.writeBuffer();
 }

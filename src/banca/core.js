@@ -261,7 +261,7 @@ export function buildModel(raw, config = DEFAULT_CONFIG, today = todayYmd()) {
   }
   const active = policies.filter(p => p.txns.length); // periods with at least one live transaction
   // flat txn view with policy context
-  const txnRows = txns.map(t => { const p = byId.get(t.policy_id) || {}; return { ...t, policy_no: p.policy_no, customer: p.customer, address: p.address, telephone: p.telephone, insurer: p.insurer, branch: p.branch, class: p.class, inception: p.inception, expiry: p.expiry }; });
+  const txnRows = txns.map(t => { const p = byId.get(t.policy_id) || {}; return { ...t, policy_no: p.policy_no, customer: p.customer, address: p.address, telephone: p.telephone, insurer: p.insurer, branch: p.branch, class: p.class, inception: p.inception, expiry: p.expiry, custom: { ...(p.custom || {}), ...(t.custom || {}) } }; });
   return { policies: active, byId, txns: txnRows, receipts, commissions: comms, claims, statements, today, config };
 }
 

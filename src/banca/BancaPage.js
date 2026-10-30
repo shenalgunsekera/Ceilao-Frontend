@@ -12,6 +12,8 @@ import { UploadPage, BatchHistory, Exceptions, Reconciliation } from './screens/
 import { Statements, Approvals, Targets } from './screens/Finance';
 import { Dashboard } from './screens/Dashboard';
 import { Settings, AuditLog } from './screens/Admin';
+import { UploadFields } from './screens/Fields';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { Platform } from './screens/Platform';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -86,6 +88,7 @@ const NAV_ICONS = {
   'lib-claims': ManageSearchOutlinedIcon,
   'targets': FlagOutlinedIcon,
   'settings': SettingsOutlinedIcon,
+  'fields': TuneOutlinedIcon,
   'audit': ReportGmailerrorredOutlinedIcon,
   'p-dr': RestoreOutlinedIcon,
   'p-ca': BuildCircleOutlinedIcon,
@@ -105,7 +108,7 @@ const NAV = [
     ['split', 'PMF & Ceilao Commission Split'], ['lib-gwp', 'GWP Report Library'], ['lib-payment', 'Payment Confirmations Library'], ['lib-commission', 'Commission Reports Library'], ['claims', 'Claims Tracker'],
   ] },
   { group: 'Operations', items: [['dashboard', 'Management Dashboard'], ['upload', 'Bulk Upload'], ['batches', 'Batch History'], ['exceptions', 'Exceptions'], ['reconciliation', 'Reconciliation'], ['statements', 'PMF Statements & Payments'], ['approvals', 'Approvals'], ['lib-pmf', 'PMF Payment Library'], ['lib-claims', 'Claims Document Library']] },
-  { group: 'Administration', items: [['targets', 'GWP Targets'], ['settings', 'Settings'], ['audit', 'Audit Log']] },
+  { group: 'Administration', items: [['targets', 'GWP Targets'], ['fields', 'Upload Fields'], ['settings', 'Settings'], ['audit', 'Audit Log']] },
   { group: 'Platform Support', items: [['p-dr', 'DR Tests'], ['p-ca', 'Corrective Actions'], ['p-issue', 'Issues & Support'], ['p-incident', 'Incidents'], ['p-release', 'Releases'], ['p-training', 'Training'], ['p-improvement', 'Improvements'], ['p-dev', 'Developer Capacity']] },
 ];
 
@@ -187,7 +190,7 @@ function Shell() {
       split: <CommissionSplit {...P} />, 'lib-gwp': <Library library="gwp" />, 'lib-payment': <Library library="payment" />, 'lib-commission': <Library library="commission" />,
       'lib-pmf': <Library library="pmf_payment" />, 'lib-claims': <Library library="claims" />, claims: <ClaimsTracker {...P} />,
       dashboard: <Dashboard />, upload: <UploadPage key={uploadReg || 'u'} initialRegister={uploadReg} />, batches: <BatchHistory />, exceptions: <Exceptions {...P} />, reconciliation: <Reconciliation />,
-      statements: <Statements />, approvals: <Approvals />, targets: <Targets {...P} />, settings: <Settings />, audit: <AuditLog />,
+      statements: <Statements />, approvals: <Approvals />, targets: <Targets {...P} />, settings: <Settings />, fields: <UploadFields />, audit: <AuditLog />,
       'p-dr': <Platform kind="dr" />, 'p-ca': <Platform kind="ca" />, 'p-issue': <Platform kind="issue" />, 'p-incident': <Platform kind="incident" />, 'p-release': <Platform kind="release" />,
       'p-training': <Platform kind="training" />, 'p-improvement': <Platform kind="improvement" />, 'p-dev': <Platform kind="dev" />,
     };

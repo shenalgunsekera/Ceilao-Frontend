@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { openFile } from '../../storage';
 import { useBanca, storeLibraryFile, audit } from '../store';
 import { DataGrid, StatusChip, Kpi, SectionTitle, T, btnPrimary, btnOutline } from '../ui';
+import { applyFields, withCustom } from '../fields';
 import { lkr, round2, AGE_BUCKETS, EXPIRY_BUCKETS, expiryBucket, monthLabel } from '../core';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -30,7 +31,8 @@ const pol = (r) => ({ policy_no: r.policy_no, customer: r.customer });
 const policyLink = (open) => (r) => <Box component="span" sx={{ color: T.coral, fontWeight: 700 }} onClick={(e) => { e.stopPropagation(); open(r); }}>{r.policy_no}</Box>;
 
 export function MasterRegister({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
+  const rowsC = useMemo(() => withCustom(model.policies), [model]);
   const cols = [
     { key: 'policy_no', label: 'Policy No', render: policyLink(openPolicy) }, { key: 'customer', label: 'Name' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' }, { key: 'class', label: 'Class' },
     { key: 'inception', label: 'Inception' }, { key: 'expiry', label: 'Expiry' },
@@ -41,57 +43,59 @@ export function MasterRegister({ openPolicy }) {
   ];
   return (<>
     <SectionTitle sub="Read-only consolidated view — one row per policy period, built from the GWP, Payments and Commission registers. Click a row to drill down to transactions and source documents.">Master Register</SectionTitle>
-    <DataGrid title="Master Register" bankName={bank.name} rows={model.policies} columns={cols} dateKey="inception" dateLabel="Inception" groupKey="insurer" onRowClick={openPolicy} exportName={`${bank.name}_Master_Register`} defaultSort={{ key: 'inception', dir: 'desc' }} />
+    <DataGrid title="Master Register" bankName={bank.name} rows={rowsC} columns={applyFields(cols, 'master', config, { net_basic: 'basic', net_srcc: 'srcc', net_tc: 'tc', net_total: 'total' })} dateKey="inception" dateLabel="Inception" groupKey="insurer" onRowClick={openPolicy} exportName={`${bank.name}_Master_Register`} defaultSort={{ key: 'inception', dir: 'desc' }} />
   </>);
 }
 
 export function GwpRegister({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
   const types = ['New', 'Renewal', 'Endorsement', 'Cancellation', 'Refund'];
   const cols = [
     { key: 'policy_no', label: 'Policy No' }, { key: 'customer', label: 'Name' }, { key: 'address', label: 'Address' }, { key: 'telephone', label: 'Telephone' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' },
     { key: 'basic', label: 'Basic Premium', type: 'money' }, { key: 'srcc', label: 'SRCC Premium', type: 'money' }, { key: 'tc', label: 'TC Premium', type: 'money' }, { key: 'total', label: 'Total Premium', type: 'money' },
     { key: 'type', label: 'Type' }, { key: 'effective_date', label: 'Effective Date' }, { key: 'gwp_month', label: 'GWP Month' }, { key: 'class', label: 'Class' }, { key: 'upload_date', label: 'Uploaded' },
   ];
-  const rows = useMemo(() => model.txns, [model]);
+  const rows = useMemo(() => withCustom(model.txns), [model]);
   return (<>
     <SectionTitle sub="Every policy and endorsement transaction from confirmed batches. Total = Basic + SRCC + TC. GWP month = inception month for originals, effective-date month for endorsements.">GWP Register</SectionTitle>
-    <DataGrid title="GWP Register" bankName={bank.name} rows={rows} columns={cols} dateKey="effective_date" dateLabel="GWP date" groupKey="type"
+    <DataGrid title="GWP Register" bankName={bank.name} rows={rows} columns={applyFields(cols, 'gwp', config)} dateKey="effective_date" dateLabel="GWP date" groupKey="type"
       chips={[{ label: 'All', test: () => true }, ...types.map(t => ({ label: t, test: r => r.type === t }))]}
       onRowClick={(r) => openPolicy(model.byId.get(r.policy_id))} exportName={`${bank.name}_GWP_Register`} defaultSort={{ key: 'effective_date', dir: 'desc' }} />
   </>);
 }
 
 export function PaymentsRegister({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
+  const rowsC = useMemo(() => withCustom(model.receipts), [model]);
   const cols = [
     { key: 'policy_no', label: 'Policy No' }, { key: 'customer', label: 'Name' }, { key: 'date', label: 'Payment Date' }, { key: 'amount', label: 'Amount', type: 'money' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' },
     { key: 'type', label: 'Type' }, { key: 'reference', label: 'Reference' }, { key: 'unallocated', label: 'Unallocated', type: 'money' }, { key: 'status', label: 'Match', render: r => <StatusChip value={r.unallocated > 0.005 ? 'Unmatched' : 'Matched'} />, exportValue: r => (r.unallocated > 0.005 ? 'Unmatched' : 'Matched') },
   ];
   return (<>
     <SectionTitle sub="Premium receipts and refunds from confirmed payment batches. Unmatched receipts are listed in Exceptions for allocation.">Payments Register</SectionTitle>
-    <DataGrid title="Payments Register" bankName={bank.name} rows={model.receipts} columns={cols} dateKey="date" dateLabel="Payment date" groupKey="insurer"
+    <DataGrid title="Payments Register" bankName={bank.name} rows={rowsC} columns={applyFields(cols, 'payments', config)} dateKey="date" dateLabel="Payment date" groupKey="insurer"
       chips={[{ label: 'All', test: () => true }, { label: 'Unmatched', test: r => r.unallocated > 0.005 }, { label: 'Refunds', test: r => r.type === 'Refund' }]}
       onRowClick={(r) => r.policy_id && openPolicy(model.byId.get(r.policy_id))} exportName={`${bank.name}_Payments_Register`} defaultSort={{ key: 'date', dir: 'desc' }} />
   </>);
 }
 
 export function CommissionRegister({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
+  const rowsC = useMemo(() => withCustom(model.commissions), [model]);
   const cols = [
     { key: 'policy_no', label: 'Policy No' }, { key: 'customer', label: 'Name' }, { key: 'date', label: 'Commission Date' }, { key: 'amount', label: 'Amount', type: 'money' }, { key: 'insurer', label: 'Insurance Company' }, { key: 'branch', label: 'Branch' },
     { key: 'reference', label: 'Statement Ref' }, { key: 'component', label: 'Component' }, { key: 'unallocated', label: 'Unallocated', type: 'money' },
   ];
   return (<>
     <SectionTitle sub="Insurer commission receipts from confirmed commission batches. Several receipts per policy are listed individually.">Commission Register</SectionTitle>
-    <DataGrid title="Commission Register" bankName={bank.name} rows={model.commissions} columns={cols} dateKey="date" dateLabel="Commission date" groupKey="insurer"
+    <DataGrid title="Commission Register" bankName={bank.name} rows={rowsC} columns={applyFields(cols, 'commission', config)} dateKey="date" dateLabel="Commission date" groupKey="insurer"
       chips={[{ label: 'All', test: () => true }, { label: 'Unmatched', test: r => r.unallocated > 0.005 }]}
       onRowClick={(r) => r.policy_id && openPolicy(model.byId.get(r.policy_id))} exportName={`${bank.name}_Commission_Register`} defaultSort={{ key: 'date', dir: 'desc' }} />
   </>);
 }
 
 export function RenewalTracker({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
   const rows = useMemo(() => model.policies.filter(p => !p.cancelled && p.days_left !== null && p.days_left >= 0 && p.days_left <= 90), [model]);
   const cols = [
     { key: 'customer', label: 'Client Name' }, { key: 'policy_no', label: 'Policy No' }, { key: 'class', label: 'Product' }, { key: 'insurer', label: 'Insurer' }, { key: 'expiry', label: 'Expiry Date' },
@@ -100,14 +104,14 @@ export function RenewalTracker({ openPolicy }) {
   ];
   return (<>
     <SectionTitle sub="Reports only — policies expiring within 90 days. A renewal posted in the GWP register updates the status automatically (no follow-up entries, Q15).">Renewal Tracker</SectionTitle>
-    <DataGrid title="Renewal Tracker" bankName={bank.name} rows={rows} columns={cols} dateKey="expiry" dateLabel="Expiry" groupKey="insurer" onRowClick={openPolicy}
+    <DataGrid title="Renewal Tracker" bankName={bank.name} rows={withCustom(rows)} columns={applyFields(cols, 'master', config, {}, true)} dateKey="expiry" dateLabel="Expiry" groupKey="insurer" onRowClick={openPolicy}
       chips={[90, 60, 30, 15, 7].map(d => ({ label: `≤ ${d} days`, test: r => r.days_left <= d })).concat([{ label: 'Renewed', test: r => r.renewal_status === 'Renewed' }, { label: 'Pending', test: r => r.renewal_status === 'Pending' }])}
       exportName={`${bank.name}_Renewal_Tracker`} defaultSort={{ key: 'days_left', dir: 'asc' }} />
   </>);
 }
 
 export function CommissionTracker({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
   const rows = useMemo(() => model.policies.filter(p => p.exp_comm > 0.005 || p.comm_received > 0.005).map(p => ({ ...p, last_comm: [...p.comms].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]?.date || '' })), [model]);
   const cols = [
     { key: 'customer', label: 'Client Name' }, { key: 'policy_no', label: 'Policy No' }, { key: 'class', label: 'Product' }, { key: 'insurer', label: 'Insurer' },
@@ -117,13 +121,13 @@ export function CommissionTracker({ openPolicy }) {
   const st = ['Fully received', 'Partly received', 'Outstanding', 'Over received'];
   return (<>
     <SectionTitle sub="Commission due vs received per policy. Due = Basic, SRCC and TC premium × the configured rates (or insurer-supplied amounts).">Commission Tracker</SectionTitle>
-    <DataGrid title="Commission Tracker" bankName={bank.name} rows={rows} columns={cols} groupKey="comm_status" onRowClick={openPolicy}
+    <DataGrid title="Commission Tracker" bankName={bank.name} rows={withCustom(rows)} columns={applyFields(cols, 'master', config, {}, true)} groupKey="comm_status" onRowClick={openPolicy}
       chips={[{ label: 'All', test: () => true }, ...st.map(s => ({ label: s, test: r => r.comm_status === s }))]} exportName={`${bank.name}_Commission_Tracker`} defaultSort={{ key: 'comm_balance', dir: 'desc' }} />
   </>);
 }
 
 export function OutstandingTracker({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
   const rows = useMemo(() => model.policies.filter(p => p.outstanding > 0.005), [model]);
   const byBucket = AGE_BUCKETS.map(b => ({ b, n: rows.filter(r => r.age_bucket === b).length, v: round2(rows.filter(r => r.age_bucket === b).reduce((s, r) => s + r.outstanding, 0)) }));
   const cols = [
@@ -137,13 +141,13 @@ export function OutstandingTracker({ openPolicy }) {
       {byBucket.map(x => <Kpi key={x.b} label={`${x.b} days`} value={`LKR ${lkr(x.v)}`} sub={`${x.n} polic${x.n === 1 ? 'y' : 'ies'}`} color={x.b === '90+' ? T.danger : undefined} />)}
       <Kpi label="Grand total" value={`LKR ${lkr(byBucket.reduce((s, x) => s + x.v, 0))}`} sub={`${rows.length} policies`} />
     </Stack>
-    <DataGrid title="Outstanding Premium Ageing" bankName={bank.name} rows={rows} columns={cols} dateKey="inception" dateLabel="Commencement" groupKey="age_bucket" onRowClick={openPolicy}
+    <DataGrid title="Outstanding Premium Ageing" bankName={bank.name} rows={withCustom(rows)} columns={applyFields(cols, 'master', config, {}, true)} dateKey="inception" dateLabel="Commencement" groupKey="age_bucket" onRowClick={openPolicy}
       chips={[{ label: 'All', test: () => true }, ...AGE_BUCKETS.map(b => ({ label: `${b} days`, test: r => r.age_bucket === b }))]} exportName={`${bank.name}_Outstanding_Ageing`} defaultSort={{ key: 'age_days', dir: 'desc' }} />
   </>);
 }
 
 export function ExpiredTracker({ openPolicy }) {
-  const { model, bank } = useBanca();
+  const { model, bank, config } = useBanca();
   const rows = useMemo(() => model.policies.filter(p => !p.cancelled && !p.renewed_by && p.days_left !== null && p.days_left < 0).map(p => ({ ...p, since: -p.days_left, bucket: expiryBucket(-p.days_left) })), [model]);
   const cols = [
     { key: 'customer', label: 'Client Name' }, { key: 'policy_no', label: 'Policy No' }, { key: 'class', label: 'Product' }, { key: 'insurer', label: 'Insurer' },
@@ -152,7 +156,7 @@ export function ExpiredTracker({ openPolicy }) {
   ];
   return (<>
     <SectionTitle sub="Expired policies with no recorded renewal (Q16). Entries clear automatically when a renewal is posted. Reports only.">Expired Policy Tracker</SectionTitle>
-    <DataGrid title="Expired Policy Tracker" bankName={bank.name} rows={rows} columns={cols} dateKey="expiry" dateLabel="Expiry" groupKey="bucket" onRowClick={openPolicy}
+    <DataGrid title="Expired Policy Tracker" bankName={bank.name} rows={withCustom(rows)} columns={applyFields(cols, 'master', config, {}, true)} dateKey="expiry" dateLabel="Expiry" groupKey="bucket" onRowClick={openPolicy}
       chips={[{ label: 'All', test: () => true }, ...EXPIRY_BUCKETS.map(b => ({ label: `${b} days`, test: r => r.bucket === b }))]} exportName={`${bank.name}_Expired_Tracker`} defaultSort={{ key: 'since', dir: 'asc' }} />
   </>);
 }
@@ -177,7 +181,7 @@ export function CommissionSplit({ openPolicy }) {
       <Kpi label="PMF paid" value={`LKR ${lkr(sum(r => r.pmf_paid))}`} />
       <Kpi label="Ceilao commission" value={`LKR ${lkr(sum(r => r.ceilao_share))}`} />
     </Stack>
-    <DataGrid title="PMF & Ceilao Commission Split" bankName={bank.name} rows={rows} columns={cols} groupKey="pmf_status" onRowClick={openPolicy}
+    <DataGrid title="PMF & Ceilao Commission Split" bankName={bank.name} rows={withCustom(rows)} columns={applyFields(cols, 'master', config, {}, true)} groupKey="pmf_status" onRowClick={openPolicy}
       chips={[{ label: 'All', test: () => true }, { label: 'Payable', test: r => r.pmf_status === 'Payable' }, { label: 'Not eligible', test: r => r.pmf_status === 'Not eligible' }, { label: 'On statement', test: r => String(r.pmf_status).startsWith('On statement') }, { label: 'Paid', test: r => r.pmf_status === 'Paid' }, { label: 'Clawback', test: r => r.pmf_status === 'Clawback' }]}
       exportName={`${bank.name}_Commission_Split`} />
   </>);
@@ -241,9 +245,9 @@ function LibraryUpload({ open, onClose, library, ctx, insurers, onDone }) {
 
 /* ── Claims Tracker (S-14) ── */
 export function ClaimsTracker({ openPolicy, goUpload }) {
-  const { model, bank, raw } = useBanca();
+  const { model, bank, raw, config } = useBanca();
   const [sel, setSel] = useState(null);
-  const rows = useMemo(() => model.claims.map(c => ({ ...c, payees: [...new Set((c.payments || []).map(p => p.payee).filter(Boolean))].join(', ') })), [model]);
+  const rows = useMemo(() => withCustom(model.claims).map(c => ({ ...c, payees: [...new Set((c.payments || []).map(p => p.payee).filter(Boolean))].join(', ') })), [model]);
   const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))].sort();
   const cols = [
     { key: 'claim_ref', label: 'Claim Ref ID' }, { key: 'customer', label: 'Client Name' }, { key: 'policy_no', label: 'Policy No' }, { key: 'class', label: 'Product / Class' },
@@ -255,7 +259,7 @@ export function ClaimsTracker({ openPolicy, goUpload }) {
   return (<>
     <SectionTitle sub="Claims from bulk claim statements. Status history is kept; settlement is cumulative across instalments. A claim is never closed because it is missing from a later statement."
       right={<Button startIcon={<UploadFileOutlinedIcon />} sx={btnPrimary} onClick={() => goUpload('claims')}>Upload claims statement</Button>}>Claims Tracker</SectionTitle>
-    <DataGrid title="Claims Tracker" bankName={bank.name} rows={rows} columns={cols} dateKey="incident_date" dateLabel="Incident" groupKey="status" onRowClick={setSel}
+    <DataGrid title="Claims Tracker" bankName={bank.name} rows={rows} columns={applyFields(cols, 'claims', config, { paid: 'settlement', payees: 'payee' })} dateKey="incident_date" dateLabel="Incident" groupKey="status" onRowClick={setSel}
       chips={[{ label: 'All', test: () => true }, ...statuses.map(s => ({ label: s, test: r => r.status === s }))]} exportName={`${bank.name}_Claims_Tracker`} defaultSort={{ key: 'incident_date', dir: 'desc' }} />
     <Drawer anchor="right" open={!!sel} onClose={() => setSel(null)} PaperProps={{ sx: { width: { xs: '100%', md: 620 } } }}>
       {sel && <Box sx={{ p: 2.5 }}>

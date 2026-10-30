@@ -22,7 +22,7 @@ jest.mock('firebase/firestore', () => ({
 global.__DATA = DATA;
 
 const SECTIONS = ['master', 'gwp', 'payments', 'commission', 'renewals', 'commission-tracker', 'outstanding', 'expired', 'split', 'lib-gwp', 'lib-payment', 'lib-commission', 'claims',
-  'dashboard', 'upload', 'batches', 'exceptions', 'reconciliation', 'statements', 'approvals', 'lib-pmf', 'lib-claims', 'targets', 'settings', 'audit',
+  'dashboard', 'upload', 'batches', 'exceptions', 'reconciliation', 'statements', 'approvals', 'lib-pmf', 'lib-claims', 'targets', 'fields', 'settings', 'audit',
   'p-dr', 'p-ca', 'p-issue', 'p-incident', 'p-release', 'p-training', 'p-improvement', 'p-dev'];
 
 for (const s of SECTIONS) {
