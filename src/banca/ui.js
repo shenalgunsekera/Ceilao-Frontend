@@ -216,14 +216,14 @@ export function DataGrid({ title, rows, columns, filterKeys = ['branch', 'insure
             {columns.some(c => c.group) && (
               <TableRow>
                 {columns.reduce((acc, c) => { const g = c.group || ''; const last = acc[acc.length - 1]; if (last && last.g === g) last.n++; else acc.push({ g, n: 1 }); return acc; }, []).map((b, i) => (
-                  <TableCell key={i} colSpan={b.n} align="center" sx={{ py: 0.4, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', bgcolor: b.g ? T.dark : '#FFF1EC', color: b.g ? '#fff' : T.dark, borderRight: '2px solid #fff' }}>{b.g}</TableCell>
+                  <TableCell key={i} colSpan={b.n} align="center" sx={{ py: 0.4, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', bgcolor: b.g ? T.dark : '#1E1E2E', color: '#fff', borderRight: '2px solid #fff' }}>{b.g}</TableCell>
                 ))}
               </TableRow>
             )}
             <TableRow>
             {columns.map(c => (
               <TableCell key={c.key} align={['money', 'int', 'pct'].includes(c.type) ? 'right' : 'left'}
-                sx={{ fontWeight: 800, fontSize: 11.5, bgcolor: '#FFF1EC', color: T.dark, whiteSpace: 'nowrap', minWidth: c.width, top: columns.some(x => x.group) ? 27 : 0 }}>
+                sx={{ fontWeight: 800, fontSize: 11.5, bgcolor: '#1E1E2E', color: '#C8C8D8', whiteSpace: 'nowrap', minWidth: c.width, top: columns.some(x => x.group) ? 27 : 0 }}>
                 {c.noSort ? c.label : (
                   <TableSortLabel active={sort?.key === c.key} direction={sort?.key === c.key ? sort.dir : 'asc'}
                     onClick={() => setSort(s => ({ key: c.key, dir: s?.key === c.key && s.dir === 'asc' ? 'desc' : 'asc' }))}>{c.label}</TableSortLabel>
