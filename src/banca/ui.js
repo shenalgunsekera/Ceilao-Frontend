@@ -293,7 +293,7 @@ export function PolicyDrawer({ policy, model, batches, files, onClose, onOpenPol
         )}
         <Divider sx={{ my: 1 }} />
         <Stack direction="row" flexWrap="wrap" columnGap={2}>
-          <Field k="Net basic" v={lkr(p.net_basic)} /><Field k="Net SRCC" v={lkr(p.net_srcc)} /><Field k="Net TC" v={lkr(p.net_tc)} /><Field k="Net total premium" v={lkr(p.net_total)} />
+          <Field k="Net basic" v={lkr(p.net_basic)} /><Field k="Net SRCC" v={lkr(p.net_srcc)} /><Field k="Net TC" v={lkr(p.net_tc)} /><Field k="Net total premium" v={lkr(p.net_total)} /><Field k="Premium incl. taxes" v={fmtCell(p.gross_premium, 'money')} />
           <Field k="Premium received" v={lkr(p.paid)} /><Field k="Outstanding" v={lkr(p.outstanding)} /><Field k="Age (from commencement)" v={p.age_days !== null ? `${p.age_days} days (${p.age_bucket})` : ''} />
           <Field k="Commission expected" v={lkr(p.exp_comm)} /><Field k="Commission received" v={lkr(p.comm_received)} /><Field k="Commission balance" v={lkr(p.comm_balance)} />
           <Field k="PMF allocation" v={lkr(p.pmf_alloc)} /><Field k="PMF paid" v={lkr(p.pmf_paid)} /><Field k="Ceilao share" v={lkr(p.ceilao_share)} />
