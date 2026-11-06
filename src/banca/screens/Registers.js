@@ -166,7 +166,7 @@ export function ExpiredTracker({ openPolicy }) {
 }
 
 export function CommissionSplit({ openPolicy }) {
-  const { model, bank, config } = useBanca();
+  const { model, bank, config, me } = useBanca();
   const rows = useMemo(() => model.policies.filter(p => p.exp_comm > 0.005 || p.comm_received > 0.005), [model]);
   const sum = (f) => round2(rows.reduce((s, r) => s + f(r), 0));
   const cols = [
@@ -177,7 +177,7 @@ export function CommissionSplit({ openPolicy }) {
   ];
   return (<>
     <SectionTitle sub={`PMF commission = ${config.pmf_pct}% of net BASIC premium (not of the broker commission). It becomes payable only when the policy's whole insurer commission is received. Ceilao commission = total commission received − PMF commission (decision D6).`}>PMF &amp; Ceilao Commission Split</SectionTitle>
-    {!config.payment_method_cleared && <Alert severity="warning" sx={{ mb: 1.5 }}>Legal hold: live PMF payments are blocked until the bank payment structure is legally cleared (Settings → payment method cleared).</Alert>}
+    {!config.payment_method_cleared && !me.readOnly && <Alert severity="warning" sx={{ mb: 1.5 }}>Legal hold: live PMF payments are blocked until the bank payment structure is legally cleared (Settings → payment method cleared).</Alert>}
     <Stack direction="row" spacing={1.2} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
       <Kpi label="Commission received" value={`LKR ${lkr(sum(r => r.comm_received))}`} />
       <Kpi label="PMF payable now" value={`LKR ${lkr(sum(r => (r.pmf_eligible ? Math.max(0, r.pmf_due) : 0)))}`} sub={`${rows.filter(r => r.pmf_status === 'Payable').length} eligible policies`} color={T.green} />
@@ -215,9 +215,9 @@ export function Library({ library }) {
     { key: 'version', label: 'Version', type: 'int' }, { key: 'batches', label: 'Linked Batches', wrap: true }, { key: 'uploaded_by', label: 'Uploaded By' }, { key: 'note', label: 'Note' },
   ];
   return (<>
-    <SectionTitle sub={L.sub} right={<Button startIcon={<UploadFileOutlinedIcon />} sx={btnPrimary} onClick={() => setOpen(true)}>Upload document</Button>}>{L.title}</SectionTitle>
+    <SectionTitle sub={L.sub} right={!me.readOnly && <Button startIcon={<UploadFileOutlinedIcon />} sx={btnPrimary} onClick={() => setOpen(true)}>Upload document</Button>}>{L.title}</SectionTitle>
     <DataGrid title={L.title} bankName={bank.name} rows={rows} columns={cols} filterKeys={['insurer']} dateKey="date_added" dateLabel="Added" groupKey="insurer" exportName={`${bank.name}_${L.title.replace(/\W+/g, '_')}`} defaultSort={{ key: 'date_added', dir: 'desc' }} />
-    <LibraryUpload open={open} onClose={() => setOpen(false)} library={library} ctx={ctx} insurers={[...new Set(model.policies.map(p => p.insurer))].sort()} onDone={() => { setOpen(false); reload(); }} />
+    {!me.readOnly && <LibraryUpload open={open} onClose={() => setOpen(false)} library={library} ctx={ctx} insurers={[...new Set(model.policies.map(p => p.insurer))].sort()} onDone={() => { setOpen(false); reload(); }} />}
   </>);
 }
 function LibraryUpload({ open, onClose, library, ctx, insurers, onDone }) {
@@ -249,7 +249,7 @@ function LibraryUpload({ open, onClose, library, ctx, insurers, onDone }) {
 
 /* ── Claims Tracker (S-14) ── */
 export function ClaimsTracker({ openPolicy, goUpload }) {
-  const { model, bank, raw, config } = useBanca();
+  const { model, bank, raw, config, me } = useBanca();
   const [sel, setSel] = useState(null);
   const rows = useMemo(() => withCustom(model.claims).map(c => ({ ...c, payees: [...new Set((c.payments || []).map(p => p.payee).filter(Boolean))].join(', ') })), [model]);
   const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))].sort();
@@ -262,7 +262,7 @@ export function ClaimsTracker({ openPolicy, goUpload }) {
   const docs = sel ? (raw.files || []).filter(f => f.library === 'claims' && ((f.ref_ids || []).includes(sel.id) || (f.batch_ids || []).some(b => (sel.payments || []).some(p => p.batch_id === b) || (sel.status_history || []).some(h => h.batch_id === b)))) : [];
   return (<>
     <SectionTitle sub="Claims from bulk claim statements. Status history is kept; settlement is cumulative across instalments. A claim is never closed because it is missing from a later statement."
-      right={<Button startIcon={<UploadFileOutlinedIcon />} sx={btnPrimary} onClick={() => goUpload('claims')}>Upload claims statement</Button>}>Claims Tracker</SectionTitle>
+      right={!me.readOnly && <Button startIcon={<UploadFileOutlinedIcon />} sx={btnPrimary} onClick={() => goUpload('claims')}>Upload claims statement</Button>}>Claims Tracker</SectionTitle>
     <DataGrid title="Claims Tracker" bankName={bank.name} rows={rows} columns={applyFields(cols, 'claims', config, { paid: 'settlement', payees: 'payee' })} dateKey="incident_date" dateLabel="Incident" groupKey="status" onRowClick={setSel}
       chips={[{ label: 'All', test: () => true }, ...statuses.map(s => ({ label: s, test: r => r.status === s }))]} exportName={`${bank.name}_Claims_Tracker`} defaultSort={{ key: 'incident_date', dir: 'desc' }} />
     <Drawer anchor="right" open={!!sel} onClose={() => setSel(null)} PaperProps={{ sx: { width: { xs: '100%', md: 620 } } }}>

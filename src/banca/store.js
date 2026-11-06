@@ -4,9 +4,12 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, query,
 import { db } from '../firebase';
 import { useAuth } from '../App';
 import { uploadFile } from '../storage';
+import { PMF_VIEWER } from '../config/products';
 import { BANKS, DEFAULT_CONFIG, buildModel, round2, num, monthEnd, todayYmd, hashKey, trainingBlock } from './core';
 
 export const COLLS = ['policies', 'txns', 'receipts', 'commissions', 'claims', 'batches', 'files', 'exceptions', 'statements', 'pmf_payments', 'approvals', 'targets', 'signoffs'];
+// All a PMF view-only login may load — keep in step with firestore.rules.
+const VIEWER_COLLS = ['policies', 'txns', 'receipts', 'commissions', 'claims', 'batches', 'files', 'statements', 'pmf_payments'];
 const nowIso = () => new Date().toISOString();
 const path = (bankId, coll) => `banca/${bankId}/${coll}`;
 
@@ -16,6 +19,7 @@ export const useBanca = () => useContext(Ctx);
 export function BancaProvider({ bankId, children }) {
   const bank = BANKS[bankId];
   const { user, userProfile } = useAuth();
+  const readOnly = userProfile?.role === PMF_VIEWER;
   const [raw, setRaw] = useState(null);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
@@ -23,26 +27,28 @@ export function BancaProvider({ bankId, children }) {
   const [loadedAt, setLoadedAt] = useState(null);
   const [platform, setPlatform] = useState([]);
   const loadPlatform = useCallback(async () => {
+    if (readOnly) return;
     try { const s2 = await getDocs(collection(db, 'platform_ops')); setPlatform(s2.docs.map(d => ({ ...d.data(), id: d.id }))); } catch (_) { setPlatform([]); }
-  }, []);
+  }, [readOnly]);
   useEffect(() => { loadPlatform(); }, [loadPlatform]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [cfgSnap, ...snaps] = await Promise.all([getDoc(doc(db, 'banca', bankId)), ...COLLS.map(c => getDocs(collection(db, path(bankId, c))))]);
-      const r = {}; COLLS.forEach((c, i) => { r[c] = snaps[i].docs.map(d => ({ ...d.data(), id: d.id })); });
+      const colls = readOnly ? VIEWER_COLLS : COLLS;
+      const [cfgSnap, ...snaps] = await Promise.all([getDoc(doc(db, 'banca', bankId)), ...colls.map(c => getDocs(collection(db, path(bankId, c))))]);
+      const r = {}; COLLS.forEach(c => { r[c] = []; }); colls.forEach((c, i) => { r[c] = snaps[i].docs.map(d => ({ ...d.data(), id: d.id })); });
       setConfig({ ...DEFAULT_CONFIG, ...(cfgSnap.exists() ? cfgSnap.data() : {}) });
       setRaw(r); setLoadedAt(new Date());
     } catch (e) {
       setError(e.code === 'permission-denied' ? 'Access denied — the Bancassurance database rules need to be deployed, or your role has no access to this bank module.' : (e.message || 'Could not load bank data.'));
     }
     setLoading(false);
-  }, [bankId]);
+  }, [bankId, readOnly]);
   useEffect(() => { load(); }, [load]);
 
   const model = useMemo(() => (raw ? buildModel(raw, config) : null), [raw, config]);
-  const me = useMemo(() => ({ uid: user?.uid || '', name: userProfile?.full_name || user?.email || '', role: userProfile?.role || '' }), [user, userProfile]);
+  const me = useMemo(() => ({ uid: user?.uid || '', name: userProfile?.full_name || user?.email || '', role: userProfile?.role || '', readOnly }), [user, userProfile, readOnly]);
 
   const value = useMemo(() => ({ bankId, bank, raw, config, model, loading, error, loadedAt, reload: load, me, setConfig, platform, reloadPlatform: loadPlatform }), [bankId, bank, raw, config, model, loading, error, loadedAt, load, me, platform, loadPlatform]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -50,6 +56,7 @@ export function BancaProvider({ bankId, children }) {
 
 /* ── audit (append-only) ── */
 export async function audit(bankId, me, event, record = '', detail = {}) {
+  if (me.readOnly) return;
   try {
     const ref = doc(collection(db, path(bankId, 'audit')));
     await setDoc(ref, { event, record: String(record || ''), detail: JSON.parse(JSON.stringify(detail || {})), user_uid: me.uid, user_name: me.name, at: nowIso() });

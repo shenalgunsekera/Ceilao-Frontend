@@ -146,6 +146,7 @@ const CreateAccountModal = ({ open, onClose, onCreated }) => {
               <Select value={form.role} label="Role" onChange={e => set('role', e.target.value)}>
                 <MenuItem value="employee">Employee</MenuItem>
                 <MenuItem value="manager">Manager</MenuItem>
+                <MenuItem value="pmf_viewer">PMF View Only (partner login)</MenuItem>
               </Select>
             </FormControl>
           </Stack>

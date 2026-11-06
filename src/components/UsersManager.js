@@ -39,6 +39,7 @@ const ROLE_CONFIG = {
   admin:    { label: 'Admin',    color: '#ef4444', bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)',   Icon: AdminPanelSettingsOutlinedIcon },
   manager:  { label: 'Manager', color: '#d97706', bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.25)',  Icon: SupervisorAccountOutlinedIcon },
   employee: { label: 'Employee',color: '#2563eb', bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.25)', Icon: BadgeOutlinedIcon },
+  pmf_viewer: { label: 'PMF View Only', color: '#D7262E', bg: 'rgba(215,38,46,0.08)', border: 'rgba(215,38,46,0.25)', Icon: BadgeOutlinedIcon },
 };
 
 // Signed-up accounts with no role yet — no data access until an admin assigns one.

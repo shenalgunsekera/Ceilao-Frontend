@@ -16,7 +16,7 @@ import { setActiveWorkSession, closeActiveWorkSession, logoutWithSessionClose, o
 import { doc, getDoc, getDocFromServer, setDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getOrCreateDeviceId, collectDeviceInfo, fetchLocationInfo } from './utils/deviceFingerprint';
-import { PRODUCTS, DEFAULT_MODULE_ACCESS } from './config/products';
+import { PRODUCTS, DEFAULT_MODULE_ACCESS, PMF_VIEWER } from './config/products';
 import { lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -359,7 +359,7 @@ function RequireAuth({ children }) {
     return () => { cancelled = true; cleanup(); };
   }, [userUid, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading || deviceState === 'checking') return (
+  if (loading || deviceState === 'checking' || (user && !userProfile)) return (
     <Box sx={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       minHeight: '100vh',
@@ -401,7 +401,7 @@ function RequireAuth({ children }) {
   );
 
   // Signed in, but no role granted yet (self-registered / not set up by an admin).
-  if (userProfile && !['admin', 'manager', 'employee'].includes(userProfile.role)) return (
+  if (userProfile && !['admin', 'manager', 'employee', PMF_VIEWER].includes(userProfile.role)) return (
     <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#F9FAFB', p: 3 }}>
       <Box sx={{ maxWidth: 420, textAlign: 'center' }}>
         <Typography sx={{ fontSize: 40, mb: 1 }}>⏳</Typography>
@@ -413,6 +413,9 @@ function RequireAuth({ children }) {
       </Box>
     </Box>
   );
+
+  // PMF partner login: the PMF BANCA reports are the only place it can go.
+  if (userProfile?.role === PMF_VIEWER && !/^\/banca\/pmf(\/|$)/.test(location.pathname)) return <Navigate to="/banca/pmf/master" replace />;
 
   return children;
 }
@@ -478,7 +481,7 @@ function App() {
         // ── Auto open work session ────────────────────────────────────────────
         // openWorkSession first reconciles (closes) this user's stale / previous-day
         // open sessions, then reuses a still-live session for today or opens a new one.
-        if (!workSessionRef.current || workSessionRef.current.userId !== firebaseUser.uid) {
+        if (profile?.role !== PMF_VIEWER && (!workSessionRef.current || workSessionRef.current.userId !== firebaseUser.uid)) {
           try {
             workSessionRef.current = await openWorkSession(
               firebaseUser.uid,
@@ -533,6 +536,7 @@ function App() {
   const hasAccess = useCallback((key) => {
     const role = userProfile?.role || 'employee';
     if (role === 'admin') return true;
+    if (role === PMF_VIEWER) return key === 'banca_pmf';
     return (moduleAccess[key] || []).includes(role);
   }, [moduleAccess, userProfile]);
 

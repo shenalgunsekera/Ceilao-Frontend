@@ -1,7 +1,8 @@
 // PMF BANCA Module — its own sub-space inside the portal (route /banca/:bankId/:section).
 import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../App';
+import { auth } from '../firebase';
 import { BANKS } from './core';
 import { BancaProvider, useBanca } from './store';
 import { T, PolicyDrawer } from './ui';
@@ -24,6 +25,7 @@ import IconButton from '@mui/material/IconButton';
 import Drawer from '@mui/material/Drawer';
 import CircularProgress from '@mui/material/CircularProgress';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
@@ -122,11 +124,16 @@ function Shell() {
   const [mobileNav, setMobileNav] = useState(false);
   const [closed, setClosed] = useState({ 'Platform Support': true });
   const go = (s) => { navigate(`/banca/${bankId}/${s}`); setMobileNav(false); };
+  // A view-only login gets the PMF BANCA reports (first nav group) and nothing else.
+  const navGroups = me.readOnly ? NAV.slice(0, 1) : NAV;
+  const roleLabel = me.readOnly ? 'View only' : me.role;
+  const signOut = async () => { const { logoutWithSessionClose } = await import('../utils/workSession'); logoutWithSessionClose(auth); };
   const goUpload = (reg) => { setUploadReg(reg); go('upload'); };
   const openPolicy = (p) => p && setPolicy(model.byId.get(p.id) || p);
   const pendingMine = (raw?.approvals || []).filter(a => a.status === 'Pending' && a.maker_uid !== me.uid).length;
   const openEx = (raw?.exceptions || []).filter(e => e.status === 'Open').length;
   const incidents = platform.filter(x => x.type === 'incident' && x.status === 'Active');
+  if (!navGroups.some(g => g.items.some(([k]) => k === section)) && me.readOnly) return <Navigate to={`/banca/${bankId}/master`} replace />;
 
   const nav = (
     <Box sx={{ width: 272, bgcolor: T.dark, color: '#fff', height: '100%', overflowY: 'auto', py: 1.5, display: 'flex', flexDirection: 'column',
@@ -139,7 +146,7 @@ function Shell() {
           {openEx > 0 && <Chip size="small" label={`${openEx} exceptions`} sx={{ height: 20, fontSize: 10.5, bgcolor: 'rgba(255,90,90,0.35)', color: '#fff' }} />}
         </Stack>
       </Box>
-      {NAV.map(g => {
+      {navGroups.map(g => {
         const isOpen = !closed[g.group];
         const hasActive = g.items.some(([k]) => k === section);
         return (
@@ -175,7 +182,7 @@ function Shell() {
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.name}</Typography>
-          <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>{me.role}</Typography>
+          <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>{roleLabel}</Typography>
         </Box>
       </Box>
     </Box>
@@ -202,7 +209,9 @@ function Shell() {
       {/* header */}
       <Box sx={{ height: 62, px: { xs: 1, md: 2 }, display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: '#fff', borderBottom: `1px solid ${T.line}`, position: 'sticky', top: 0, zIndex: 20 }}>
         <IconButton sx={{ display: { md: 'none' } }} onClick={() => setMobileNav(true)}><MenuIcon /></IconButton>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/menu')} sx={{ textTransform: 'none', color: T.muted, display: { xs: 'none', sm: 'inline-flex' } }}>Portal</Button>
+        {me.readOnly
+          ? <Button startIcon={<LogoutIcon />} onClick={signOut} sx={{ textTransform: 'none', color: T.muted, flexShrink: 0 }}>Sign out</Button>
+          : <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/menu')} sx={{ textTransform: 'none', color: T.muted, display: { xs: 'none', sm: 'inline-flex' } }}>Portal</Button>}
         <Box component="img" src={ceilaoLogo} alt="Ceilao" sx={{ height: 36 }} />
         <Typography sx={{ fontWeight: 800, color: T.muted, fontSize: 18 }}>×</Typography>
         <Box component="img" src={pmfMark} alt={bank.name} sx={{ height: 34 }} />
@@ -213,7 +222,7 @@ function Shell() {
         <Box sx={{ flex: 1 }} />
         {loadedAt && <Typography sx={{ fontSize: 11, color: '#9CA3AF', display: { xs: 'none', md: 'block' } }}>Data loaded {loadedAt.toLocaleTimeString()}</Typography>}
         <IconButton onClick={reload} title="Refresh data"><RefreshIcon /></IconButton>
-        <Chip label={`${me.name} · ${me.role}`} size="small" sx={{ fontWeight: 700, display: { xs: 'none', sm: 'flex' } }} />
+        <Chip label={`${me.name} · ${roleLabel}`} size="small" sx={{ fontWeight: 700, display: { xs: 'none', sm: 'flex' } }} />
       </Box>
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Box sx={{ display: { xs: 'none', md: 'block' }, position: 'sticky', top: 62, height: 'calc(100vh - 62px)' }}>{nav}</Box>

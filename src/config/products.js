@@ -1777,6 +1777,10 @@ export const MODULES = [
   { key: 'banca_pmf',    label: 'PMF Bancassurance',  icon: '🏦', description: 'Bank GWP, premium, commission and claims (Module 11)' },
 ];
 
+// Partner login for PMF: read-only, PMF BANCA reports only. Deliberately NOT a staff role,
+// so firestore.rules and storage.rules keep it out of everything else.
+export const PMF_VIEWER = 'pmf_viewer';
+
 export const DEFAULT_MODULE_ACCESS = {
   quotations:   ['admin', 'manager', 'employee'],
   underwriting: ['admin', 'manager', 'employee'],
