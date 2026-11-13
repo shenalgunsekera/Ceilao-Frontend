@@ -148,6 +148,9 @@ export const expiryBucket = (d) => (d <= 7 ? '0-7' : d <= 15 ? '8-15' : d <= 30 
 
 export const TXN_TYPES = ['New', 'Renewal', 'Endorsement', 'Cancellation', 'Refund'];
 export const ORIGINAL_TYPES = new Set(['New', 'Renewal']);
+// Names and places are kept in capitals, so "peoples insurance" and "Peoples Insurance" are one insurer everywhere.
+export const CAPS_KEYS = new Set(['customer', 'address', 'insurer', 'branch', 'class', 'pay_type', 'vehicle_no', 'cause', 'payee']);
+export const capsRecord = (o) => { for (const k of CAPS_KEYS) if (typeof o[k] === 'string') o[k] = o[k].toUpperCase(); return o; };
 
 /* ── the model: every register / tracker / report reads from this ── */
 export function buildModel(raw, config = DEFAULT_CONFIG, today = todayYmd()) {

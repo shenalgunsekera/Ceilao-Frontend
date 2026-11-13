@@ -2,7 +2,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { validate } from './templates';
-import { DEFAULT_CONFIG, expectedCommission, periodId } from './core';
+import { DEFAULT_CONFIG, expectedCommission, periodId, capsRecord } from './core';
 import { executeReversal } from './store';
 import { DuplicateReview } from './screens/Operations';
 
@@ -20,7 +20,7 @@ jest.mock('firebase/firestore', () => ({
 const PID = periodId('X', 'P1', '2026-01-01');
 const comm = expectedCommission(DEFAULT_CONFIG, 'X', 'Motor', '2026-01-01', 100, 0, 0);
 const stored = () => ({
-  policies: [{ id: PID, policy_no: 'P1', customer: 'A', address: 'Old Rd', insurer: 'X', branch: 'Colombo', class: 'Motor', inception: '2026-01-01', expiry: '2026-12-31', facility_no: '', vehicle_no: 'CAB-1', batch_id: 'B1' }],
+  policies: [capsRecord({ id: PID, policy_no: 'P1', customer: 'A', address: 'Old Rd', insurer: 'X', branch: 'Colombo', class: 'Motor', inception: '2026-01-01', expiry: '2026-12-31', facility_no: '', vehicle_no: 'CAB-1', batch_id: 'B1' })],
   txns: [{ id: 'T1', policy_id: PID, type: 'New', effective_date: '2026-01-01', basic: 100, srcc: 0, tc: 0, total: 100, ...comm, comm_source: 'schedule', batch_id: 'B1' }],
   receipts: [], commissions: [], claims: [], targets: [], exceptions: [],
 });
@@ -77,6 +77,13 @@ describe('policy rows already in the system', () => {
     const v = run('gwp', GWP_H, [gwpRow(), gwpRow({ __row: 3, 'Basic Premium': 90, 'Total Premium': 90 })], fresh);
     expect(v.stats).toMatchObject({ accepted: 1, rejected: 1 });
   });
+});
+
+test('names are taken in capitals, so different spellings of one insurer stay one', () => {
+  const fresh = { ...stored(), policies: [], txns: [] };
+  const v = run('gwp', GWP_H, [gwpRow({ 'Insurance Company': 'peoples Insurance', 'Customer Name': 'mr a. silva', Branch: 'colombo' })], fresh);
+  expect(v.writes.policies[0].data).toMatchObject({ insurer: 'PEOPLES INSURANCE', customer: 'MR A. SILVA', branch: 'COLOMBO' });
+  expect(capsRecord({ insurer: 'peoples insurance', status: 'Matched' })).toEqual({ insurer: 'PEOPLES INSURANCE', status: 'Matched' });
 });
 
 describe('payments and commission', () => {

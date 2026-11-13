@@ -2,7 +2,7 @@
 // Pure functions (no Firebase): validate() returns exactly what would be written.
 import {
   num, isNumeric, round2, toYmd, monthOf, norm, normPolicy, hashKey, periodId, expectedCommission,
-  TXN_TYPES, ORIGINAL_TYPES, todayYmd,
+  TXN_TYPES, ORIGINAL_TYPES, todayYmd, CAPS_KEYS,
 } from './core';
 
 export const TEMPLATE_VERSION = 'v1';
@@ -234,7 +234,7 @@ export function validate(register, parsed, raw, config, ctx) {
   const H = (k) => (tpl.cols.find(c => c.key === k) || TEMPLATES[register].cols.find(c => c.key === k) || { header: k }).header;
   const { map, missing } = matchHeaders(parsed.headers, tpl);
   if (missing.length) return { fatal: `Missing required column(s): ${missing.join(', ')}` };
-  const get = (row, key) => (map[key] ? row[map[key]] : '');
+  const get = (row, key) => { const v = map[key] ? row[map[key]] : ''; return CAPS_KEYS.has(key) && typeof v === 'string' ? v.toUpperCase() : v; };
   const customCols = tpl.cols.filter(c => c.custom);
   // Parse this row's custom fields by type; errors reject the row. Required is enforced only where it applies.
   const readCustom = (row, errs, enforceRequired) => {

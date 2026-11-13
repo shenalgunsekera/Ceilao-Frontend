@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { useAuth } from '../App';
 import { uploadFile } from '../storage';
 import { PMF_VIEWER } from '../config/products';
-import { BANKS, DEFAULT_CONFIG, buildModel, round2, num, monthEnd, todayYmd, hashKey, trainingBlock } from './core';
+import { BANKS, DEFAULT_CONFIG, buildModel, round2, num, monthEnd, todayYmd, hashKey, trainingBlock, capsRecord } from './core';
 
 export const COLLS = ['policies', 'txns', 'receipts', 'commissions', 'claims', 'batches', 'files', 'exceptions', 'statements', 'pmf_payments', 'approvals', 'targets', 'signoffs'];
 // All a PMF view-only login may load — keep in step with firestore.rules.
@@ -37,7 +37,7 @@ export function BancaProvider({ bankId, children }) {
     try {
       const colls = readOnly ? VIEWER_COLLS : COLLS;
       const [cfgSnap, ...snaps] = await Promise.all([getDoc(doc(db, 'banca', bankId)), ...colls.map(c => getDocs(collection(db, path(bankId, c))))]);
-      const r = {}; COLLS.forEach(c => { r[c] = []; }); colls.forEach((c, i) => { r[c] = snaps[i].docs.map(d => ({ ...d.data(), id: d.id })); });
+      const r = {}; COLLS.forEach(c => { r[c] = []; }); colls.forEach((c, i) => { r[c] = snaps[i].docs.map(d => capsRecord({ ...d.data(), id: d.id })); });
       setConfig({ ...DEFAULT_CONFIG, ...(cfgSnap.exists() ? cfgSnap.data() : {}) });
       setRaw(r); setLoadedAt(new Date());
     } catch (e) {

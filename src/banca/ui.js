@@ -65,6 +65,9 @@ export const fmtCell = (v, type) => {
   return String(v);
 };
 
+// register text (names, insurers, branches…) is shown and exported in capitals
+const upper = (v) => (typeof v === 'string' ? v.toUpperCase() : v);
+
 /* ── Excel export: Summary + Detail sheets with working formulas ── */
 const colLetter = (n) => { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
 export async function exportExcel({ title, bankName, columns, rows, filtersText, groupKey, fileName }) {
@@ -75,7 +78,7 @@ export async function exportExcel({ title, bankName, columns, rows, filtersText,
   const det = wb.addWorksheet('Detail');
   det.addRow(cols.map(c => c.label)).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   det.getRow(1).eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } }; });
-  rows.forEach(r => det.addRow(cols.map(c => { const v = c.exportValue ? c.exportValue(r) : r[c.key]; return c.type === 'money' || c.type === 'int' || c.type === 'pct' ? (v === '' || v === null || v === undefined ? null : num(v)) : (v ?? ''); })));
+  rows.forEach(r => det.addRow(cols.map(c => { const v = c.exportValue ? c.exportValue(r) : r[c.key]; return c.type === 'money' || c.type === 'int' || c.type === 'pct' ? (v === '' || v === null || v === undefined ? null : num(v)) : upper(v ?? ''); })));
   const last = rows.length + 1;
   const totalRow = det.addRow(cols.map((c, i) => (i === 0 ? 'TOTAL' : c.type === 'money' ? { formula: `SUBTOTAL(9,${colLetter(i)}2:${colLetter(i)}${last})` } : '')));
   totalRow.font = { bold: true };
@@ -135,7 +138,7 @@ export async function exportPdf({ title, bankName, columns, rows, filtersText, f
   const totals = cols.map((c, i) => (i === 0 ? 'TOTAL' : c.type === 'money' ? lkr(rows.reduce((s, r) => s + num(c.exportValue ? c.exportValue(r) : r[c.key]), 0)) : ''));
   autoTable(pdf, {
     startY: 31, head: [cols.map(c => c.label)],
-    body: rows.map(r => cols.map(c => fmtCell(c.exportValue ? c.exportValue(r) : r[c.key], c.type))),
+    body: rows.map(r => cols.map(c => upper(fmtCell(c.exportValue ? c.exportValue(r) : r[c.key], c.type)))),
     foot: [totals], showFoot: 'lastPage',
     styles: { fontSize: tight ? 6 : 7, cellPadding: tight ? 1 : 1.4 }, headStyles: { fillColor: [255, 90, 90], textColor: 255 }, footStyles: { fillColor: [26, 26, 46], textColor: 255, fontStyle: 'bold' },
     columnStyles: Object.fromEntries(cols.map((c, i) => [i, c.type === 'money' || c.type === 'int' ? { halign: 'right' } : {}])),
@@ -240,7 +243,7 @@ export function DataGrid({ title, rows, columns, filterKeys = ['branch', 'insure
               <TableRow key={r.id || i} hover onClick={onRowClick ? () => onRowClick(r) : undefined} sx={{ cursor: onRowClick ? 'pointer' : 'default', ...(rowSx ? rowSx(r) : {}) }}>
                 {columns.map(c => (
                   <TableCell key={c.key} align={['money', 'int', 'pct'].includes(c.type) ? 'right' : 'left'}
-                    sx={{ fontSize: 12, whiteSpace: c.wrap ? 'normal' : 'nowrap', color: c.type === 'money' && num(r[c.key]) < 0 ? T.danger : undefined }}>
+                    sx={{ fontSize: 12, whiteSpace: c.wrap ? 'normal' : 'nowrap', color: c.type === 'money' && num(r[c.key]) < 0 ? T.danger : undefined, textTransform: c.render ? undefined : 'uppercase' }}>
                     {c.render ? c.render(r) : fmtCell(r[c.key], c.type)}
                   </TableCell>
                 ))}
