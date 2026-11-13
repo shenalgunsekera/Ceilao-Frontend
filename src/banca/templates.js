@@ -8,6 +8,8 @@ import {
 export const TEMPLATE_VERSION = 'v1';
 
 const C = (key, header, opts = {}) => ({ key, header, ...opts });
+const FACILITY_COL = C('facility_no', 'Facility No', { aliases: ['facno', 'fac no', 'facility number', 'loan no', 'loan number'] });
+const VEHICLE_COL = C('vehicle_no', 'Vehicle Reg No', { aliases: ['vehicleregno', 'vehicle no', 'vehicle number', 'registration no', 'reg no'] });
 const GWP_COLS = [
   C('policy_no', 'Policy No', { required: true, aliases: ['policy number', 'policy no.', 'policyno'] }),
   C('prev_policy_no', 'Previous Policy No', { aliases: ['previous policy number', 'prev policy no'] }),
@@ -17,8 +19,8 @@ const GWP_COLS = [
   C('telephone', 'Telephone', { aliases: ['phone', 'mobile', 'contact no', 'telephone no'] }),
   C('insurer', 'Insurance Company', { required: true, aliases: ['insurer', 'insurance company name', 'company'] }),
   C('branch', 'Branch', { aliases: ['pmf branch', 'branch name', 'facility branch'] }),
-  C('facility_no', 'Facility No', { aliases: ['facno', 'fac no', 'facility number', 'loan no', 'loan number'] }),
-  C('vehicle_no', 'Vehicle Reg No', { aliases: ['vehicleregno', 'vehicle no', 'vehicle number', 'registration no', 'reg no'] }),
+  FACILITY_COL,
+  VEHICLE_COL,
   C('pay_type', 'Pay Type', { aliases: ['premium pay type', 'payment mode'] }),
   C('class', 'Class / Product', { aliases: ['class', 'product', 'class of insurance', 'insurance class', 'product / class'] }),
   C('inception', 'Inception Date', { type: 'date', aliases: ['period from', 'from date', 'commencement date', 'start date'] }),
@@ -59,9 +61,11 @@ export const TEMPLATES = {
     C('amount', 'Amount', { required: true, type: 'money', aliases: ['payment amount', 'amount paid'] }),
     C('insurer', 'Insurance Company', { required: true, aliases: ['insurer'] }),
     C('branch', 'Branch'),
+    FACILITY_COL,
+    VEHICLE_COL,
     C('reference', 'Payment Reference', { aliases: ['reference', 'receipt no', 'transaction reference'] }),
     C('type', 'Type', { type: 'enum', options: ['Receipt', 'Refund'], aliases: ['payment type'] }),
-  ], note: 'Premium receipts and customer refunds. A receipt is matched when Policy No + Insurance Company identify exactly one policy period; otherwise it goes to Exceptions.' },
+  ], note: 'Premium receipts and customer refunds. A receipt is matched when Policy No + Insurance Company identify exactly one policy period; otherwise it goes to Exceptions. A Facility No / Vehicle Reg No on the row is copied to the policy, so every register shows it.' },
   commission: { label: 'Insurer Commission Receipts', control: 'Amount', library: 'commission', cols: [
     C('policy_no', 'Policy No', { required: true, aliases: ['policy number'] }),
     C('customer', 'Customer Name', { aliases: ['name', 'client name'] }),
@@ -69,9 +73,11 @@ export const TEMPLATES = {
     C('amount', 'Amount', { required: true, type: 'money', aliases: ['commission amount'] }),
     C('insurer', 'Insurance Company', { required: true, aliases: ['insurer'] }),
     C('branch', 'Branch'),
+    FACILITY_COL,
+    VEHICLE_COL,
     C('reference', 'Statement Reference', { aliases: ['reference', 'statement ref'] }),
     C('component', 'Component', { type: 'enum', options: ['Basic', 'SRCC', 'TC'] }),
-  ], note: 'Commission actually received from insurers. Several receipts per policy are allowed. PMF becomes payable only when the full policy commission is received.' },
+  ], note: 'Commission actually received from insurers. Several receipts per policy are allowed. PMF becomes payable only when the full policy commission is received. A Facility No / Vehicle Reg No on the row is copied to the policy, so every register shows it.' },
   claims: { label: 'Claims Statements', control: 'Estimated Loss', library: 'claims', cols: [
     C('claim_ref', 'Claim Ref ID', { required: true, aliases: ['claim ref', 'claim no', 'claim number', 'claim reference'] }),
     C('customer', 'Client Name', { aliases: ['customer name', 'name'] }),
@@ -268,9 +274,9 @@ export function validate(register, parsed, raw, config, ctx) {
     return { error: `Ambiguous: ${cands.length} policy periods match — allocate manually` };
   };
 
-  const out = { register, rows: [], writes: { policies: [], txns: [], receipts: [], commissions: [], claims: [], targets: [], exceptions: [] },
+  const out = { register, rows: [], conflicts: [], updates: [], writes: { policies: [], txns: [], receipts: [], commissions: [], claims: [], targets: [], exceptions: [] },
     stats: { count: 0, accepted: 0, rejected: 0, duplicates: 0, total: 0, acceptedTotal: 0, rejectedTotal: 0, duplicateTotal: 0, unmatched: 0, unmatchedTotal: 0 } };
-  const seen = { T: new Set(), R: new Set(), K: new Set(), P: new Set() };
+  const seen = { T: new Set(), R: new Set(), K: new Set(), P: new Set(), U: new Set() };
   const newPeriods = new Map();
   const claimDocs = new Map((raw.claims || []).filter(c => !c.reversed).map(c => [c.id, JSON.parse(JSON.stringify(c))]));
   const touchedClaims = new Set();
@@ -293,6 +299,125 @@ export function validate(register, parsed, raw, config, ctx) {
     const n = round2(num(v)); return { [k]: (type === 'Cancellation' || type === 'Refund') && n > 0 ? -n : n };
   };
   const base = (extra = {}) => ({ batch_id: ctx.batchId, created_at: new Date().toISOString(), created_by: ctx.user || '', ...extra });
+
+  /* Rows that repeat a record already in the system. Nothing changed: a plain duplicate. Otherwise the differences
+     go to the uploader to Update or Ignore. An update keeps the record's earlier values in its history, so reversing
+     the batch puts them back. A blank optional cell keeps the stored value. */
+  const stampAt = new Date().toISOString();
+  const NO_CHANGE = 'Already in the system — nothing changed';
+  const REVIEW = 'Already in the system — choose Update or Ignore above';
+  const MONEY = new Set(['basic', 'srcc', 'tc', 'total', 'sum_insured', 'gross_premium', 'prev_premium', 'comm_basic', 'comm_srcc', 'comm_tc', 'amount']);
+  const LABELS = { type: 'Transaction Type', amount: 'Amount', comm_basic: 'Commission Basic', comm_srcc: 'Commission SRCC', comm_tc: 'Commission TC' };
+  const labelOf = (k) => (H(k) !== k ? H(k) : LABELS[k] || k);
+  const blankCell = (v) => v === '' || v === null || v === undefined;
+  const same = (a, b) => (typeof b === 'number' ? isNumeric(a) && Math.abs(num(a) - b) < 0.005 : str(a) === str(b));
+  const liveById = { receipts: new Map((raw.receipts || []).filter(x => !x.reversed).map(x => [x.id, x])), commissions: new Map((raw.commissions || []).filter(x => !x.reversed).map(x => [x.id, x])) };
+  const diffRecord = (coll, old, next, silent = {}, prefix = '') => {
+    const changes = [], set = {}, previous = {};
+    for (const [k, v] of Object.entries(next)) {
+      if (k === 'custom') {
+        const keys = Object.keys(v).filter(f => !same((old.custom || {})[f], v[f]));
+        if (!keys.length) continue;
+        keys.forEach(f => { const c = customCols.find(x => x.custom.key === f); changes.push({ label: prefix + (c ? c.custom.label : f), old: (old.custom || {})[f] ?? '', new: v[f], money: c?.custom.type === 'money' }); });
+        set.custom = { ...(old.custom || {}), ...v }; previous.custom = old.custom ?? null;
+        continue;
+      }
+      if (same(old[k], v)) continue;
+      changes.push({ label: prefix + labelOf(k), old: old[k] ?? '', new: v, money: MONEY.has(k) });
+      set[k] = v; previous[k] = old[k] ?? null;
+    }
+    if (!changes.length) return null;
+    for (const [k, v] of Object.entries(silent)) if (!same(old[k], v)) { set[k] = v; previous[k] = old[k] ?? null; }
+    seen.U.add(`${coll}/${old.id}`);
+    return { changes, updates: [{ coll, id: old.id, data: { ...set, updated_at: stampAt, last_batch_id: ctx.batchId,
+      history: [...(old.history || []), { batch_id: ctx.batchId, at: stampAt, by: ctx.user || '', previous }] } }] };
+  };
+  const addConflict = (rec, title, parts) => {
+    rec.conflict = true;
+    out.conflicts.push({ rowNo: rec.rowNo, title, amount: rec.amount, changes: parts.flatMap(p => p.changes), updates: parts.flatMap(p => p.updates || []),
+      adds: parts.flatMap(p => p.adds || []), blocked: parts.map(p => p.blocked).filter(Boolean).join('; ') });
+  };
+  // commission on a policy transaction: the file's figures when it gives them, else the rate schedule
+  const commOf = (row, type, period, eff, basic, srcc, tc) => {
+    const supplied = ['comm_basic', 'comm_srcc', 'comm_tc'].some(k => isNumeric(get(row, k)));
+    if (!supplied) return { supplied, cm: expectedCommission(config, period.insurer, period.class, eff, basic, srcc, tc) };
+    const sign = (type === 'Cancellation' || type === 'Refund') && num(get(row, 'comm_basic')) + num(get(row, 'comm_srcc')) + num(get(row, 'comm_tc')) > 0 ? -1 : 1;
+    const b = round2(sign * num(get(row, 'comm_basic'))), s = round2(sign * num(get(row, 'comm_srcc'))), t = round2(sign * num(get(row, 'comm_tc')));
+    return { supplied, cm: { comm_basic: b, comm_srcc: s, comm_tc: t, comm_total: round2(b + s + t), rate_id: null } };
+  };
+  // A receipt / commission already posted: the same line exactly, or the same policy, date and reference with another amount.
+  const existingLine = (P, coll, u, k, { pno, d, ref, kindK, kindV, amount, details, prefix = '' }) => {
+    let old = u.duplicate ? liveById[coll].get(u.id) : null;
+    if (!old && ref) {
+      const c = (raw[coll] || []).filter(x => !x.reversed && normPolicy(x.policy_no) === normPolicy(pno) && x.date === d && str(x.reference) === ref && str(x[kindK]) === str(kindV) && !seen.U.has(`${coll}/${x.id}`));
+      if (c.length === 1) old = c[0];
+    }
+    if (!old) return null;
+    const part = diffRecord(coll, old, { amount, ...(details || {}) }, { posting_key: k }, prefix);
+    if (!part) return 'same';
+    if ((old.allocations || []).length && !same(old.amount, amount)) part.blocked = `${old.id} is already allocated to policies — reverse its batch to change the amount`;
+    const ex = (raw.exceptions || []).find(e => e.ref_id === old.id && e.status === 'Open');
+    if (ex && !same(ex.amount, amount)) part.updates.push(...diffRecord('exceptions', ex, { amount }).updates);
+    return part;
+  };
+  // premium paid / commission received on a Master Register row for a policy that is already in the system
+  const masterMoney = (row, period, eff, pno) => [
+    ['R', 'receipts', 'paid_amount', 'payment_date', 'payment_ref', 'Premium received', 'type', 'Receipt'],
+    ['K', 'commissions', 'comm_received', 'comm_date', 'comm_ref', 'Commission received', 'component', ''],
+  ].map(([P, coll, amtK, dateK, refK, label, kindK, kindV]) => {
+    const v = get(row, amtK); if (!isNumeric(v) || num(v) === 0) return null;
+    const d = toYmd(get(row, dateK)) || eff; const ref = str(get(row, refK)); const amount = round2(num(v));
+    const k = P === 'R' ? `R|${normPolicy(pno)}|${d}|${amount}|${ref}|Receipt` : `K|${normPolicy(pno)}|${d}|${amount}|${ref}|`;
+    const u = uniqueId(P, k, taken[P], revd[P]);
+    if (seen[P].has(u.id)) return null;
+    const line = `${label} ${d}${ref ? ` (${ref})` : ''}`;
+    const m = existingLine(P, coll, u, k, { pno, d, ref, kindK, kindV, amount, prefix: `${line} · ` });
+    seen[P].add(u.id);
+    if (m) return m === 'same' ? null : m;
+    return { changes: [{ label: line, old: '', new: amount, money: true, added: true }],
+      adds: [{ coll, id: u.id, data: { policy_id: period.id, policy_no: pno, customer: period.customer, insurer: period.insurer, branch: period.branch, date: d, amount,
+        ...(P === 'R' ? { type: 'Receipt' } : { component: '' }), reference: ref, status: 'Matched', posting_key: k, ...base() } }] };
+  }).filter(Boolean);
+  const POLICY_FIELDS = ['customer', 'address', 'telephone', 'branch', 'class', 'expiry', 'sum_insured', 'facility_no', 'vehicle_no', 'pay_type', 'prev_policy_no'];
+  const policyConflict = (row, { period, type, eff, key, basic, srcc, tc, total, supplied, cm, pno }) => {
+    const oldP = (raw.policies || []).find(p => p.id === period.id);
+    const oldT = (raw.txns || []).find(t => t.policy_id === period.id && !t.reversed && ORIGINAL_TYPES.has(t.type));
+    const pNext = {};
+    for (const k of POLICY_FIELDS) if (!blankCell(get(row, k))) pNext[k] = period[k];
+    if (period.custom) pNext.custom = period.custom;
+    const tNext = { type, basic: round2(basic), srcc: round2(srcc), tc: round2(tc), total: round2(total), ...optMoney(row, 'gross_premium', type), ...optMoney(row, 'prev_premium'),
+      ...(str(get(row, 'remarks')) ? { remarks: str(get(row, 'remarks')).slice(0, 500) } : {}) };
+    const tSilent = { posting_key: key };
+    // a commission typed in by hand on the stored transaction is kept unless the file gives one
+    if (supplied || !oldT || oldT.comm_source !== 'file') {
+      const { comm_basic, comm_srcc, comm_tc, comm_total, rate_id } = cm;
+      Object.assign(tNext, { comm_basic, comm_srcc, comm_tc });
+      Object.assign(tSilent, { comm_total, rate_id: rate_id ?? null, comm_source: supplied ? 'file' : 'schedule' });
+    }
+    return [oldP && diffRecord('policies', oldP, pNext), oldT && diffRecord('txns', oldT, tNext, tSilent), ...(register === 'master' ? masterMoney(row, period, eff, pno) : [])].filter(Boolean);
+  };
+  // Facility No / Vehicle Reg No on a payment or commission row are carried to its policy, so every register shows them.
+  // Filling a blank one needs no question; replacing a different value goes to the uploader.
+  const polPending = new Map();
+  const policyDetails = (row, period, warns) => {
+    const pend = polPending.get(period.id) || {};
+    const next = {};
+    for (const k of ['facility_no', 'vehicle_no']) {
+      let v = str(get(row, k)); if (!v) continue;
+      if (k === 'vehicle_no') v = v.toUpperCase();
+      if (pend[k] !== undefined) { if (pend[k] !== v) warns.push(`${H(k)} ${v} differs from an earlier row for this policy (${pend[k]}) — not carried to the policy`); continue; }
+      if (!same(period[k], v)) next[k] = v;
+    }
+    if (!Object.keys(next).length) return null;
+    const old = (raw.policies || []).find(p => p.id === period.id) || period;
+    if (seen.U.has(`policies/${old.id}`)) { warns.push('Policy details not carried — an earlier row in this file already changes this policy'); return null; }
+    const part = diffRecord('policies', old, next);
+    if (!part) return null;
+    polPending.set(period.id, { ...pend, ...next });
+    if (Object.keys(next).some(k => str(old[k]))) { part.changes.forEach(c => { c.label = `${c.label} on the policy`; }); return { review: part }; }
+    warns.push(`${part.changes.map(c => `${c.label} ${c.new}`).join(', ')} added to the policy`);
+    return { auto: part };
+  };
 
   // GWP-style rows: originals first (so endorsements in the same file find their period)
   let rowsInOrder = parsed.rows;
@@ -342,6 +467,7 @@ export function validate(register, parsed, raw, config, ctx) {
             telephone: str(get(row, 'telephone')), insurer, branch: str(get(row, 'branch')), class: str(get(row, 'class')), inception: dates.inception, expiry: dates.expiry,
             sum_insured: round2(num(get(row, 'sum_insured'))), facility_no: str(get(row, 'facility_no')), vehicle_no: str(get(row, 'vehicle_no')).toUpperCase(),
             pay_type: str(get(row, 'pay_type')), ...(Object.keys(custom).length ? { custom } : {}) };
+          period._inDb = exists;
           if (exists || seen.P.has(id)) { period._exists = true; }
         }
       } else if (!errs.length) {
@@ -355,22 +481,22 @@ export function validate(register, parsed, raw, config, ctx) {
       if (!errs.length) {
         key = `T|${norm(insurer)}|${normPolicy(pno)}|${type}|${eff}|${round2(basic)}|${round2(srcc)}|${round2(tc)}`;
         const u = uniqueId('T', key, taken.T, revd.T);
-        if (u.duplicate || seen.T.has(u.id)) status = 'duplicate';
+        const { supplied, cm } = commOf(row, type, period, eff, basic, srcc, tc);
+        if (ORIGINAL_TYPES.has(type) && period._inDb && !seen.P.has(period.id)) {
+          // this policy period is already in the system
+          seen.P.add(period.id); seen.T.add(u.id);
+          status = 'duplicate';
+          const parts = policyConflict(row, { period, type, eff, key, basic, srcc, tc, total, supplied, cm, pno });
+          if (parts.length) { addConflict(rec, `${pno} · ${period.insurer} · ${period.inception}`, parts); rec.note = REVIEW; } else rec.note = NO_CHANGE;
+        } else if (u.duplicate || seen.T.has(u.id)) status = 'duplicate';
         else if (ORIGINAL_TYPES.has(type) && period._exists) { errs.push('This policy period already has an original transaction — post an Endorsement instead'); }
         else {
           seen.T.add(u.id);
           if (ORIGINAL_TYPES.has(type)) {
-            seen.P.add(period.id); const { _exists, ...pdoc } = period;
+            seen.P.add(period.id); const { _exists, _inDb, ...pdoc } = period;
             out.writes.policies.push({ id: period.id, data: { ...pdoc, ...base() } });
             newPeriods.set(period.id, pdoc); indexPeriod(pdoc);
           }
-          const supplied = ['comm_basic', 'comm_srcc', 'comm_tc'].some(k => isNumeric(get(row, k)));
-          let cm;
-          if (supplied) {
-            const sign = (type === 'Cancellation' || type === 'Refund') && num(get(row, 'comm_basic')) + num(get(row, 'comm_srcc')) + num(get(row, 'comm_tc')) > 0 ? -1 : 1;
-            const b = round2(sign * num(get(row, 'comm_basic'))), s = round2(sign * num(get(row, 'comm_srcc'))), t = round2(sign * num(get(row, 'comm_tc')));
-            cm = { comm_basic: b, comm_srcc: s, comm_tc: t, comm_total: round2(b + s + t), rate_id: null };
-          } else cm = expectedCommission(config, period.insurer, period.class, eff, basic, srcc, tc);
           out.writes.txns.push({ id: u.id, data: { policy_id: period.id, type, effective_date: eff, gwp_month: monthOf(eff), upload_date: today,
             basic: round2(basic), srcc: round2(srcc), tc: round2(tc), total: round2(total), ...cm, comm_source: supplied ? 'file' : 'schedule', posting_key: key,
             ...optMoney(row, 'gross_premium', type), ...optMoney(row, 'prev_premium'), ...(str(get(row, 'remarks')) ? { remarks: str(get(row, 'remarks')).slice(0, 500) } : {}),
@@ -414,10 +540,19 @@ export function validate(register, parsed, raw, config, ctx) {
         const P = register === 'payments' ? 'R' : 'K';
         key = `${P}|${normPolicy(pno)}|${d}|${amount}|${str(get(row, 'reference'))}|${register === 'payments' ? type : comp}`;
         const u = uniqueId(P, key, taken[P], revd[P]);
-        if (u.duplicate || seen[P].has(u.id)) status = 'duplicate';
-        else {
+        const r = resolvePeriod(insurer, pno, d);
+        const inFile = seen[P].has(u.id);
+        const details = { ...(str(get(row, 'customer')) ? { customer: str(get(row, 'customer')) } : {}), ...(str(get(row, 'branch')) ? { branch: str(get(row, 'branch')) } : {}), ...(Object.keys(custom).length ? { custom } : {}) };
+        const m = inFile ? 'same' : existingLine(P, register === 'payments' ? 'receipts' : 'commissions', u, key, { pno, d, ref: str(get(row, 'reference')),
+          kindK: register === 'payments' ? 'type' : 'component', kindV: register === 'payments' ? type : comp, amount, details });
+        const parts = [];
+        if (m) { status = 'duplicate'; seen[P].add(u.id); if (m !== 'same') parts.push(m); else if (!inFile) rec.note = NO_CHANGE; }
+        const pd = r.period ? policyDetails(row, r.period, warns) : null;
+        if (pd?.auto) out.updates.push(...pd.auto.updates);
+        if (pd?.review) parts.push(pd.review);
+        if (parts.length) { addConflict(rec, `${pno} · ${insurer} · ${d}`, parts); if (m) rec.note = REVIEW; else warns.push('Policy details differ — choose Update or Ignore above'); }
+        if (!m) {
           seen[P].add(u.id);
-          const r = resolvePeriod(insurer, pno, d);
           const doc = { policy_id: r.period ? r.period.id : null, policy_no: pno, customer: str(get(row, 'customer')) || r.period?.customer || '', insurer, branch: str(get(row, 'branch')) || r.period?.branch || '',
             date: d, amount, reference: str(get(row, 'reference')), status: r.period ? 'Matched' : 'Unmatched', posting_key: key, ...base() };
           if (register === 'payments') doc.type = type; else doc.component = comp;
@@ -531,7 +666,7 @@ export async function errorWorkbook(plan, parsedHeaders) {
   const ws = wb.addWorksheet('Errors');
   ws.addRow(['Row', 'Outcome', 'Reason', ...parsedHeaders]);
   ws.getRow(1).font = { bold: true };
-  plan.rows.filter(r => r.status !== 'accepted').forEach(r => ws.addRow([r.rowNo, r.status, [...r.errors, ...r.warnings].join('; '), ...parsedHeaders.map(h => { const v = r.raw[h]; return v instanceof Date ? toYmd(v) : v; })]));
+  plan.rows.filter(r => r.status !== 'accepted').forEach(r => ws.addRow([r.rowNo, r.status, [...r.errors, ...r.warnings].join('; ') || r.note || '', ...parsedHeaders.map(h => { const v = r.raw[h]; return v instanceof Date ? toYmd(v) : v; })]));
   ws.getColumn(3).width = 60;
   return wb.xlsx.writeBuffer();
 }

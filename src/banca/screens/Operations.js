@@ -28,6 +28,7 @@ import TableRow from '@mui/material/TableRow';
 import TableCell from '@mui/material/TableCell';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
+import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
@@ -44,6 +45,9 @@ import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 import PercentIcon from '@mui/icons-material/Percent';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import ArrowRightAltIcon from '@mui/icons-material/ArrowRightAlt';
 
 const UPLOAD_REGISTERS = ['master', 'gwp', 'renewals', 'payments', 'commission', 'claims', 'targets'];
 const REG_META = {
@@ -70,6 +74,78 @@ const StepCard = ({ n, title, sub, children, done: ok }) => (
   </Box>
 );
 
+const COUNT_LABELS = { updated: 'record(s) updated', filled: 'policy detail(s) filled in' };
+const fmtVal = (c, v) => (v === '' || v === null || v === undefined ? '—' : c.money ? lkr(v) : String(v));
+
+/* Rows that would change a record already in the system: tick the ones to update, the rest are ignored. */
+export function DuplicateReview({ conflicts, picked, setPicked, disabled }) {
+  const [q, setQ] = useState('');
+  const open = conflicts.filter(c => !c.blocked);
+  const nPicked = open.filter(c => picked.has(c.rowNo)).length;
+  const all = open.length > 0 && nPicked === open.length;
+  const setAll = (on) => setPicked(on ? new Set(open.map(c => c.rowNo)) : new Set());
+  const toggle = (c) => {
+    if (disabled || c.blocked) return;
+    setPicked(s => { const n = new Set(s); if (n.has(c.rowNo)) n.delete(c.rowNo); else n.add(c.rowNo); return n; });
+  };
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? conflicts.filter(c => `${c.rowNo} ${c.title} ${c.changes.map(x => `${x.label} ${x.old} ${x.new}`).join(' ')}`.toLowerCase().includes(needle)) : conflicts;
+  return (
+    <Box sx={{ mb: 2, bgcolor: '#fff', borderRadius: '16px', border: `1px solid ${T.line}`, overflow: 'hidden', boxShadow: '0 2px 10px rgba(26,26,46,0.04)' }}>
+      <Box sx={{ p: 2, display: 'flex', gap: 1.5, alignItems: 'flex-start', bgcolor: '#FFFBEB', borderBottom: `1px solid ${T.line}` }}>
+        <Box sx={{ width: 36, height: 36, borderRadius: '10px', bgcolor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <ContentCopyOutlinedIcon sx={{ fontSize: 19, color: T.amber }} />
+        </Box>
+        <Box>
+          <Typography sx={{ fontWeight: 800, fontSize: 15, color: T.dark }}>{conflicts.length} row{conflicts.length === 1 ? '' : 's'} would change records already in the system</Typography>
+          <Typography sx={{ fontSize: 12.5, color: T.muted }}>Tick the rows to update with the file's values. Unticked rows are ignored and the stored record stays as it is. Earlier values are kept, and reversing this batch puts them back.</Typography>
+        </Box>
+      </Box>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.2} alignItems={{ sm: 'center' }} sx={{ px: 2, py: 1, borderBottom: `1px solid ${T.line}` }}>
+        <FormControlLabel sx={{ mr: 0 }} label={<Typography sx={{ fontWeight: 700, fontSize: 13 }}>Select all</Typography>}
+          control={<Checkbox checked={all} indeterminate={nPicked > 0 && !all} disabled={disabled || !open.length} onChange={e => setAll(e.target.checked)} />} />
+        <Stack direction="row" spacing={1}>
+          <Chip size="small" label={`${nPicked} to update`} sx={{ fontWeight: 700, bgcolor: nPicked ? 'rgba(5,150,105,0.12)' : '#F3F4F6', color: nPicked ? T.green : T.muted }} />
+          <Chip size="small" label={`${conflicts.length - nPicked} to ignore`} sx={{ fontWeight: 700, bgcolor: '#F3F4F6', color: T.muted }} />
+        </Stack>
+        <Box sx={{ flex: 1 }} />
+        {conflicts.length > 5 && <TextField size="small" placeholder="Search policy, field…" value={q} onChange={e => setQ(e.target.value)} sx={{ minWidth: 220 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18 }} /></InputAdornment> }} />}
+      </Stack>
+      <Box sx={{ maxHeight: 480, overflowY: 'auto', p: 1.2, display: 'grid', gap: 1 }}>
+        {shown.map(c => {
+          const on = picked.has(c.rowNo) && !c.blocked;
+          return (
+            <Box key={c.rowNo} onClick={() => toggle(c)} sx={{ p: 1.2, borderRadius: '12px', cursor: disabled || c.blocked ? 'default' : 'pointer', transition: 'all .15s',
+              border: `1.5px solid ${on ? T.green : T.line}`, bgcolor: on ? 'rgba(5,150,105,0.04)' : '#fff', '&:hover': { borderColor: on ? T.green : c.blocked ? T.line : '#D1D5DB' } }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Checkbox size="small" checked={on} disabled={disabled || !!c.blocked} onClick={e => e.stopPropagation()} onChange={() => toggle(c)} sx={{ p: 0.5 }} inputProps={{ 'aria-label': `Update row ${c.rowNo}` }} />
+                <Chip size="small" label={`Row ${c.rowNo}`} sx={{ height: 20, fontSize: 11, fontWeight: 700 }} />
+                <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 800, fontSize: 13, color: T.dark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</Typography>
+                <Typography sx={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, color: c.blocked ? T.danger : on ? T.green : T.muted }}>{c.blocked ? 'Cannot update' : on ? 'Update' : 'Ignore'}</Typography>
+              </Stack>
+              <Box sx={{ mt: 0.8, ml: { xs: 0, sm: 4.5 }, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(140px, 260px) 1fr' }, columnGap: 2, rowGap: 0.4 }}>
+                {c.changes.map((x, i) => (
+                  <React.Fragment key={i}>
+                    <Typography sx={{ fontSize: 12, color: T.muted }}>{x.label}</Typography>
+                    <Typography component="div" sx={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 0.6, flexWrap: 'wrap' }}>
+                      {x.added ? <Box component="span" sx={{ color: T.muted }}>new</Box> : <Box component="span" sx={{ color: '#9CA3AF', textDecoration: 'line-through' }}>{fmtVal(x, x.old)}</Box>}
+                      <ArrowRightAltIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                      <Box component="span" sx={{ fontWeight: 700, color: on ? T.green : T.dark }}>{fmtVal(x, x.new)}</Box>
+                    </Typography>
+                  </React.Fragment>
+                ))}
+              </Box>
+              {c.blocked && <Typography sx={{ mt: 0.6, ml: { sm: 4.5 }, fontSize: 11.5, color: T.danger }}>{c.blocked}</Typography>}
+            </Box>
+          );
+        })}
+        {!shown.length && <Typography sx={{ p: 2, fontSize: 12.5, color: T.muted, textAlign: 'center' }}>No rows match “{q}”.</Typography>}
+      </Box>
+    </Box>
+  );
+}
+
 export function UploadPage({ initialRegister, onPosted }) {
   const ctx = useBanca();
   const { bank, bankId, raw, config, me, reload, model } = ctx;
@@ -83,14 +159,15 @@ export function UploadPage({ initialRegister, onPosted }) {
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [pct, setPct] = useState(0);
   const [overrideReason, setOverrideReason] = useState(''); const [addMasters, setAddMasters] = useState(true);
   const [done, setDone] = useState(null);
+  const [picked, setPicked] = useState(() => new Set());
   const tpl = effectiveTemplate(register, config);
   const isApprover = me.role === 'admin' || me.role === 'manager';
   const insurers = useMemo(() => [...new Set(model.policies.map(p => p.insurer))].sort(), [model]);
-  const reset = () => { setFile(null); setParsed(null); setPlan(null); setErr(''); setDone(null); setPct(0); setOverrideReason(''); setFp(''); };
+  const reset = () => { setFile(null); setParsed(null); setPlan(null); setErr(''); setDone(null); setPct(0); setOverrideReason(''); setFp(''); setPicked(new Set()); };
 
   const downloadTemplate = async () => { const buf = await templateWorkbook(register, bank.name, config); saveAs(new Blob([buf]), `${bank.name}_${register}_template_v1.xlsx`); };
   const runValidation = async () => {
-    setErr(''); setPlan(null); setBusy(true);
+    setErr(''); setPlan(null); setPicked(new Set()); setBusy(true);
     try {
       const fingerprint = await fileFingerprint(file);
       const dupBatch = (raw.batches || []).find(b => b.file_hash === fingerprint && b.register === register && b.status !== 'Reversed' && b.type !== 'Reversal');
@@ -104,13 +181,14 @@ export function UploadPage({ initialRegister, onPosted }) {
     setBusy(false);
   };
   const variance = plan && ((declCount !== '' && num(declCount) !== plan.stats.count) || (declTotal !== '' && Math.abs(num(declTotal) - plan.stats.total) > 0.01));
-  const canConfirm = plan && plan.stats.accepted > 0 && declCount !== '' && declTotal !== '' && (!variance || (isApprover && overrideReason.trim()));
+  const chosen = plan ? plan.conflicts.filter(c => picked.has(c.rowNo) && !c.blocked) : [];
+  const canConfirm = plan && (plan.stats.accepted > 0 || chosen.length > 0 || plan.updates.length > 0) && declCount !== '' && declTotal !== '' && (!variance || (isApprover && overrideReason.trim()));
   const confirm = async () => {
     setBusy(true); setErr('');
     try {
       let fileId = '';
       if (doc && tpl.library) fileId = (await storeLibraryFile(ctx, doc, { library: tpl.library, insurer: docIns, from: docFrom, to: docTo, batch_id: batchId })).id;
-      const counts = await postBatch(ctx, { batchId, register, plan, fileName: file.name, fileHash: fp, fileId, declared: { count: num(declCount), total: num(declTotal) },
+      const counts = await postBatch(ctx, { batchId, register, plan, updates: chosen, fileName: file.name, fileHash: fp, fileId, declared: { count: num(declCount), total: num(declTotal) },
         override: variance ? { by: me.name, reason: overrideReason } : null, corrects, onProgress: setPct });
       const nm = plan.newMasters || {};
       if (addMasters && (nm.insurers?.length || nm.branches?.length || nm.classes?.length)) {
@@ -210,12 +288,12 @@ export function UploadPage({ initialRegister, onPosted }) {
       <Box sx={{ flex: 1, minWidth: 220 }}>
         <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: 14 }}>{done ? 'Posted ✓' : plan ? 'Review the results below, then confirm' : 'Step 4 — validate'}</Typography>
         <Typography sx={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
-          {!file ? 'Add a file to continue' : declCount === '' || declTotal === '' ? 'Declare the record count and control total' : plan ? `${plan.stats.accepted} accepted · ${plan.stats.rejected} rejected · ${plan.stats.duplicates} duplicate` : `${TEMPLATES[register].label} · ${file.name}`}
+          {!file ? 'Add a file to continue' : declCount === '' || declTotal === '' ? 'Declare the record count and control total' : plan ? `${plan.stats.accepted} accepted · ${plan.stats.rejected} rejected · ${plan.stats.duplicates} duplicate${chosen.length ? ` · ${chosen.length} to update` : ''}` : `${TEMPLATES[register].label} · ${file.name}`}
         </Typography>
       </Box>
       {plan && !done && <Button onClick={reset} disabled={busy} sx={{ textTransform: 'none', color: '#fff' }}>Start over</Button>}
       {!plan && <Button sx={{ ...btnPrimary, px: 3 }} disabled={!file || busy} onClick={runValidation}>{busy ? 'Validating…' : 'Validate file'}</Button>}
-      {plan && <Button sx={{ ...btnPrimary, px: 3 }} disabled={!canConfirm || busy || !!done} onClick={confirm}>{busy ? 'Posting…' : `Confirm & post ${plan.stats.accepted} row(s)`}</Button>}
+      {plan && <Button sx={{ ...btnPrimary, px: 3 }} disabled={!canConfirm || busy || !!done} onClick={confirm}>{busy ? 'Posting…' : `Confirm & post ${plan.stats.accepted} row(s)${chosen.length ? ` · update ${chosen.length}` : ''}`}</Button>}
       {busy && plan && <LinearProgress variant="determinate" value={pct} sx={{ width: '100%', borderRadius: 2 }} />}
     </Box>
     {err && <Alert severity="error" sx={{ mt: 1.5 }}>{err}</Alert>}
@@ -231,6 +309,7 @@ export function UploadPage({ initialRegister, onPosted }) {
           <Kpi label={`Computed ${tpl.control}`} value={`LKR ${lkr(plan.stats.total)}`} sub={declTotal !== '' ? `Declared LKR ${lkr(num(declTotal))}` : 'Declare the control total'} color={declTotal !== '' && Math.abs(num(declTotal) - plan.stats.total) > 0.01 ? T.danger : undefined} />
         </Stack>
         <Typography sx={{ fontSize: 12, color: T.muted, mb: 1 }}>Control total includes rejected and duplicate rows: accepted {lkr(plan.stats.acceptedTotal)} + rejected {lkr(plan.stats.rejectedTotal)} + duplicate {lkr(plan.stats.duplicateTotal)} = {lkr(plan.stats.total)}.</Typography>
+        {plan.conflicts.length > 0 && <DuplicateReview conflicts={plan.conflicts} picked={picked} setPicked={setPicked} disabled={busy || !!done} />}
         {variance && (isApprover
           ? <TextField size="small" fullWidth label="Declared vs computed differ — approver override reason (logged)" value={overrideReason} onChange={e => setOverrideReason(e.target.value)} sx={{ mb: 1.5 }} />
           : <Alert severity="error" sx={{ mb: 1.5 }}>Declared count / control total do not match the file. Fix the declaration or the file — a manager or admin can override with a reason.</Alert>)}
@@ -241,13 +320,13 @@ export function UploadPage({ initialRegister, onPosted }) {
         {(plan.stats.rejected + plan.stats.duplicates + (plan.stats.unmatched || 0)) > 0 && (
           <Button size="small" startIcon={<FileDownloadOutlinedIcon />} sx={{ textTransform: 'none', mb: 1 }} onClick={async () => saveAs(new Blob([await errorWorkbook(plan, parsed.headers)]), `${file.name.replace(/\.\w+$/, '')}_errors.xlsx`)}>Download error workbook</Button>
         )}
-        {done && <Alert severity="success" sx={{ mb: 1.5 }}>Batch {batchId} posted: {Object.entries(done.counts).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ')}.</Alert>}
+        {done && <Alert severity="success" sx={{ mb: 1.5 }}>Batch {batchId} posted: {Object.entries(done.counts).filter(([, n]) => n).map(([k, n]) => `${n} ${COUNT_LABELS[k] || k}`).join(', ')}.</Alert>}
         <Table size="small" sx={{ bgcolor: '#fff' }}>
           <TableHead><TableRow><TableCell>Row</TableCell><TableCell>Outcome</TableCell><TableCell>Amount</TableCell><TableCell>Reason</TableCell></TableRow></TableHead>
           <TableBody>
             {plan.rows.filter(r => r.status !== 'accepted' || r.warnings.length).slice(0, 200).map(r => (
               <TableRow key={r.rowNo}><TableCell>{r.rowNo}</TableCell><TableCell><StatusChip value={r.status === 'accepted' ? 'Matched' : r.status === 'rejected' ? 'Rejected' : r.status === 'unmatched' ? 'Unmatched' : 'Duplicate'} /></TableCell>
-                <TableCell>{lkr(r.amount)}</TableCell><TableCell sx={{ fontSize: 12 }}>{[...r.errors, ...r.warnings].join('; ') || (r.status === 'duplicate' ? 'Already posted / repeated in file' : '')}</TableCell></TableRow>
+                <TableCell>{lkr(r.amount)}</TableCell><TableCell sx={{ fontSize: 12 }}>{[...r.errors, ...r.warnings].join('; ') || (r.note || (r.status === 'duplicate' ? 'Already posted / repeated in file' : ''))}</TableCell></TableRow>
             ))}
           </TableBody>
         </Table>
@@ -264,7 +343,7 @@ export function BatchHistory() {
   const rows = useMemo(() => (raw.batches || []).map(b => {
     const f = (raw.files || []).find(x => x.id === b.file_id);
     return { ...b, register_label: b.type === 'Reversal' ? `Reversal (${TEMPLATES[b.register]?.label || b.register})` : (TEMPLATES[b.register]?.label || b.register), uploaded: String(b.uploaded_at || '').slice(0, 16).replace('T', ' '),
-      accepted: b.stats?.accepted, rejected: b.stats?.rejected, duplicates: b.stats?.duplicates, total: b.stats?.acceptedTotal, doc: f };
+      accepted: b.stats?.accepted, rejected: b.stats?.rejected, duplicates: b.stats?.duplicates, updated: b.stats?.updated, total: b.stats?.acceptedTotal, doc: f };
   }), [raw]);
   const submit = async () => {
     setBusy(true); setErr('');
@@ -277,7 +356,7 @@ export function BatchHistory() {
   };
   const cols = [
     { key: 'uploaded', label: 'Uploaded' }, { key: 'register_label', label: 'Register' }, { key: 'file_name', label: 'File', wrap: true }, { key: 'status', label: 'Status', render: r => <StatusChip value={r.status} /> },
-    { key: 'accepted', label: 'Accepted', type: 'int' }, { key: 'rejected', label: 'Rejected', type: 'int' }, { key: 'duplicates', label: 'Duplicates', type: 'int' }, { key: 'total', label: 'Accepted total', type: 'money' },
+    { key: 'accepted', label: 'Accepted', type: 'int' }, { key: 'rejected', label: 'Rejected', type: 'int' }, { key: 'duplicates', label: 'Duplicates', type: 'int' }, { key: 'updated', label: 'Updated', type: 'int' }, { key: 'total', label: 'Accepted total', type: 'money' },
     { key: 'uploaded_by', label: 'Uploader' }, { key: 'confirmed_by', label: 'Confirmer' },
     { key: 'links', label: 'Links', noExport: true, noSort: true, render: r => <>{r.reverses && `reverses ${r.reverses} `}{r.reversed_by && `reversed by ${r.reversed_by} `}{r.corrects && `corrects ${r.corrects} `}{r.corrected_by && `corrected by ${r.corrected_by}`}</> },
     { key: 'doc', label: 'Source', noExport: true, noSort: true, render: r => r.doc ? <Button size="small" onClick={(e) => { e.stopPropagation(); openFile(r.doc.url); }} sx={{ textTransform: 'none', p: 0 }}>open</Button> : <Typography sx={{ fontSize: 11, color: T.danger }}>{r.type === 'Reversal' ? '' : 'missing'}</Typography> },
@@ -289,7 +368,7 @@ export function BatchHistory() {
     <Dialog open={!!rev} onClose={() => setRev(null)} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 800 }}>Request reversal</DialogTitle>
       <DialogContent dividers>
-        {rev && <Typography sx={{ fontSize: 13, mb: 1.5 }}>{rev.file_name} — {rev.stats?.accepted} posted row(s), LKR {lkr(rev.stats?.acceptedTotal)}. A different manager/admin must approve. All its postings will be flagged reversed (kept for audit) and live totals recalculate.</Typography>}
+        {rev && <Typography sx={{ fontSize: 13, mb: 1.5 }}>{rev.file_name} — {rev.stats?.accepted} posted row(s), LKR {lkr(rev.stats?.acceptedTotal)}{rev.stats?.updated || rev.stats?.filled ? `, and ${(rev.stats.updated || 0) + (rev.stats.filled || 0)} updated record(s), which go back to their earlier values` : ''}. A different manager/admin must approve. All its postings will be flagged reversed (kept for audit) and live totals recalculate.</Typography>}
         <TextField fullWidth multiline minRows={2} label="Reason (original value, what is wrong) *" value={reason} onChange={e => setReason(e.target.value)} />
         {err && <Alert severity="error" sx={{ mt: 1.5 }}>{err}</Alert>}
       </DialogContent>

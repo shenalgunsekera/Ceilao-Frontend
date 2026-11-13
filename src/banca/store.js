@@ -100,29 +100,39 @@ export async function storeLibraryFile(ctx, file, meta) {
 }
 
 /* ── post a validated batch (idempotent: deterministic ids, safe to retry) ── */
-export async function postBatch(ctx, { batchId, register, plan, fileName, fileHash, fileId, declared, override, corrects, onProgress }) {
+export async function postBatch(ctx, { batchId, register, plan, updates = [], fileName, fileHash, fileId, declared, override, corrects, onProgress }) {
   const { bankId, me } = ctx;
   const bref = doc(db, path(bankId, 'batches'), batchId);
   const rejectedSample = plan.rows.filter(r => r.status === 'rejected').slice(0, 300).map(r => ({ row: r.rowNo, reason: r.errors.join('; '), amount: r.amount }));
+  // duplicate rows the uploader chose to update, plus policy details the file filled in where they were blank
+  const chosen = updates.filter(c => !c.blocked);
+  const stats = { ...plan.stats, updated: chosen.length, filled: (plan.updates || []).length };
   await setDoc(bref, {
     register, status: 'Posting', file_name: fileName, file_hash: fileHash, file_id: fileId || '', declared: declared || null, override: override || null,
-    stats: plan.stats, rejected_rows: rejectedSample, corrects: corrects || '',
+    stats, rejected_rows: rejectedSample, corrects: corrects || '',
     uploaded_by: me.name, uploaded_by_uid: me.uid, uploaded_at: nowIso(), confirmed_by: me.name, confirmed_by_uid: me.uid, confirmed_at: nowIso(),
   }, { merge: true });
   const jobs = [];
-  for (const [coll, list] of Object.entries(plan.writes)) for (const w of list) jobs.push([coll, w]);
+  for (const [coll, list] of Object.entries(plan.writes)) for (const w of list) jobs.push(['set', coll, w]);
+  for (const c of chosen) for (const w of c.adds) jobs.push(['set', w.coll, w]);
+  // an update carries the record's earlier values in its history, so reversing this batch can put them back
+  for (const w of [...(plan.updates || []), ...chosen.flatMap(c => c.updates)]) jobs.push(['update', w.coll, w]);
   let done = 0;
   for (let i = 0; i < jobs.length; i += 400) {
     const b = writeBatch(db);
     // JSON round-trip drops any undefined field (Firestore rejects undefined values)
-    for (const [coll, w] of jobs.slice(i, i + 400)) b.set(doc(db, path(bankId, coll), w.id), JSON.parse(JSON.stringify(w.data)));
+    for (const [op, coll, w] of jobs.slice(i, i + 400)) {
+      const ref = doc(db, path(bankId, coll), w.id); const data = JSON.parse(JSON.stringify(w.data));
+      if (op === 'update') b.update(ref, data); else b.set(ref, data);
+    }
     await b.commit();
     done += Math.min(400, jobs.length - i); onProgress && onProgress(Math.round(done / Math.max(1, jobs.length) * 100));
   }
-  const counts = Object.fromEntries(Object.entries(plan.writes).map(([k, v]) => [k, v.length]));
+  const counts = Object.fromEntries(Object.entries(plan.writes).map(([k, v]) => [k, v.length + chosen.reduce((n, c) => n + c.adds.filter(w => w.coll === k).length, 0)]));
+  counts.updated = chosen.length; counts.filled = stats.filled;
   await updateDoc(bref, { status: 'Posted', posted_at: nowIso(), written: counts });
   if (corrects) await updateDoc(doc(db, path(bankId, 'batches'), corrects), { corrected_by: batchId });
-  await audit(bankId, me, 'batch_posted', batchId, { register, file: fileName, stats: plan.stats, override: override || null });
+  await audit(bankId, me, 'batch_posted', batchId, { register, file: fileName, stats, override: override || null });
   return counts;
 }
 
@@ -227,6 +237,15 @@ export async function executeReversal(ctx, batchId, reason, approvalId) {
     const hist = (t.history || []).filter(h => h.batch_id !== batchId);
     const prev = hist[hist.length - 1];
     ops.push(['targets', t.id, prev ? { target: prev.target, version: (t.version || 1) + 1, history: [...(t.history || []), { target: prev.target, at: nowIso(), by: me.name, reversal_of: batchId }] } : { target: 0, reversed: true }]);
+  }
+  // records this batch updated get their earlier values back, unless a later upload changed them again
+  for (const coll of ['policies', 'txns', 'receipts', 'commissions', 'exceptions']) for (const d of (raw[coll] || [])) {
+    const hist = d.history || [];
+    const i = hist.findIndex(h => h.batch_id === batchId && !h.reversed);
+    if (i < 0) continue;
+    const later = hist.slice(i + 1).find(h => !h.reversed);
+    if (later) throw new Error(`${d.policy_no || d.id} was changed again by batch ${later.batch_id} — reverse that batch first`);
+    ops.push([coll, d.id, { ...hist[i].previous, history: hist.map((h, j) => (j === i ? { ...h, reversed: true, reversed_at: nowIso() } : h)) }]);
   }
   for (let i = 0; i < ops.length; i += 400) {
     const b = writeBatch(db);
