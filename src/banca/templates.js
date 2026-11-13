@@ -129,7 +129,10 @@ export function effectiveTemplate(register, config) {
   const fc = (config?.fields || {})[register] || {};
   const hidden = new Set(fc.hidden || []);
   const labels = fc.labels || {};
+  // a custom field with a standard column's key (e.g. Facility No on payments) takes that column over
+  const customKeys = new Set(customFieldsFor(config, register).map(f => f.key));
   const cols = baseTpl.cols
+    .filter(c => !customKeys.has(c.key))
     .filter(c => isLocked(register, c.key) || !hidden.has(c.key))
     .map(c => (labels[c.key] && labels[c.key].trim() && labels[c.key].trim() !== c.header
       ? { ...c, header: labels[c.key].trim(), aliases: [c.header, ...(c.aliases || [])] } : c));
@@ -396,14 +399,14 @@ export function validate(register, parsed, raw, config, ctx) {
     }
     return [oldP && diffRecord('policies', oldP, pNext), oldT && diffRecord('txns', oldT, tNext, tSilent), ...(register === 'master' ? masterMoney(row, period, eff, pno) : [])].filter(Boolean);
   };
-  // Facility No / Vehicle Reg No on a payment or commission row are carried to its policy, so every register shows them.
-  // Filling a blank one needs no question; replacing a different value goes to the uploader.
+  // Facility No / Vehicle Reg No on a payment or commission row (a standard column or a custom field with that key)
+  // are carried to its policy automatically, so every register shows them. The policy keeps the earlier value in its history.
   const polPending = new Map();
-  const policyDetails = (row, period, warns) => {
+  const policyDetails = (row, period, warns, custom = {}) => {
     const pend = polPending.get(period.id) || {};
     const next = {};
     for (const k of ['facility_no', 'vehicle_no']) {
-      let v = str(get(row, k)); if (!v) continue;
+      let v = str(get(row, k)) || str(custom[k]); if (!v) continue;
       if (k === 'vehicle_no') v = v.toUpperCase();
       if (pend[k] !== undefined) { if (pend[k] !== v) warns.push(`${H(k)} ${v} differs from an earlier row for this policy (${pend[k]}) — not carried to the policy`); continue; }
       if (!same(period[k], v)) next[k] = v;
@@ -414,9 +417,8 @@ export function validate(register, parsed, raw, config, ctx) {
     const part = diffRecord('policies', old, next);
     if (!part) return null;
     polPending.set(period.id, { ...pend, ...next });
-    if (Object.keys(next).some(k => str(old[k]))) { part.changes.forEach(c => { c.label = `${c.label} on the policy`; }); return { review: part }; }
-    warns.push(`${part.changes.map(c => `${c.label} ${c.new}`).join(', ')} added to the policy`);
-    return { auto: part };
+    warns.push(part.changes.map(c => (str(c.old) ? `${c.label} on the policy changed ${c.old} → ${c.new}` : `${c.label} ${c.new} added to the policy`)).join('; '));
+    return part;
   };
 
   // GWP-style rows: originals first (so endorsements in the same file find their period)
@@ -547,10 +549,9 @@ export function validate(register, parsed, raw, config, ctx) {
           kindK: register === 'payments' ? 'type' : 'component', kindV: register === 'payments' ? type : comp, amount, details });
         const parts = [];
         if (m) { status = 'duplicate'; seen[P].add(u.id); if (m !== 'same') parts.push(m); else if (!inFile) rec.note = NO_CHANGE; }
-        const pd = r.period ? policyDetails(row, r.period, warns) : null;
-        if (pd?.auto) out.updates.push(...pd.auto.updates);
-        if (pd?.review) parts.push(pd.review);
-        if (parts.length) { addConflict(rec, `${pno} · ${insurer} · ${d}`, parts); if (m) rec.note = REVIEW; else warns.push('Policy details differ — choose Update or Ignore above'); }
+        const pd = r.period ? policyDetails(row, r.period, warns, custom) : null;
+        if (pd) out.updates.push(...pd.updates);
+        if (parts.length) { addConflict(rec, `${pno} · ${insurer} · ${d}`, parts); rec.note = REVIEW; }
         if (!m) {
           seen[P].add(u.id);
           const doc = { policy_id: r.period ? r.period.id : null, policy_no: pno, customer: str(get(row, 'customer')) || r.period?.customer || '', insurer, branch: str(get(row, 'branch')) || r.period?.branch || '',

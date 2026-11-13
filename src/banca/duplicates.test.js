@@ -116,13 +116,28 @@ describe('payments and commission', () => {
     expect(v.conflicts).toEqual([]);
   });
 
-  test('a Facility No that differs from the policy is offered as an update; the payment still posts', () => {
+  test('a Facility No that differs from the policy replaces it too, keeping the old one in history', () => {
     const raw = stored(); raw.policies[0].facility_no = 'F-OLD';
     const v = run('payments', PAY_H, [payRow({ 'Facility No': 'F-NEW', 'Vehicle Reg No': 'cab-1' })], raw);
     expect(v.stats.accepted).toBe(1);
     expect(v.writes.receipts).toHaveLength(1);
-    expect(v.updates).toEqual([]);
-    expect(v.conflicts[0].changes).toEqual([expect.objectContaining({ label: 'Facility No on the policy', old: 'F-OLD', new: 'F-NEW' })]);
+    expect(v.conflicts).toEqual([]);
+    expect(v.updates[0].data).toMatchObject({ facility_no: 'F-NEW', history: [expect.objectContaining({ previous: { facility_no: 'F-OLD' } })] });
+    expect(v.rows[0].warnings.join()).toMatch(/Facility No on the policy changed F-OLD → F-NEW/);
+  });
+
+  test('a Facility No custom field on payments still goes on the receipt and now reaches the policy', () => {
+    const config = { ...DEFAULT_CONFIG, custom_fields: { payment: [{ key: 'facility_no', label: 'Facility No', type: 'text' }] } };
+    const v = validate('payments', { headers: PAY_H, rows: [payRow({ 'Facility No': '01712251000183' })] }, stored(), config, { batchId: 'B2', user: 'T', bankId: 'pmf' });
+    expect(v.writes.receipts[0].data.custom).toEqual({ facility_no: '01712251000183' });
+    expect(v.updates[0].data.facility_no).toBe('01712251000183');
+  });
+
+  test('a later row for the same policy with another Facility No is not carried', () => {
+    const v = run('payments', PAY_H, [payRow({ 'Facility No': 'F1' }), payRow({ __row: 3, Amount: 50, 'Facility No': 'F2' })]);
+    expect(v.updates).toHaveLength(1);
+    expect(v.updates[0].data.facility_no).toBe('F1');
+    expect(v.rows[1].warnings.join()).toMatch(/F2 differs from an earlier row/);
   });
 
   test('a commission file carries the Facility No too', () => {
