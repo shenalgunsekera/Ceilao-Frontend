@@ -35,7 +35,9 @@ function MiniTable({ title, rows, cols }) {
 }
 
 export function Dashboard() {
-  const { model, raw, config } = useBanca();
+  const { model, raw, config, me } = useBanca();
+  // A view-only login can't read exceptions, approvals or sign-offs, so anything built on them is left out rather than shown as zero.
+  const { readOnly } = me;
   const [tab, setTab] = useState(0);
   const [month, setMonth] = useState(monthOf(todayYmd()));
   const year = month.slice(0, 4);
@@ -54,7 +56,7 @@ export function Dashboard() {
 
   // alerts (auto-clear when the cause is resolved)
   const alerts = [];
-  if (openEx.length >= num(config.alert_open_exceptions)) alerts.push(['error', `Critical: ${openEx.length} open reconciliation exceptions (threshold ${config.alert_open_exceptions}), exposure LKR ${lkr(openEx.reduce((s, e) => s + num(e.amount), 0))}`]);
+  if (!readOnly && openEx.length >= num(config.alert_open_exceptions)) alerts.push(['error', `Critical: ${openEx.length} open reconciliation exceptions (threshold ${config.alert_open_exceptions}), exposure LKR ${lkr(openEx.reduce((s, e) => s + num(e.amount), 0))}`]);
   else if (openEx.length) alerts.push(['warning', `${openEx.length} open exception(s) awaiting allocation`]);
   const claw = P.filter(p => p.pmf_due < -0.005);
   if (claw.length) alerts.push(['warning', `${claw.length} PMF clawback(s) totalling LKR ${lkr(-S(p => Math.min(0, p.pmf_due), claw))} to offset on the next statement`]);
@@ -63,7 +65,7 @@ export function Dashboard() {
   const noDoc = (raw.batches || []).filter(b => b.type !== 'Reversal' && b.status === 'Posted' && !b.file_id && TEMPLATES[b.register]?.library);
   if (noDoc.length) alerts.push(['info', `${noDoc.length} posted batch(es) have no source document linked`]);
   if (pendingAppr.length) alerts.push(['info', `${pendingAppr.length} approval(s) pending`]);
-  if (!config.payment_method_cleared) alerts.push(['info', 'Legal hold active — live PMF payments are blocked until the payment method is cleared']);
+  if (!readOnly && !config.payment_method_cleared) alerts.push(['info', 'Legal hold active — live PMF payments are blocked until the payment method is cleared']);
 
   const groupBy = (key, arr, fn) => { const m = new Map(); for (const x of arr) { const k = x[key] || '—'; m.set(k, fn(m.get(k), x)); } return [...m.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]))); };
   const monthTx = model.txns.filter(t => t.gwp_month === month);
@@ -88,7 +90,7 @@ export function Dashboard() {
       right={<TextField size="small" type="month" label="Reporting month" value={month} onChange={e => setMonth(e.target.value)} InputLabelProps={{ shrink: true }} />}>Management Dashboard</SectionTitle>
     {alerts.map(([sev, txt], i) => <Alert key={i} severity={sev} sx={{ mb: 0.8, py: 0 }}>{txt}</Alert>)}
     <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ my: 1, '& .MuiTab-root': { textTransform: 'none', fontWeight: 700 } }}>
-      {['Financial Performance', 'Renewals', 'Claims', 'Data Quality', 'Reconciliation'].map(t => <Tab key={t} label={t} />)}
+      {['Financial Performance', 'Renewals', 'Claims', 'Data Quality', ...(readOnly ? [] : ['Reconciliation'])].map(t => <Tab key={t} label={t} />)}
     </Tabs>
 
     {tab === 0 && <>
@@ -148,18 +150,18 @@ export function Dashboard() {
 
     {tab === 3 && <>
       <Stack direction="row" spacing={1.2} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
-        <Kpi label="Open exceptions" value={openEx.length} sub={`LKR ${lkr(openEx.reduce((s, e) => s + num(e.amount), 0))} exposure`} color={openEx.length ? T.amber : T.green} />
+        {!readOnly && <Kpi label="Open exceptions" value={openEx.length} sub={`LKR ${lkr(openEx.reduce((s, e) => s + num(e.amount), 0))} exposure`} color={openEx.length ? T.amber : T.green} />}
         <Kpi label="Rejected rows (all batches)" value={regDq.reduce((s, r) => s + r.rejected, 0)} sub={`LKR ${lkr(regDq.reduce((s, r) => s + r.exposure, 0))}`} />
         <Kpi label="Batches without source document" value={noDoc.length} color={noDoc.length ? T.amber : T.green} />
         <Kpi label="Policies missing branch / class" value={P.filter(p => !p.branch || !p.class).length} />
       </Stack>
       <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
         <MiniTable title="Completeness by source register" rows={regDq} cols={[['k', 'Register'], ['batches', 'Batches', 1], ['rejected', 'Rejected rows', 1], ['exposure', 'Rejected exposure', 'm'], ['missing', 'Missing source docs', 1]]} />
-        <MiniTable title="Open exceptions by type" rows={['receipt', 'commission'].map(k => ({ k, n: openEx.filter(e => e.kind === k).length, v: round2(openEx.filter(e => e.kind === k).reduce((s, e) => s + num(e.amount), 0)) }))} cols={[['k', 'Type'], ['n', 'Count', 1], ['v', 'Exposure', 'm']]} />
+        {!readOnly && <MiniTable title="Open exceptions by type" rows={['receipt', 'commission'].map(k => ({ k, n: openEx.filter(e => e.kind === k).length, v: round2(openEx.filter(e => e.kind === k).reduce((s, e) => s + num(e.amount), 0)) }))} cols={[['k', 'Type'], ['n', 'Count', 1], ['v', 'Exposure', 'm']]} />}
       </Stack>
     </>}
 
-    {tab === 4 && <>
+    {tab === 4 && !readOnly && <>
       <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
         <MiniTable title="Four-stage reconciliation" rows={stages.map(s => ({ ...s, k: s.stage }))} cols={[['k', 'Stage'], ['expected', 'Expected', 'm'], ['actual', 'Actual', 'm'], ['variance', 'Variance', 'm'], ['unmatched', 'Unmatched', 'm']]} />
         <MiniTable title="Unresolved exceptions — ageing" rows={exAge} cols={[['k', 'Age'], ['n', 'Count', 1], ['v', 'Amount', 'm']]} />

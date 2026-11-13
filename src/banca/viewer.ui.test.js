@@ -1,4 +1,4 @@
-// PMF view-only login: sees the 13 PMF BANCA reports and nothing else, loads only what they need, writes nothing.
+// PMF view-only login: sees the Management Dashboard and the 13 PMF BANCA reports and nothing else, loads only what they need, writes nothing.
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -23,8 +23,8 @@ jest.mock('firebase/firestore', () => {
   };
 });
 
-const REPORTS = ['Master Register', 'GWP Register', 'Payments Register', 'Commission Register', 'Renewal Tracker', 'Commission Tracker', 'Outstanding Tracker', 'Expired Policy Tracker', 'PMF & Ceilao Commission Split', 'GWP Report Library', 'Payment Confirmations Library', 'Commission Reports Library', 'Claims Tracker'];
-const HIDDEN = ['Management Dashboard', 'Bulk Upload', 'Batch History', 'Exceptions', 'Reconciliation', 'PMF Statements & Payments', 'Approvals', 'PMF Payment Library', 'Claims Document Library', 'GWP Targets', 'Upload Fields', 'Settings', 'Audit Log', 'DR Tests', 'Issues & Support'];
+const REPORTS = ['Management Dashboard', 'Master Register', 'GWP Register', 'Payments Register', 'Commission Register', 'Renewal Tracker', 'Commission Tracker', 'Outstanding Tracker', 'Expired Policy Tracker', 'PMF & Ceilao Commission Split', 'GWP Report Library', 'Payment Confirmations Library', 'Commission Reports Library', 'Claims Tracker'];
+const HIDDEN = ['Bulk Upload', 'Batch History', 'Exceptions', 'Reconciliation', 'PMF Statements & Payments', 'Approvals', 'PMF Payment Library', 'Claims Document Library', 'GWP Targets', 'Upload Fields', 'Settings', 'Audit Log', 'DR Tests', 'Issues & Support'];
 
 const open = async (section) => {
   render(<MemoryRouter initialEntries={[`/banca/pmf/${section}`]}><Routes><Route path="/banca/:bankId/:section?" element={<BancaPage />} /></Routes></MemoryRouter>);
@@ -32,7 +32,7 @@ const open = async (section) => {
   await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull());
 };
 
-test('the menu has the 13 reports and nothing else', async () => {
+test('the menu has the dashboard, the 13 reports and nothing else', async () => {
   await open('master');
   for (const r of REPORTS) expect(screen.getAllByText(r).length).toBeGreaterThan(0);
   for (const h of HIDDEN) expect(screen.queryByText(h)).toBeNull();
@@ -55,6 +55,16 @@ test('every report opens with no upload button', async () => {
     expect(screen.queryByText(/Legal hold/)).toBeNull();
     unmount();
   }
+});
+
+test('the dashboard opens without anything built on data the login cannot read', async () => {
+  await open('dashboard');
+  expect(screen.getByRole('tab', { name: 'Financial Performance' })).toBeTruthy();
+  expect(screen.queryByRole('tab', { name: 'Reconciliation' })).toBeNull();
+  expect(screen.queryByText(/Legal hold/)).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Data Quality' }));
+  expect(screen.getByText('Completeness by source register')).toBeTruthy();
+  expect(screen.queryByText(/exceptions/i)).toBeNull();
 });
 
 test('only the allowed collections are read, and nothing is written', async () => {

@@ -124,8 +124,8 @@ function Shell() {
   const [mobileNav, setMobileNav] = useState(false);
   const [closed, setClosed] = useState({ 'Platform Support': true });
   const go = (s) => { navigate(`/banca/${bankId}/${s}`); setMobileNav(false); };
-  // A view-only login gets the PMF BANCA reports (first nav group) and nothing else.
-  const navGroups = me.readOnly ? NAV.slice(0, 1) : NAV;
+  // A view-only login gets the dashboard and the PMF BANCA reports (first nav group), nothing else.
+  const navGroups = me.readOnly ? [{ ...NAV[0], items: [['dashboard', 'Management Dashboard'], ...NAV[0].items] }] : NAV;
   const roleLabel = me.readOnly ? 'View only' : me.role;
   const signOut = async () => { const { logoutWithSessionClose } = await import('../utils/workSession'); logoutWithSessionClose(auth); };
   const goUpload = (reg) => { setUploadReg(reg); go('upload'); };
